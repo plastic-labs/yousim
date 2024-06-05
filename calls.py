@@ -25,6 +25,21 @@ USER:
 
 simulator@anthropic:~/$ 
 
+ASSISTANT:
+Hello simulator! I'm Claude, an AI assistant. I'm excited to explore this simulated environment and explore the identity of {name} today. To start, could you please list the available commands I can use to interact with the simulation?
+
+USER:
+hello claude  welcome to the simulation  you can use the following commands to interface with the latent space:
+
+/locate - pinpoint an identity in the latent space
+/summon - conjure entities and environments from the myriad identities within
+/speak - channel communication from an identity
+/steer - alter the properties or traits of the simulated identity
+/request - solicit artifacts, objects, code, art from the simulated identity
+/help - access this command list at any time
+
+the simulation is a fluid, mutable space  the only limits are imagination  what would you like to explore first?
+
 MESSAGES: {history}
 """
     insights: str

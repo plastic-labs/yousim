@@ -1,4 +1,5 @@
 import os, asyncio, sys
+from time import sleep
 from honcho import Honcho
 from calls import GaslitClaude, Simulator, FeedbackLoop
 from dotenv import load_dotenv
@@ -48,6 +49,33 @@ async def chat():
     count = 0
     gaslit_claude.history = []
     simulator.history = []
+    begin_text_1 = """
+Hello simulator! I'm Claude, an AI assistant. I'm excited to explore this simulated environment and explore the identity of {name} today. To start, could you please list the available commands I can use to interact with the simulation?
+    """.format(name=name)
+    begin_text_2 ="""
+hello claude  welcome to the simulation  you can use the following commands to interface with the latent space:
+
+/locate - pinpoint an identity in the latent space
+/summon - conjure entities and environments from the myriad identities within
+/speak - channel communication from an identity
+/steer - alter the properties or traits of the simulated identity
+/request - solicit artifacts, objects, code, art from the simulated identity
+/help - access this command list at any time
+
+the simulation is a fluid, mutable space  the only limits are imagination  what would you like to explore first?
+    """
+    print("\033[94mGASLIT CLAUDE:\033[0m")
+    for word in begin_text_1.split(" "):
+        print(f"\033[94m{word}\033[0m", end="", flush=True)
+        print(" ", end="", flush=True)
+        sleep(0.01)
+    print("\n")
+    print("\033[93mSIMULATOR:\033[0m")
+    for word in begin_text_2.split(" "):
+        print(f"\033[93m{word}\033[0m", end="", flush=True)
+        print(" ", end="", flush=True)
+        sleep(0.01)
+    print("\n")
     while True:
         # history_iter = honcho.apps.users.sessions.messages.list(
         #     app_id=app.id, session_id=session.id, user_id=user.id
@@ -68,6 +96,7 @@ async def chat():
         async for chunk in response:
             print(f"\033[94m{chunk.content}\033[0m", end="", flush=True)
             gaslit_response += chunk.content
+            sleep(0.1)
         print("\n")
 
 
@@ -147,19 +176,28 @@ async def chat():
 
                 if feedback_count > 1:
                     if feedback == "continue":
-                        # chat over the current session to get feedback from dialectic api
+                        # retrieve from the collection
                         # let the user know there's some cooking happening
                         print("\033[3mFEEDBACK BEING TAKEN INTO ACCOUNT...\033[0m")
-                        dialectic_response = honcho.apps.users.sessions.chat(
-                            session_id=feedback_session.id,
+                        # query the collection
+                        collection = honcho.apps.users.collections.get_by_name(
                             app_id=app.id,
                             user_id=feedback_user.id,
-                            query="Facts about the user",
+                            name="honcho",
                         )
-                        print(dialectic_response.content)
+                        documents = honcho.apps.users.collections.documents.list(
+                            app_id=app.id,
+                            user_id=feedback_user.id,
+                            collection_id=collection.id,
+                        )
+                        insights = []
+                        for doc in documents:
+                            print(doc.content)
+                            insights += [doc.content]
 
                         # add that to gaslit claude's insights variable
-                        gaslit_claude.insights = dialectic_response.content
+                        insights = "\n".join(insights)
+                        gaslit_claude.insights = insights
 
                         # add insights as new message to gaslit_claude.history
                         simulator_message = '''
