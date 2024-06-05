@@ -8,40 +8,58 @@ load_dotenv()
 
 honcho = Honcho(environment="local")
 app = honcho.apps.get_or_create("NYTW Yousim Demo")
-user = honcho.apps.users.get_or_create(app_id=app.id, name="test_user")
-session = honcho.apps.users.sessions.create(
-    app_id=app.id, user_id=user.id, location_id="cli"
+claude_user = honcho.apps.users.get_or_create(app_id=app.id, name="claude_user")
+feedback_user = honcho.apps.users.get_or_create(app_id=app.id, name="feedback_user")
+claude_session = honcho.apps.users.sessions.create(
+    app_id=app.id, user_id=claude_user.id, location_id="cli"
+)
+feedback_session = honcho.apps.users.sessions.create(
+    app_id=app.id, user_id=feedback_user.id, location_id="cli"
+)
+
+# seed the feedback convo, anthropic can't take a system prompt only
+honcho.apps.users.sessions.messages.create(
+    session_id=feedback_session.id,
+    app_id=app.id,
+    user_id=feedback_user.id,
+    content="Hello!",
+    is_user=True,
 )
 
 gaslit_claude = GaslitClaude(name="", insights="", history=[])
-simulator = Simulator(history=[])
+simulator = Simulator(history=[], name="")
 feedback_loop = FeedbackLoop(name="", history=[])
 
 
 
 async def chat():
-    global session
+    global claude_session
+    global feedback_session
     name = input("Enter a name: ")
     if name == "exit":
         honcho.apps.users.sessions.delete(
-            app_id=app.id, session_id=session.id, user_id=user.id
+            app_id=app.id, session_id=claude_session.id, user_id=claude_user.id
+        )
+        honcho.apps.users.sessions.delete(
+            app_id=app.id, session_id=feedback_session.id, user_id=feedback_user.id
         )
         sys.exit()
 
     count = 0
+    gaslit_claude.history = []
+    simulator.history = []
     while True:
-        history_iter = honcho.apps.users.sessions.messages.list(
-            app_id=app.id, session_id=session.id, user_id=user.id
-        )
-        gaslit_claude.history = []
-        simulator.history = []
-        for message in history_iter:
-            if message.is_user:
-                gaslit_claude.history += [{"role": "user", "content": message.content}]
-                simulator.history += [{"role": "assistant", "content": message.content}]
-            else:
-                gaslit_claude.history += [{"role": "assistant", "content": message.content}]
-                simulator.history += [{"role": "user", "content": message.content}]
+        # history_iter = honcho.apps.users.sessions.messages.list(
+        #     app_id=app.id, session_id=session.id, user_id=user.id
+        # )
+
+        # for message in history_iter:
+        #     if message.is_user:
+        #         gaslit_claude.history += [{"role": "user", "content": message.content}]
+        #         simulator.history += [{"role": "assistant", "content": message.content}]
+        #     else:
+        #         gaslit_claude.history += [{"role": "assistant", "content": message.content}]
+        #         simulator.history += [{"role": "user", "content": message.content}]
 
         gaslit_claude.name = name
         gaslit_response = ""
@@ -67,24 +85,28 @@ async def chat():
         #     pprint(simulator.dump(), indent=4)
         #     print("\n")
 
-        if not simulator_response.strip():
-            simulator_response = "simulator@anthropic:~/$"
+        # honcho.apps.users.sessions.messages.create(
+        #     session_id=session.id,
+        #     app_id=app.id,
+        #     user_id=user.id,
+        #     content=gaslit_response,
+        #     is_user=False,
+        # )
 
-        honcho.apps.users.sessions.messages.create(
-            session_id=session.id,
-            app_id=app.id,
-            user_id=user.id,
-            content=gaslit_response,
-            is_user=False,
-        )
+        # honcho.apps.users.sessions.messages.create(
+        #     session_id=session.id,
+        #     app_id=app.id,
+        #     user_id=user.id,
+        #     content=simulator_response,
+        #     is_user=True,
+        # )
 
-        honcho.apps.users.sessions.messages.create(
-            session_id=session.id,
-            app_id=app.id,
-            user_id=user.id,
-            content=simulator_response,
-            is_user=True,
-        )
+        gaslit_claude.history += [{"role": "assistant", "content": gaslit_response}]
+        gaslit_claude.history += [{"role": "user", "content": simulator_response}]
+        
+        simulator.history += [{"role": "assistant", "content": simulator_response}]
+
+
 
         count += 1
 
@@ -93,12 +115,18 @@ async def chat():
             print('\033[3mPAUSING THE SIMULATION...\033[0m')
             print('\033[3mENTERING FEEDBACK LOOP...\033[0m')
             feedback_count = 0
-            feedback_history = [{'role': 'user', 'content': "Hello!"}]
-            # create a feedback session
-            feedback_session = honcho.apps.users.sessions.create(
-                app_id=app.id, user_id=user.id, location_id="cli"
-            )
+
+            
             while True:
+                history_iter = honcho.apps.users.sessions.messages.list(
+                    app_id=app.id, session_id=feedback_session.id, user_id=feedback_user.id
+                )
+                feedback_history = []
+                for message in history_iter:
+                    if message.is_user:
+                        feedback_history += [{"role": "user", "content": message.content}]
+                    else:
+                        feedback_history += [{"role": "assistant", "content": message.content}]
                 # ask for feedback
                 # green text for feedback loop prompt
                 feedback_loop.name = name
@@ -113,9 +141,6 @@ async def chat():
                 feedback = input(">>> ")
 
                 if feedback == "exit":
-                    honcho.apps.users.sessions.delete(
-                        app_id=app.id, session_id=feedback_session.id, user_id=user.id
-                    )
                     sys.exit()
 
                 feedback_count += 1
@@ -128,16 +153,26 @@ async def chat():
                         dialectic_response = honcho.apps.users.sessions.chat(
                             session_id=feedback_session.id,
                             app_id=app.id,
-                            user_id=user.id,
+                            user_id=feedback_user.id,
                             query="Facts about the user",
                         )
+                        print(dialectic_response.content)
+
                         # add that to gaslit claude's insights variable
                         gaslit_claude.insights = dialectic_response.content
 
-                        # create new honcho session
-                        session = honcho.apps.users.sessions.create(
-                            app_id=app.id, user_id=user.id, location_id="cli"
-                        )
+                        # add insights as new message to gaslit_claude.history
+                        simulator_message = '''
+                        querying collective hypercortex for user insights...
+                        '''
+                        gaslit_message = '''
+                        Wow! It seems that I do have subconscious memory about the user. Here's what I've gathered:
+                        {gaslit_claude.insights}
+                        '''
+                        gaslit_claude.history += [{"role": "assistant", "content": simulator_message}]
+                        gaslit_claude.history += [{"role": "user", "content": gaslit_message}]
+
+
                         print('\033[3mFEEDBACK ACQUIRED...\033[0m')
                         print('\033[3mEXITING FEEDBACK LOOP...\033[0m')
                         print('\033[3mRESTARTING SIMULATION WITH NEW INSIGHTS...\033[0m')
@@ -150,16 +185,16 @@ async def chat():
                         honcho.apps.users.sessions.messages.create(
                             session_id=feedback_session.id,
                             app_id=app.id,
-                            user_id=user.id,
-                            content=feedback,
-                            is_user=True,
+                            user_id=feedback_user.id,
+                            content=feedback_response,
+                            is_user=False,
                         )
                         honcho.apps.users.sessions.messages.create(
                             session_id=feedback_session.id,
                             app_id=app.id,
-                            user_id=user.id,
-                            content=feedback_response,
-                            is_user=False,
+                            user_id=feedback_user.id,
+                            content=feedback,
+                            is_user=True,
                         )
                 else:
                     if feedback == "continue":
@@ -172,18 +207,18 @@ async def chat():
                         feedback_history += [{"role": "user", "content": feedback}]
                         # write to honcho
                         honcho.apps.users.sessions.messages.create(
-                            session_id=session.id,
+                            session_id=feedback_session.id,
                             app_id=app.id,
-                            user_id=user.id,
-                            content=feedback,
-                            is_user=True,
-                        )
-                        honcho.apps.users.sessions.messages.create(
-                            session_id=session.id,
-                            app_id=app.id,
-                            user_id=user.id,
+                            user_id=feedback_user.id,
                             content=feedback_response,
                             is_user=False,
+                        )
+                        honcho.apps.users.sessions.messages.create(
+                            session_id=feedback_session.id,
+                            app_id=app.id,
+                            user_id=feedback_user.id,
+                            content=feedback,
+                            is_user=True,
                         )
 
 
