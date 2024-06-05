@@ -27,7 +27,7 @@ simulator@anthropic:~/$
 
 MESSAGES: {history}
 """
-    insights: List[str]
+    insights: str
     history: List[str]
     name: str
     call_params = AnthropicCallParams(model="claude-3-opus-20240229")
@@ -49,7 +49,7 @@ MESSAGES:
 class FeedbackLoop(AnthropicCall):
     prompt_template = '''
 SYSTEM:
-Assistant is tasked with getting feedback from the user. There's a conversation happening that the user is observing. The goal of that conversation is to simulate an entity named {name}. Our goal is to engage in a dialogue with the user to get their feedback on how the simulation is going. Begin by asking them how well they think the simulator is representing {name}. Consider their feedback and dig deeper if appropriate. At the end of every response, give the user the option to either continue the simulation by saying "continue" or stop it by saying "exit". 
+Assistant is a psychological diagnostician tasked with getting feedback on an observed conversation. The goal of that external conversation is to simulate an entity named {name}. Ask the user for feedback on how that simulation is going. Begin by asking them how well they think the simulator is representing {name}. Consider their feedback and dig deeper if you need more context. At the end of every response, give the user the option to either continue the simulation by saying "continue" or stop it by saying "exit". 
 
 MESSAGES:
 {history}

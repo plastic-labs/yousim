@@ -13,7 +13,7 @@ session = honcho.apps.users.sessions.create(
     app_id=app.id, user_id=user.id, location_id="cli"
 )
 
-gaslit_claude = GaslitClaude(name="", insights=[], history=[])
+gaslit_claude = GaslitClaude(name="", insights="", history=[])
 simulator = Simulator(history=[])
 feedback_loop = FeedbackLoop(name="", history=[])
 
@@ -89,13 +89,17 @@ async def chat():
         count += 1
 
         if count % 2 == 0:
+            # print("=======================================")
+            print('\033[3mPAUSING THE SIMULATION...\033[0m')
+            print('\033[3mENTERING FEEDBACK LOOP...\033[0m')
             feedback_count = 0
             feedback_history = [{'role': 'user', 'content': "Hello!"}]
+            # create a feedback session
+            feedback_session = honcho.apps.users.sessions.create(
+                app_id=app.id, user_id=user.id, location_id="cli"
+            )
             while True:
                 # ask for feedback
-                # print("=======================================")
-                print('\033[3mPAUSING THE SIMULATION...\033[0m')
-                print('\033[3mENTERING FEEDBACK LOOP...\033[0m')
                 # green text for feedback loop prompt
                 feedback_loop.name = name
                 feedback_loop.history = feedback_history
@@ -108,35 +112,79 @@ async def chat():
 
                 feedback = input(">>> ")
 
-                feedback_count += 1
-
                 if feedback == "exit":
                     honcho.apps.users.sessions.delete(
-                        app_id=app.id, session_id=session.id, user_id=user.id
+                        app_id=app.id, session_id=feedback_session.id, user_id=user.id
                     )
                     sys.exit()
+
+                feedback_count += 1
 
                 if feedback_count > 1:
                     if feedback == "continue":
                         # chat over the current session to get feedback from dialectic api
+                        # let the user know there's some cooking happening
+                        print("\033[3mFEEDBACK BEING TAKEN INTO ACCOUNT...\033[0m")
+                        dialectic_response = honcho.apps.users.sessions.chat(
+                            session_id=feedback_session.id,
+                            app_id=app.id,
+                            user_id=user.id,
+                            query="Facts about the user",
+                        )
                         # add that to gaslit claude's insights variable
+                        gaslit_claude.insights = dialectic_response.content
 
                         # create new honcho session
                         session = honcho.apps.users.sessions.create(
                             app_id=app.id, user_id=user.id, location_id="cli"
                         )
+                        print('\033[3mFEEDBACK ACQUIRED...\033[0m')
+                        print('\033[3mEXITING FEEDBACK LOOP...\033[0m')
+                        print('\033[3mRESTARTING SIMULATION WITH NEW INSIGHTS...\033[0m')
                         break
                     else:
                         # append input and response to history
                         feedback_history += [{"role": "assistant", "content": feedback_response}]
                         feedback_history += [{"role": "user", "content": feedback}]
+                        # write to honcho
+                        honcho.apps.users.sessions.messages.create(
+                            session_id=feedback_session.id,
+                            app_id=app.id,
+                            user_id=user.id,
+                            content=feedback,
+                            is_user=True,
+                        )
+                        honcho.apps.users.sessions.messages.create(
+                            session_id=feedback_session.id,
+                            app_id=app.id,
+                            user_id=user.id,
+                            content=feedback_response,
+                            is_user=False,
+                        )
                 else:
                     if feedback == "continue":
+                        print('\033[3mEXITING FEEDBACK LOOP...\033[0m')
+                        print('\033[3mCONTINUING SIMULATION...\033[0m')
                         break
                     else:
                         # append input and response to history
                         feedback_history += [{"role": "assistant", "content": feedback_response}]
                         feedback_history += [{"role": "user", "content": feedback}]
+                        # write to honcho
+                        honcho.apps.users.sessions.messages.create(
+                            session_id=session.id,
+                            app_id=app.id,
+                            user_id=user.id,
+                            content=feedback,
+                            is_user=True,
+                        )
+                        honcho.apps.users.sessions.messages.create(
+                            session_id=session.id,
+                            app_id=app.id,
+                            user_id=user.id,
+                            content=feedback_response,
+                            is_user=False,
+                        )
 
 
 
