@@ -26,7 +26,7 @@ async def chat():
             app_id=app.id, session_id=session.id, user_id=user.id
         )
         sys.exit()
-    count = 0
+    # count = 0
     while True:
         history_iter = honcho.apps.users.sessions.messages.list(
             app_id=app.id, session_id=session.id, user_id=user.id
@@ -56,8 +56,8 @@ async def chat():
 
         # If you feed the input on the first output it will cause Claude to refuse to
         # play
-        if count != 0:
-            simulator.history += [{"role": "user", "content": gaslit_response}]
+        # if count != 0:
+        simulator.history += [{"role": "user", "content": gaslit_response}]
         simulator_response = ""
         response = simulator.stream_async()
         print("\033[93mSIMULATOR:\033[0m")
@@ -90,7 +90,7 @@ async def chat():
             is_user=True,
         )
 
-        count += 1
+        # count += 1
 
 
 if __name__ == "__main__":
