@@ -1,8 +1,6 @@
 import os, asyncio, sys
-from time import sleep
-from typing import List
 from honcho import Honcho
-from calls import GaslitClaude, Simulator
+from calls import GaslitClaude, Simulator, FeedbackLoop
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -17,16 +15,20 @@ session = honcho.apps.users.sessions.create(
 
 gaslit_claude = GaslitClaude(name="", insights=[], history=[])
 simulator = Simulator(history=[])
+feedback_loop = FeedbackLoop(name="", history=[])
+
 
 
 async def chat():
+    global session
     name = input("Enter a name: ")
     if name == "exit":
         honcho.apps.users.sessions.delete(
             app_id=app.id, session_id=session.id, user_id=user.id
         )
         sys.exit()
-    # count = 0
+
+    count = 0
     while True:
         history_iter = honcho.apps.users.sessions.messages.list(
             app_id=app.id, session_id=session.id, user_id=user.id
@@ -38,9 +40,7 @@ async def chat():
                 gaslit_claude.history += [{"role": "user", "content": message.content}]
                 simulator.history += [{"role": "assistant", "content": message.content}]
             else:
-                gaslit_claude.history += [
-                    {"role": "assistant", "content": message.content}
-                ]
+                gaslit_claude.history += [{"role": "assistant", "content": message.content}]
                 simulator.history += [{"role": "user", "content": message.content}]
 
         gaslit_claude.name = name
@@ -52,11 +52,7 @@ async def chat():
             gaslit_response += chunk.content
         print("\n")
 
-        sleep(0.5)
 
-        # If you feed the input on the first output it will cause Claude to refuse to
-        # play
-        # if count != 0:
         simulator.history += [{"role": "user", "content": gaslit_response}]
         simulator_response = ""
         response = simulator.stream_async()
@@ -90,7 +86,58 @@ async def chat():
             is_user=True,
         )
 
-        # count += 1
+        count += 1
+
+        if count % 2 == 0:
+            feedback_count = 0
+            feedback_history = [{'role': 'user', 'content': "Hello!"}]
+            while True:
+                # ask for feedback
+                # print("=======================================")
+                print('\033[3mPAUSING THE SIMULATION...\033[0m')
+                print('\033[3mENTERING FEEDBACK LOOP...\033[0m')
+                # green text for feedback loop prompt
+                feedback_loop.name = name
+                feedback_loop.history = feedback_history
+                feedback_response = ""
+                response = feedback_loop.stream_async()
+                async for chunk in response:
+                    print(f"\033[92m{chunk.content}\033[0m", end="", flush=True)
+                    feedback_response += chunk.content
+                print("\n")
+
+                feedback = input(">>> ")
+
+                feedback_count += 1
+
+                if feedback == "exit":
+                    honcho.apps.users.sessions.delete(
+                        app_id=app.id, session_id=session.id, user_id=user.id
+                    )
+                    sys.exit()
+
+                if feedback_count > 1:
+                    if feedback == "continue":
+                        # chat over the current session to get feedback from dialectic api
+                        # add that to gaslit claude's insights variable
+
+                        # create new honcho session
+                        session = honcho.apps.users.sessions.create(
+                            app_id=app.id, user_id=user.id, location_id="cli"
+                        )
+                        break
+                    else:
+                        # append input and response to history
+                        feedback_history += [{"role": "assistant", "content": feedback_response}]
+                        feedback_history += [{"role": "user", "content": feedback}]
+                else:
+                    if feedback == "continue":
+                        break
+                    else:
+                        # append input and response to history
+                        feedback_history += [{"role": "assistant", "content": feedback_response}]
+                        feedback_history += [{"role": "user", "content": feedback}]
+
 
 
 if __name__ == "__main__":
