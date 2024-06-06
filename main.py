@@ -64,17 +64,17 @@ hello claude  welcome to the simulation  you can use the following commands to i
 
 the simulation is a fluid, mutable space  the only limits are imagination  what would you like to explore first?
     """
-    print("\033[94mGASLIT CLAUDE:\033[0m")
+    print("\033[94mSEARCHER CLAUDE:\033[0m")
     for word in begin_text_1.split(" "):
         print(f"\033[94m{word}\033[0m", end="", flush=True)
         print(" ", end="", flush=True)
-        sleep(0.01)
+        sleep(0.1)
     print("\n")
-    print("\033[93mSIMULATOR:\033[0m")
+    print("\033[93mSIMULATOR CLAUDE:\033[0m")
     for word in begin_text_2.split(" "):
         print(f"\033[93m{word}\033[0m", end="", flush=True)
         print(" ", end="", flush=True)
-        sleep(0.01)
+        sleep(0.1)
     print("\n")
     while True:
         # history_iter = honcho.apps.users.sessions.messages.list(
@@ -92,7 +92,7 @@ the simulation is a fluid, mutable space  the only limits are imagination  what 
         gaslit_claude.name = name
         gaslit_response = ""
         response = gaslit_claude.stream_async()
-        print("\033[94mGASLIT CLAUDE:\033[0m")
+        print("\033[94mSEARCHER CLAUDE:\033[0m")
         async for chunk in response:
             print(f"\033[94m{chunk.content}\033[0m", end="", flush=True)
             gaslit_response += chunk.content
@@ -103,7 +103,7 @@ the simulation is a fluid, mutable space  the only limits are imagination  what 
         simulator.history += [{"role": "user", "content": gaslit_response}]
         simulator_response = ""
         response = simulator.stream_async()
-        print("\033[93mSIMULATOR:\033[0m")
+        print("\033[93mSIMULATOR CLAUDE:\033[0m")
         async for chunk in response:
             print(f"\033[93m{chunk.content}\033[0m", end="", flush=True)
             simulator_response += chunk.content
