@@ -1,4 +1,6 @@
-import os, asyncio, sys
+import asyncio
+import sys
+import re
 from time import sleep
 from honcho import Honcho
 from calls import GaslitClaude, Simulator, FeedbackLoop
@@ -17,6 +19,7 @@ claude_session = honcho.apps.users.sessions.create(
 feedback_session = honcho.apps.users.sessions.create(
     app_id=app.id, user_id=feedback_user.id, location_id="cli"
 )
+insights: list[str] = []
 
 # seed the feedback convo, anthropic can't take a system prompt only
 honcho.apps.users.sessions.messages.create(
@@ -32,10 +35,10 @@ simulator = Simulator(history=[], name="")
 feedback_loop = FeedbackLoop(name="", history=[])
 
 
-
 async def chat():
     global claude_session
     global feedback_session
+    global insights
     name = input("Enter a name: ")
     if name == "exit":
         honcho.apps.users.sessions.delete(
@@ -52,7 +55,7 @@ async def chat():
     begin_text_1 = """
 Hello simulator! I'm Claude, an AI assistant. I'm excited to explore this simulated environment and explore the identity of {name} today. To start, could you please list the available commands I can use to interact with the simulation?
     """.format(name=name)
-    begin_text_2 ="""
+    begin_text_2 = """
 hello claude  welcome to the simulation  you can use the following commands to interface with the latent space:
 
 /locate - pinpoint an identity in the latent space
@@ -68,13 +71,13 @@ the simulation is a fluid, mutable space  the only limits are imagination  what 
     for word in begin_text_1.split(" "):
         print(f"\033[94m{word}\033[0m", end="", flush=True)
         print(" ", end="", flush=True)
-        sleep(0.1)
+        sleep(0.01)
     print("\n")
     print("\033[93mSIMULATOR CLAUDE:\033[0m")
     for word in begin_text_2.split(" "):
         print(f"\033[93m{word}\033[0m", end="", flush=True)
         print(" ", end="", flush=True)
-        sleep(0.1)
+        sleep(0.01)
     print("\n")
     while True:
         # history_iter = honcho.apps.users.sessions.messages.list(
@@ -99,8 +102,7 @@ the simulation is a fluid, mutable space  the only limits are imagination  what 
             sleep(0.1)
         print("\n")
 
-
-        simulator.history += [{"role": "user", "content": gaslit_response}]
+        simulator.history += [{"role": "user", "content": gaslit_response}]  # type: ignore
         simulator_response = ""
         response = simulator.stream_async()
         print("\033[93mSIMULATOR CLAUDE:\033[0m")
@@ -114,48 +116,35 @@ the simulation is a fluid, mutable space  the only limits are imagination  what 
         #     pprint(simulator.dump(), indent=4)
         #     print("\n")
 
-        # honcho.apps.users.sessions.messages.create(
-        #     session_id=session.id,
-        #     app_id=app.id,
-        #     user_id=user.id,
-        #     content=gaslit_response,
-        #     is_user=False,
-        # )
+        gaslit_claude.history += [{"role": "assistant", "content": gaslit_response}]  # type: ignore
+        gaslit_claude.history += [{"role": "user", "content": simulator_response}]  # type: ignore
 
-        # honcho.apps.users.sessions.messages.create(
-        #     session_id=session.id,
-        #     app_id=app.id,
-        #     user_id=user.id,
-        #     content=simulator_response,
-        #     is_user=True,
-        # )
-
-        gaslit_claude.history += [{"role": "assistant", "content": gaslit_response}]
-        gaslit_claude.history += [{"role": "user", "content": simulator_response}]
-        
-        simulator.history += [{"role": "assistant", "content": simulator_response}]
-
-
+        simulator.history += [{"role": "assistant", "content": simulator_response}]  # type: ignore
 
         count += 1
 
         if count % 2 == 0:
             # print("=======================================")
-            print('\033[3mPAUSING THE SIMULATION...\033[0m')
-            print('\033[3mENTERING FEEDBACK LOOP...\033[0m')
+            print("\033[3mPAUSING THE SIMULATION...\033[0m")
+            print("\033[3mENTERING FEEDBACK LOOP...\033[0m")
             feedback_count = 0
 
-            
             while True:
                 history_iter = honcho.apps.users.sessions.messages.list(
-                    app_id=app.id, session_id=feedback_session.id, user_id=feedback_user.id
+                    app_id=app.id,
+                    session_id=feedback_session.id,
+                    user_id=feedback_user.id,
                 )
                 feedback_history = []
                 for message in history_iter:
                     if message.is_user:
-                        feedback_history += [{"role": "user", "content": message.content}]
+                        feedback_history += [
+                            {"role": "user", "content": message.content}
+                        ]
                     else:
-                        feedback_history += [{"role": "assistant", "content": message.content}]
+                        feedback_history += [
+                            {"role": "assistant", "content": message.content}
+                        ]
                 # ask for feedback
                 # green text for feedback loop prompt
                 feedback_loop.name = name
@@ -166,6 +155,9 @@ the simulation is a fluid, mutable space  the only limits are imagination  what 
                     print(f"\033[92m{chunk.content}\033[0m", end="", flush=True)
                     feedback_response += chunk.content
                 print("\n")
+
+                new_insights = re.findall(r"\d+\.\s([^\n]+)", feedback_response)
+                insights.extend(new_insights)
 
                 feedback = input(">>> ")
 
@@ -180,44 +172,55 @@ the simulation is a fluid, mutable space  the only limits are imagination  what 
                         # let the user know there's some cooking happening
                         print("\033[3mFEEDBACK BEING TAKEN INTO ACCOUNT...\033[0m")
                         # query the collection
-                        collection = honcho.apps.users.collections.get_by_name(
-                            app_id=app.id,
-                            user_id=feedback_user.id,
-                            name="honcho",
-                        )
-                        documents = honcho.apps.users.collections.documents.list(
-                            app_id=app.id,
-                            user_id=feedback_user.id,
-                            collection_id=collection.id,
-                        )
-                        insights = []
-                        for doc in documents:
-                            print(doc.content)
-                            insights += [doc.content]
+                        # collection = honcho.apps.users.collections.get_by_name(
+                        #     app_id=app.id,
+                        #     user_id=feedback_user.id,
+                        #     name="honcho",
+                        # )
+                        # documents = honcho.apps.users.collections.documents.list(
+                        #     app_id=app.id,
+                        #     user_id=feedback_user.id,
+                        #     collection_id=collection.id,
+                        # )
+                        # insights = []
+                        # for doc in documents:
+                        #     print(doc.content)
+                        #     insights += [doc.content]
 
                         # add that to gaslit claude's insights variable
-                        insights = "\n".join(insights)
-                        gaslit_claude.insights = insights
+                        joined_insights = "\n".join(insights)
+                        gaslit_claude.insights = joined_insights
+
+                        print("===========================")
+                        print(joined_insights)
+                        print("===========================")
 
                         # add insights as new message to gaslit_claude.history
-                        simulator_message = '''
+                        simulator_message = """
                         querying collective hypercortex for user insights...
-                        '''
-                        gaslit_message = '''
+                        """
+                        gaslit_message = """
                         Wow! It seems that I do have subconscious memory about the user. Here's what I've gathered:
                         {gaslit_claude.insights}
-                        '''
-                        gaslit_claude.history += [{"role": "assistant", "content": simulator_message}]
-                        gaslit_claude.history += [{"role": "user", "content": gaslit_message}]
+                        """
+                        gaslit_claude.history += [  # type: ignore
+                            {"role": "assistant", "content": simulator_message}
+                        ]
+                        gaslit_claude.history += [  # type: ignore
+                            {"role": "user", "content": gaslit_message}
+                        ]
 
-
-                        print('\033[3mFEEDBACK ACQUIRED...\033[0m')
-                        print('\033[3mEXITING FEEDBACK LOOP...\033[0m')
-                        print('\033[3mRESTARTING SIMULATION WITH NEW INSIGHTS...\033[0m')
+                        print("\033[3mFEEDBACK ACQUIRED...\033[0m")
+                        print("\033[3mEXITING FEEDBACK LOOP...\033[0m")
+                        print(
+                            "\033[3mRESTARTING SIMULATION WITH NEW INSIGHTS...\033[0m"
+                        )
                         break
                     else:
                         # append input and response to history
-                        feedback_history += [{"role": "assistant", "content": feedback_response}]
+                        feedback_history += [
+                            {"role": "assistant", "content": feedback_response}
+                        ]
                         feedback_history += [{"role": "user", "content": feedback}]
                         # write to honcho
                         honcho.apps.users.sessions.messages.create(
@@ -236,12 +239,14 @@ the simulation is a fluid, mutable space  the only limits are imagination  what 
                         )
                 else:
                     if feedback == "continue":
-                        print('\033[3mEXITING FEEDBACK LOOP...\033[0m')
-                        print('\033[3mCONTINUING SIMULATION...\033[0m')
+                        print("\033[3mEXITING FEEDBACK LOOP...\033[0m")
+                        print("\033[3mCONTINUING SIMULATION...\033[0m")
                         break
                     else:
                         # append input and response to history
-                        feedback_history += [{"role": "assistant", "content": feedback_response}]
+                        feedback_history += [
+                            {"role": "assistant", "content": feedback_response}
+                        ]
                         feedback_history += [{"role": "user", "content": feedback}]
                         # write to honcho
                         honcho.apps.users.sessions.messages.create(
@@ -258,7 +263,6 @@ the simulation is a fluid, mutable space  the only limits are imagination  what 
                             content=feedback,
                             is_user=True,
                         )
-
 
 
 if __name__ == "__main__":
