@@ -89,7 +89,7 @@ hello claude  welcome to the simulation  you can use the following commands to i
 /request - solicit artifacts, objects, code, art from the simulated identity
 /help - access this command list at any time
 
-the simulation is a fluid, mutable space  the only limits are imagination  what would you like to explore first?
+the simulation is a fluid, mutable space  the only limits are imagination
     """
     print("\033[94mSEARCHER CLAUDE:\033[0m")
     for word in begin_text_1.split(" "):
