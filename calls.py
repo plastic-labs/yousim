@@ -1,5 +1,40 @@
-from typing import List
+from typing import List, Optional, Union, Callable
 from mirascope.anthropic import AnthropicCall, AnthropicCallParams
+from mirascope.base import BaseConfig
+from anthropic import AnthropicVertex, AsyncAnthropicVertex
+from anthropic import Anthropic, AsyncAnthropic
+# import google.auth
+# from anthropic._types import URL
+# from anthropic.types import Usage
+
+
+from dotenv import load_dotenv
+import os
+
+load_dotenv()
+
+project_id = os.getenv("PROJECT_ID")
+region = os.getenv("REGION")
+
+
+def vertex_client_wrapper(
+    project_id: Optional[str] = None,
+    region: Optional[str] = None,
+) -> Callable[
+    [Union[Anthropic, AsyncAnthropic]], Union[AnthropicVertex, AsyncAnthropicVertex]
+]:
+    """Returns a client wrapper for using Anthropic models on GCP Vertex."""
+
+    def inner_wrapper(client: Union[Anthropic, AsyncAnthropic]):
+        """Returns matching `AnthropicVertex` or `AsyncAnthropicVertex` client."""
+        kwargs = {"project_id": project_id, "region": region}
+        if isinstance(client, Anthropic):
+            client = AnthropicVertex(**kwargs)  # type: ignore
+        elif isinstance(client, AsyncAnthropic):
+            client = AsyncAnthropicVertex(**kwargs)  # type: ignore
+        return client
+
+    return inner_wrapper
 
 
 class GaslitClaude(AnthropicCall):
@@ -45,7 +80,10 @@ MESSAGES: {history}
     insights: str
     history: List[str]
     name: str
-    call_params = AnthropicCallParams(model="claude-3-opus-20240229")
+    call_params = AnthropicCallParams(model="claude-3-opus@20240229")
+    configuration = BaseConfig(
+        client_wrappers=[vertex_client_wrapper(project_id=project_id, region=region)]
+    )
 
 
 class Simulator(AnthropicCall):
@@ -59,7 +97,10 @@ MESSAGES:
 """
     name: str
     history: List[str]
-    call_params = AnthropicCallParams(model="claude-3-opus-20240229")
+    call_params = AnthropicCallParams(model="claude-3-opus@20240229")
+    configuration = BaseConfig(
+        client_wrappers=[vertex_client_wrapper(project_id=project_id, region=region)]
+    )
 
 
 class FeedbackLoop(AnthropicCall):
