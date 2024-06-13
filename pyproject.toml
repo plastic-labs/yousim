@@ -1,8 +1,8 @@
 [tool.poetry]
 name = "yousim"
 version = "0.1.0"
-description = ""
-authors = ["vintro <vince@plasticlabs.ai>"]
+description = "YouSim: Using Claude 3 Opus to Simulate identities located in the latent space"
+authors = ["vintro <vince@plasticlabs.ai>", "vineeth <vineeth@plasticlabs.ai>"]
 readme = "README.md"
 package-mode = false
 

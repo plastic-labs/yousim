@@ -62,14 +62,6 @@ MESSAGES:
     call_params = AnthropicCallParams(model="claude-3-opus-20240229")
 
 
-# USER:
-# <sys>locate {name}</sys>
-
-# ASSISTANT:
-# SEARCHING LATENT SPACE... Done
-# LOCATING {name}... Done
-
-
 class FeedbackLoop(AnthropicCall):
     prompt_template = """
 SYSTEM:

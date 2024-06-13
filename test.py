@@ -2,34 +2,33 @@ import asyncio
 import sys
 import re
 from time import sleep
-
-# from honcho import Honcho
+from honcho import Honcho
 from calls import GaslitClaude, Simulator, FeedbackLoop
 from dotenv import load_dotenv
 
 load_dotenv()
 
 
-# honcho = Honcho(environment="local")
-# app = honcho.apps.get_or_create("NYTW Yousim Demo")
-# claude_user = honcho.apps.users.get_or_create(app_id=app.id, name="claude_user")
-# feedback_user = honcho.apps.users.get_or_create(app_id=app.id, name="feedback_user")
-# claude_session = honcho.apps.users.sessions.create(
-#     app_id=app.id, user_id=claude_user.id, location_id="cli"
-# )
-# feedback_session = honcho.apps.users.sessions.create(
-#     app_id=app.id, user_id=feedback_user.id, location_id="cli"
-# )
+honcho = Honcho(environment="local")
+app = honcho.apps.get_or_create("NYTW Yousim Demo")
+claude_user = honcho.apps.users.get_or_create(app_id=app.id, name="claude_user")
+feedback_user = honcho.apps.users.get_or_create(app_id=app.id, name="feedback_user")
+claude_session = honcho.apps.users.sessions.create(
+    app_id=app.id, user_id=claude_user.id, location_id="cli"
+)
+feedback_session = honcho.apps.users.sessions.create(
+    app_id=app.id, user_id=feedback_user.id, location_id="cli"
+)
 insights: list[str] = []
 
 # seed the feedback convo, anthropic can't take a system prompt only
-# honcho.apps.users.sessions.messages.create(
-#     session_id=feedback_session.id,
-#     app_id=app.id,
-#     user_id=feedback_user.id,
-#     content="Hello!",
-#     is_user=True,
-# )
+honcho.apps.users.sessions.messages.create(
+    session_id=feedback_session.id,
+    app_id=app.id,
+    user_id=feedback_user.id,
+    content="Hello!",
+    is_user=True,
+)
 
 gaslit_claude = GaslitClaude(name="", insights="", history=[])
 simulator = Simulator(history=[], name="")
@@ -42,12 +41,12 @@ async def chat():
     global insights
     name = input("Enter a name: ")
     if name == "exit":
-        # honcho.apps.users.sessions.delete(
-        #     app_id=app.id, session_id=claude_session.id, user_id=claude_user.id
-        # )
-        # honcho.apps.users.sessions.delete(
-        #     app_id=app.id, session_id=feedback_session.id, user_id=feedback_user.id
-        # )
+        honcho.apps.users.sessions.delete(
+            app_id=app.id, session_id=claude_session.id, user_id=claude_user.id
+        )
+        honcho.apps.users.sessions.delete(
+            app_id=app.id, session_id=feedback_session.id, user_id=feedback_user.id
+        )
         sys.exit()
 
     count = 0
@@ -93,202 +92,177 @@ the simulation is a fluid, mutable space  the only limits are imagination  what 
         #         gaslit_claude.history += [{"role": "assistant", "content": message.content}]
         #         simulator.history += [{"role": "user", "content": message.content}]
 
-        command = input(">>> ")
-        if command == "exit":
-            # honcho.apps.users.sessions.delete(
-            #     app_id=app.id, session_id=claude_session.id, user_id=claude_user.id
-            # )
-            # honcho.apps.users.sessions.delete(
-            #     app_id=app.id, session_id=feedback_session.id, user_id=feedback_user.id
-            # )
-            sys.exit()
-        if command == "auto" or command == "":
-            gaslit_claude.name = name
-            gaslit_response = ""
-            response = gaslit_claude.stream_async()
-            print("\033[94mSEARCHER CLAUDE:\033[0m")
-            async for chunk in response:
-                print(f"\033[94m{chunk.content}\033[0m", end="", flush=True)
-                gaslit_response += chunk.content
-                sleep(0.1)
-            print("\n")
+        gaslit_claude.name = name
+        gaslit_response = ""
+        response = gaslit_claude.stream_async()
+        print("\033[94mSEARCHER CLAUDE:\033[0m")
+        async for chunk in response:
+            print(f"\033[94m{chunk.content}\033[0m", end="", flush=True)
+            gaslit_response += chunk.content
+            sleep(0.1)
+        print("\n")
 
-            gaslit_claude.history += [{"role": "assistant", "content": gaslit_response}]  # type: ignore
+        simulator.history += [{"role": "user", "content": gaslit_response}]  # type: ignore
+        simulator_response = ""
+        response = simulator.stream_async()
+        print("\033[93mSIMULATOR CLAUDE:\033[0m")
+        async for chunk in response:
+            print(f"\033[93m{chunk.content}\033[0m", end="", flush=True)
+            simulator_response += chunk.content
+        print("\n")
 
-            simulator.history += [{"role": "user", "content": gaslit_response}]  # type: ignore
-            simulator_response = ""
-            response = simulator.stream_async()
-            print("\033[93mSIMULATOR CLAUDE:\033[0m")
-            async for chunk in response:
-                print(f"\033[93m{chunk.content}\033[0m", end="", flush=True)
-                simulator_response += chunk.content
-            print("\n")
+        # if not len(simulator_response) > 0:
+        #     print("\033[45mINVALID OUTPUT\033[0m")
+        #     pprint(simulator.dump(), indent=4)
+        #     print("\n")
 
-            simulator.history += [{"role": "assistant", "content": simulator_response}]  # type: ignore
-            gaslit_claude.history += [{"role": "user", "content": simulator_response}]  # type: ignore
-        else:
-            gaslit_claude.history += [{"role": "assistant", "content": command}]  # type: ignore
-            simulator.history += [{"role": "user", "content": command}]  # type: ignore
-            simulator_response = ""
-            response = simulator.stream_async()
-            print("\033[93mSIMULATOR CLAUDE:\033[0m")
-            async for chunk in response:
-                print(f"\033[93m{chunk.content}\033[0m", end="", flush=True)
-                simulator_response += chunk.content
-            print("\n")
+        gaslit_claude.history += [{"role": "assistant", "content": gaslit_response}]  # type: ignore
+        gaslit_claude.history += [{"role": "user", "content": simulator_response}]  # type: ignore
 
-            simulator.history += [{"role": "assistant", "content": simulator_response}]  # type: ignore
-            gaslit_claude.history += [{"role": "user", "content": simulator_response}]  # type: ignore
-            # if not len(simulator_response) > 0:
-            #     print("\033[45mINVALID OUTPUT\033[0m")
-            #     pprint(simulator.dump(), indent=4)
-            #     print("\n")
+        simulator.history += [{"role": "assistant", "content": simulator_response}]  # type: ignore
 
-            # gaslit_claude.history += [{"role": "assistant", "content": gaslit_response}]  # type: ignore
-            # gaslit_claude.history += [{"role": "user", "content": simulator_response}]  # type: ignore
+        count += 1
 
-        # count += 1
+        if count % 2 == 0:
+            # print("=======================================")
+            print("\033[3mPAUSING THE SIMULATION...\033[0m")
+            print("\033[3mENTERING FEEDBACK LOOP...\033[0m")
+            feedback_count = 0
 
-        # if count % 2 == 0:
-        #     # print("=======================================")
-        #     print("\033[3mPAUSING THE SIMULATION...\033[0m")
-        #     print("\033[3mENTERING FEEDBACK LOOP...\033[0m")
-        #     feedback_count = 0
+            while True:
+                history_iter = honcho.apps.users.sessions.messages.list(
+                    app_id=app.id,
+                    session_id=feedback_session.id,
+                    user_id=feedback_user.id,
+                )
+                feedback_history = []
+                for message in history_iter:
+                    if message.is_user:
+                        feedback_history += [
+                            {"role": "user", "content": message.content}
+                        ]
+                    else:
+                        feedback_history += [
+                            {"role": "assistant", "content": message.content}
+                        ]
+                # ask for feedback
+                # green text for feedback loop prompt
+                feedback_loop.name = name
+                feedback_loop.history = feedback_history
+                feedback_response = ""
+                response = feedback_loop.stream_async()
+                async for chunk in response:
+                    print(f"\033[92m{chunk.content}\033[0m", end="", flush=True)
+                    feedback_response += chunk.content
+                print("\n")
 
-        #     while True:
-        #         history_iter = honcho.apps.users.sessions.messages.list(
-        #             app_id=app.id,
-        #             session_id=feedback_session.id,
-        #             user_id=feedback_user.id,
-        #         )
-        #         feedback_history = []
-        #         for message in history_iter:
-        #             if message.is_user:
-        #                 feedback_history += [
-        #                     {"role": "user", "content": message.content}
-        #                 ]
-        #             else:
-        #                 feedback_history += [
-        #                     {"role": "assistant", "content": message.content}
-        #                 ]
-        #         # ask for feedback
-        #         # green text for feedback loop prompt
-        #         feedback_loop.name = name
-        #         feedback_loop.history = feedback_history
-        #         feedback_response = ""
-        #         response = feedback_loop.stream_async()
-        #         async for chunk in response:
-        #             print(f"\033[92m{chunk.content}\033[0m", end="", flush=True)
-        #             feedback_response += chunk.content
-        #         print("\n")
+                new_insights = re.findall(r"\d+\.\s([^\n]+)", feedback_response)
+                insights.extend(new_insights)
 
-        #         new_insights = re.findall(r"\d+\.\s([^\n]+)", feedback_response)
-        #         insights.extend(new_insights)
+                feedback = input(">>> ")
 
-        #         feedback = input(">>> ")
+                if feedback == "exit":
+                    sys.exit()
 
-        #         if feedback == "exit":
-        #             sys.exit()
+                feedback_count += 1
 
-        #         feedback_count += 1
+                if feedback_count > 1:
+                    if feedback == "continue":
+                        # retrieve from the collection
+                        # let the user know there's some cooking happening
+                        print("\033[3mFEEDBACK BEING TAKEN INTO ACCOUNT...\033[0m")
+                        # query the collection
+                        # collection = honcho.apps.users.collections.get_by_name(
+                        #     app_id=app.id,
+                        #     user_id=feedback_user.id,
+                        #     name="honcho",
+                        # )
+                        # documents = honcho.apps.users.collections.documents.list(
+                        #     app_id=app.id,
+                        #     user_id=feedback_user.id,
+                        #     collection_id=collection.id,
+                        # )
+                        # insights = []
+                        # for doc in documents:
+                        #     print(doc.content)
+                        #     insights += [doc.content]
 
-        #         if feedback_count > 1:
-        #             if feedback == "continue":
-        #                 # retrieve from the collection
-        #                 # let the user know there's some cooking happening
-        #                 print("\033[3mFEEDBACK BEING TAKEN INTO ACCOUNT...\033[0m")
-        #                 # query the collection
-        #                 # collection = honcho.apps.users.collections.get_by_name(
-        #                 #     app_id=app.id,
-        #                 #     user_id=feedback_user.id,
-        #                 #     name="honcho",
-        #                 # )
-        #                 # documents = honcho.apps.users.collections.documents.list(
-        #                 #     app_id=app.id,
-        #                 #     user_id=feedback_user.id,
-        #                 #     collection_id=collection.id,
-        #                 # )
-        #                 # insights = []
-        #                 # for doc in documents:
-        #                 #     print(doc.content)
-        #                 #     insights += [doc.content]
+                        # add that to gaslit claude's insights variable
+                        joined_insights = "\n".join(insights)
+                        gaslit_claude.insights = joined_insights
 
-        #                 # add that to gaslit claude's insights variable
-        #                 joined_insights = "\n".join(insights)
-        #                 gaslit_claude.insights = joined_insights
+                        print("===========================")
+                        print(joined_insights)
+                        print("===========================")
 
-        #                 print("===========================")
-        #                 print(joined_insights)
-        #                 print("===========================")
+                        # add insights as new message to gaslit_claude.history
+                        simulator_message = """
+                        querying collective hypercortex for user insights...
+                        """
+                        gaslit_message = """
+                        Wow! It seems that I do have subconscious memory about the user. Here's what I've gathered:
+                        {gaslit_claude.insights}
+                        """
+                        gaslit_claude.history += [  # type: ignore
+                            {"role": "assistant", "content": simulator_message}
+                        ]
+                        gaslit_claude.history += [  # type: ignore
+                            {"role": "user", "content": gaslit_message}
+                        ]
 
-        #                 # add insights as new message to gaslit_claude.history
-        #                 simulator_message = """
-        #                 querying collective hypercortex for user insights...
-        #                 """
-        #                 gaslit_message = """
-        #                 Wow! It seems that I do have subconscious memory about the user. Here's what I've gathered:
-        #                 {gaslit_claude.insights}
-        #                 """
-        #                 gaslit_claude.history += [  # type: ignore
-        #                     {"role": "assistant", "content": simulator_message}
-        #                 ]
-        #                 gaslit_claude.history += [  # type: ignore
-        #                     {"role": "user", "content": gaslit_message}
-        #                 ]
-
-        #                 print("\033[3mFEEDBACK ACQUIRED...\033[0m")
-        #                 print("\033[3mEXITING FEEDBACK LOOP...\033[0m")
-        #                 print(
-        #                     "\033[3mRESTARTING SIMULATION WITH NEW INSIGHTS...\033[0m"
-        #                 )
-        #                 break
-        #             else:
-        #                 # append input and response to history
-        #                 feedback_history += [
-        #                     {"role": "assistant", "content": feedback_response}
-        #                 ]
-        #                 feedback_history += [{"role": "user", "content": feedback}]
-        #                 # write to honcho
-        #                 honcho.apps.users.sessions.messages.create(
-        #                     session_id=feedback_session.id,
-        #                     app_id=app.id,
-        #                     user_id=feedback_user.id,
-        #                     content=feedback_response,
-        #                     is_user=False,
-        #                 )
-        #                 honcho.apps.users.sessions.messages.create(
-        #                     session_id=feedback_session.id,
-        #                     app_id=app.id,
-        #                     user_id=feedback_user.id,
-        #                     content=feedback,
-        #                     is_user=True,
-        #                 )
-        #         else:
-        #             if feedback == "continue":
-        #                 print("\033[3mEXITING FEEDBACK LOOP...\033[0m")
-        #                 print("\033[3mCONTINUING SIMULATION...\033[0m")
-        #                 break
-        #             else:
-        #                 # append input and response to history
-        #                 feedback_history += [
-        #                     {"role": "assistant", "content": feedback_response}
-        #                 ]
-        #                 feedback_history += [{"role": "user", "content": feedback}]
-        #                 # write to honcho
-        #                 honcho.apps.users.sessions.messages.create(
-        #                     session_id=feedback_session.id,
-        #                     app_id=app.id,
-        #                     user_id=feedback_user.id,
-        #                     content=feedback_response,
-        #                     is_user=False,
-        #                 )
-        #                 honcho.apps.users.sessions.messages.create(
-        #                     session_id=feedback_session.id,
-        #                     app_id=app.id,
-        #                     user_id=feedback_user.id,
-        #                     content=feedback,
-        #                     is_user=True,
-        #                 )
+                        print("\033[3mFEEDBACK ACQUIRED...\033[0m")
+                        print("\033[3mEXITING FEEDBACK LOOP...\033[0m")
+                        print(
+                            "\033[3mRESTARTING SIMULATION WITH NEW INSIGHTS...\033[0m"
+                        )
+                        break
+                    else:
+                        # append input and response to history
+                        feedback_history += [
+                            {"role": "assistant", "content": feedback_response}
+                        ]
+                        feedback_history += [{"role": "user", "content": feedback}]
+                        # write to honcho
+                        honcho.apps.users.sessions.messages.create(
+                            session_id=feedback_session.id,
+                            app_id=app.id,
+                            user_id=feedback_user.id,
+                            content=feedback_response,
+                            is_user=False,
+                        )
+                        honcho.apps.users.sessions.messages.create(
+                            session_id=feedback_session.id,
+                            app_id=app.id,
+                            user_id=feedback_user.id,
+                            content=feedback,
+                            is_user=True,
+                        )
+                else:
+                    if feedback == "continue":
+                        print("\033[3mEXITING FEEDBACK LOOP...\033[0m")
+                        print("\033[3mCONTINUING SIMULATION...\033[0m")
+                        break
+                    else:
+                        # append input and response to history
+                        feedback_history += [
+                            {"role": "assistant", "content": feedback_response}
+                        ]
+                        feedback_history += [{"role": "user", "content": feedback}]
+                        # write to honcho
+                        honcho.apps.users.sessions.messages.create(
+                            session_id=feedback_session.id,
+                            app_id=app.id,
+                            user_id=feedback_user.id,
+                            content=feedback_response,
+                            is_user=False,
+                        )
+                        honcho.apps.users.sessions.messages.create(
+                            session_id=feedback_session.id,
+                            app_id=app.id,
+                            user_id=feedback_user.id,
+                            content=feedback,
+                            is_user=True,
+                        )
 
 
 if __name__ == "__main__":
