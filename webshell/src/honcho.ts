@@ -4,7 +4,7 @@ const API_URL = import.meta.env.VITE_API_URL
 /*
  *
  * */
-export function getUser() {
+export async function getUser() {
   const username = localStorage.getItem("username")
   const user_id = localStorage.getItem("user_id")
   // const session_id = localStorage.getItem("session_id")
@@ -41,7 +41,7 @@ export function getUser() {
 
 
 
-export function newSession() {
+export async function newSession() {
   const user_id = localStorage.getItem("user_id")
   return fetch(`${API_URL}/reset?user_id=${user_id}`)
     .then(response => response.json())

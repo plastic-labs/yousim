@@ -570,8 +570,8 @@ const initEventListeners = () => {
     if (USERINPUT) {
       USERINPUT.focus()
     }
-    getUser();
-    newSession();
+    await getUser();
+    await newSession();
   });
 
   USERINPUT.addEventListener('keypress', userInputHandler);
