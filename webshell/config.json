@@ -1,0 +1,56 @@
+{
+  "ascii": [
+    "██╗   ██╗ ██████╗ ██╗   ██╗███████╗██╗███╗   ███╗",
+    "╚██╗ ██╔╝██╔═══██╗██║   ██║██╔════╝██║████╗ ████║",
+    " ╚████╔╝ ██║   ██║██║   ██║███████╗██║██╔████╔██║",
+    "  ╚██╔╝  ██║   ██║██║   ██║╚════██║██║██║╚██╔╝██║",
+    "   ██║   ╚██████╔╝╚██████╔╝███████║██║██║ ╚═╝ ██║",
+    "   ╚═╝    ╚═════╝  ╚═════╝ ╚══════╝╚═╝╚═╝     ╚═╝"
+  ],
+  "title": "YouSim",
+  "username": "simulator",
+  "hostname": "anthropic",
+  "password": "050823",
+  "repoLink": "https://github.com/nasan016/webshell",
+  "social": {
+    "email": "your@email.com",
+    "github": "yourgithub",
+    "linkedin": "you"
+  },
+  "aboutGreeting": "Hi stranger. Welcome to WebShell.",
+  "projects": [
+    [
+      "GofeR",
+      "Vue.js reactivity in Go.",
+      "https://github.com/nasan016/gofer"
+    ],
+    [
+      "WebShell",
+      "Terminal styled website.",
+      "https://github.com/nasan016/webshell"
+    ]
+  ],
+  "colors": {
+    "background": "#0C0623",
+    "foreground": "#F8DDE5",
+    "banner": "#FF9951",
+    "border": {
+      "visible": true,
+      "color": "#FFADE2"
+    },
+    "prompt": {
+      "default": "#A5A7A7",
+      "user": "#FE6BC9",
+      "host": "#70FDFF",
+      "input": "#FF7685"
+    },
+    "link": {
+      "text": "#B6AAEE",
+      "highlightColor": "#FFADE2",
+      "highlightText": "#0C0623"
+    },
+    "commands": {
+      "textColor": "#FD9BDB"
+    }
+  }
+}

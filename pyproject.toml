@@ -7,11 +7,13 @@ readme = "README.md"
 package-mode = false
 
 [tool.poetry.dependencies]
-python = "^3.12"
+python = "^3.11"
 mirascope = {extras = ["anthropic"], version = "^0.16.0"}
 honcho-ai = "^0.0.12"
 python-dotenv = "^1.0.1"
 google-auth = "^2.30.0"
+fastapi = "^0.111.0"
+sentry-sdk = {extras = ["fastapi"], version = "^2.5.1"}
 
 
 [build-system]
