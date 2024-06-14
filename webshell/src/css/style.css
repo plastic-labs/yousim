@@ -1,0 +1,209 @@
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@200;300;400;600&family=Pixelify+Sans&family=VT323&display=swap');
+
+:root {
+  font-family: 'IBM Plex Mono', monospace;
+  font-weight: 200;
+  --bg: #0C0623;
+  --border: #FFADE2;
+  --text: #F8DDE5;
+  --prompt-default: #A5A7A7;
+  --prompt-1: #FE6BC9;
+  --prompt-2: #70FDFF;
+}
+
+@keyframes typing {
+  from {
+    width: 0
+  }
+
+  to {
+    width: 100%
+  }
+}
+
+html,
+body {
+  color: var(--text);
+  background-color: var(--bg);
+  height: 100%;
+  font-size: 16px;
+  display: block;
+}
+
+html {
+  overflow: auto;
+}
+
+body {
+  padding: 16px;
+  box-sizing: border-box;
+}
+
+main {
+  display: block;
+  box-sizing: border-box;
+  height: 100%;
+  border: var(--border) solid 2px;
+  border-radius: 2px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+main::-webkit-scrollbar {
+  display: none;
+}
+
+p {
+  display: block;
+  line-height: 22px;
+  animation: typing 0.5s steps(30, end);
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+div {
+  line-height: 22px;
+}
+
+@font-face {
+  font-family: ascii;
+  src: url("./font/IBMPlexMono-Thin.ttf")
+}
+
+pre {
+  margin: 0;
+  padding: 0;
+  line-height: 20px !important;
+  color: #FF9951;
+  font-family: "ascii", monospace;
+}
+
+input {
+  font-family: 'IBM Plex Mono', monospace;
+  padding: 0px;
+  margin: 0px;
+  border: none;
+  resize: none;
+  outline: none;
+  font-size: 16px;
+  color: #FF7685;
+  caret-color: var(--prompt-default);
+  width: 50%;
+}
+
+a {
+  color: #B6AAEE;
+}
+
+a:hover {
+  background-color: var(--border);
+  color: var(--bg);
+}
+
+#bars {
+  font-family: 'Pixelify Sans', sans-serif;
+  font-size: 20px;
+  position: -webkit-sticky;
+  position: sticky;
+  width: 100%;
+  top: 0;
+  background-color: var(--bg);
+}
+
+#bar-1 {
+  height: 36px;
+  background-color: var(--border);
+  color: var(--bg);
+  line-height: 36px;
+  padding-left: 10px;
+}
+
+#bar-2 {
+  height: 4px;
+  background-color: var(--border);
+  margin-top: 1px;
+}
+
+#bar-3 {
+  height: 3px;
+  background-color: var(--border);
+  margin-top: 2px;
+}
+
+#bar-4 {
+  height: 2px;
+  background-color: var(--border);
+  margin-top: 3px;
+}
+
+
+#bar-5 {
+  height: 1px;
+  background-color: var(--border);
+  margin-top: 4px;
+}
+
+#terminal {
+  margin-left: 20px;
+}
+
+#input-line {
+  margin-left: 20px;
+  overflow-x: hidden;
+  width: 100%;
+}
+
+.command {
+  text-shadow:
+    0 0 7px #fff,
+    0 0 151px var(--border);
+  color: #FD9BDB;
+}
+
+.output {
+  font-weight: 400 !important;
+}
+
+.keys {
+  color: #FF9951;
+  font-weight: 400;
+}
+
+@media (max-width: 600px) {
+  body {
+    font-size: 10px;
+    padding: 2px;
+    font-weight: 300;
+  }
+
+  input {
+    font-size: 10px;
+  }
+
+  p {
+    line-height: 14px;
+  }
+
+  pre {
+    line-height: 12px !important;
+    font-size: 9px;
+  }
+
+  main {
+    border-width: 1px;
+  }
+
+  div {
+    line-height: 14px;
+  }
+
+  #terminal {
+    margin-left: 8px;
+  }
+
+  #input-line {
+    margin-left: 8px;
+  }
+}

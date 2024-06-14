@@ -12,6 +12,7 @@ mirascope = {extras = ["anthropic"], version = "^0.16.0"}
 honcho-ai = "^0.0.12"
 python-dotenv = "^1.0.1"
 google-auth = "^2.30.0"
+fastapi = "^0.111.0"
 
 
 [build-system]
