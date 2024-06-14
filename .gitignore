@@ -12,3 +12,7 @@ webshell/node_modules/**
 node_modules/**
 
 webshell/dist/**
+
+
+# Sentry Config File
+webshell/.env.sentry-build-plugin

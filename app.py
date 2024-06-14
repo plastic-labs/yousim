@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from contextvars import ContextVar
 
+import sentry_sdk
 from pydantic import BaseModel
 
 from honcho import Honcho
@@ -26,6 +27,17 @@ simulator_ctx = ContextVar("simulator", default=Simulator(history=[], name=""))
 
 # gaslit_response = ContextVar("gaslit_response", default="")
 # simulator_response = ContextVar("simulator_response", default="")
+
+sentry_sdk.init(
+    dsn=os.getenv("SENTRY_DSN"),
+    # Set traces_sample_rate to 1.0 to capture 100%
+    # of transactions for performance monitoring.
+    traces_sample_rate=1.0,
+    # Set profiles_sample_rate to 1.0 to profile 100%
+    # of sampled transactions.
+    # We recommend adjusting this value in production.
+    profiles_sample_rate=1.0,
+)
 
 app = FastAPI()
 

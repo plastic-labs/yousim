@@ -10,10 +10,13 @@
   },
   "devDependencies": {
     "@types/js-yaml": "^4.0.9",
+    "@types/uuid": "^9.0.8",
     "typescript": "^5.2.2",
     "vite": "^5.0.0"
   },
   "dependencies": {
+    "@sentry/browser": "^8.9.2",
+    "@sentry/vite-plugin": "^2.18.0",
     "js-yaml": "^4.1.0",
     "posthog-js": "^1.139.1",
     "uuid": "^10.0.0"

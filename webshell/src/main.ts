@@ -1,28 +1,44 @@
 import command from '../config.json' assert {type: 'json'};
+import * as Sentry from "@sentry/browser";
 import { HELP } from "./commands/help";
 import { BANNER } from "./commands/banner";
-import { ABOUT } from "./commands/about"
+// import { ABOUT } from "./commands/about"
 import { DEFAULT } from "./commands/default";
-import { PROJECTS } from "./commands/projects";
-import { createWhoami } from "./commands/whoami";
+// import { PROJECTS } from "./commands/projects";
+// import { createWhoami } from "./commands/whoami";
 import posthog from 'posthog-js'
-import { getUser, checkSession, newSession, manual, auto } from "./honcho"
+import { getUser, newSession, manual, auto } from "./honcho"
 
-posthog.init('phc_RKXB27qjiNjaORFYsfN7OpyZKkRM9ZrYiJlo2WhHOfd',
+posthog.init(import.meta.env.VITE_POSTHOG_KEY,
   {
     api_host: 'https://us.i.posthog.com',
     person_profiles: 'always' // or 'always' to create profiles for anonymous users as well
   }
 )
 
+Sentry.init({
+  dsn: import.meta.env.VITE_SENTRY_DSN,
+  integrations: [
+    Sentry.browserTracingIntegration(),
+    Sentry.replayIntegration(),
+  ],
+  // Performance Monitoring
+  tracesSampleRate: 1.0, //  Capture 100% of the transactions
+  // Set 'tracePropagationTargets' to control for which URLs distributed tracing should be enabled
+  tracePropagationTargets: ["localhost", /^https:\/\/yourserver\.io\/api/, "yousim.ai"],
+  // Session Replay
+  replaysSessionSampleRate: 0.1, // This sets the sample rate at 10%. You may want to change it to 100% while in development and then sample at a lower rate in production.
+  replaysOnErrorSampleRate: 1.0, // If you're not already sampling the entire session, change the sample rate to 100% when sampling sessions where errors occur.
+});
+
 //mutWriteLines gets deleted and reassigned
 let mutWriteLines = document.getElementById("write-lines");
 let historyIdx = 0
 let tempInput = ""
 let userInput: string;
-let isSudo = false;
+// let isSudo = false;
 let isPasswordInput = false;
-let passwordCounter = 0;
+// let passwordCounter = 0;
 let bareMode = false;
 let NAME = "";
 
@@ -30,19 +46,19 @@ let NAME = "";
 const WRITELINESCOPY = mutWriteLines;
 const TERMINAL = document.getElementById("terminal");
 const USERINPUT = document.getElementById("user-input") as HTMLInputElement;
-const INPUT_HIDDEN = document.getElementById("input-hidden");
-const PASSWORD = document.getElementById("password-input");
+// const INPUT_HIDDEN = document.getElementById("input-hidden");
+// const PASSWORD = document.getElementById("password-input");
 const PASSWORD_INPUT = document.getElementById("password-field") as HTMLInputElement;
 const PRE_HOST = document.getElementById("pre-host");
 const PRE_USER = document.getElementById("pre-user");
-const HOST = document.getElementById("host");
-const USER = document.getElementById("user");
+// const HOST = document.getElementById("host");
+// const USER = document.getElementById("user");
 const PROMPT = document.getElementById("prompt");
 const MAIN_PROMPT = document.querySelector("#input-hidden > span#prompt");
 const COMMANDS = ["help", "about", "projects", "whoami", "repo", "banner", "clear"];
 const HISTORY: string[] = [];
-const SUDO_PASSWORD = command.password;
-const REPO_LINK = command.repoLink;
+// const SUDO_PASSWORD = command.password;
+// const REPO_LINK = command.repoLink;
 
 const scrollToBottom = () => {
   const MAIN = document.getElementById("main");
@@ -60,7 +76,7 @@ function userInputHandler(e: KeyboardEvent) {
       if (!isPasswordInput) {
         enterKey();
       } else {
-        passwordHandler();
+        // passwordHandler();
       }
 
       scrollToBottom();
@@ -107,6 +123,15 @@ async function enterKey() {
     return
   }
 
+  if (userInput === 'help') {
+    commandHandler(userInput.toLowerCase().trim());
+    USERINPUT.value = resetInput;
+    userInput = resetInput;
+    const div = document.createElement("div");
+    div.innerHTML = `<span id="prompt">${PROMPT.innerHTML}</span> ${newUserInput}`;
+    return
+  }
+
   const div = document.createElement("div");
   div.innerHTML = `<span id="prompt">${PROMPT.innerHTML}</span> ${newUserInput}`;
 
@@ -135,7 +160,7 @@ async function enterKey() {
   }
   if (MAIN_PROMPT) {
     if (NAME === '') {
-      MAIN_PROMPT.innerHTML = "LOADING..."
+      MAIN_PROMPT.innerHTML = "Enter a Name to Simulate >>> ";
     } else {
       MAIN_PROMPT.innerHTML = `<span id="prompt"><span id="user">${command.username}</span>@<span id="host">${command.hostname}</span>:$ ~ `
     }
@@ -148,10 +173,24 @@ async function enterKey() {
 }
 
 async function localManual(command: string) {
-  let acc = "SIMULATOR CLAUDE:\n"
+  let acc = "SEARCHER CLAUDE:\n"
+  acc += command.replace(/\n/g, "<br>").replace(/ /g, "&nbsp;");
   if (!mutWriteLines) return
   let p = document.createElement("p");
-  p.innerHTML = acc.replace(/\n/g, "<br>").replace(/ /g, "&nbsp;");
+  let span = document.createElement("span");
+  span.className = "searcher";
+  p.appendChild(span);
+  span.innerHTML = acc.replace(/\n/g, "<br>").replace(/ /g, "&nbsp;");
+  mutWriteLines.parentNode!.insertBefore(p, mutWriteLines);
+  scrollToBottom();
+
+  acc = "\nSIMULATOR CLAUDE:\n"
+  if (!mutWriteLines) return
+  p = document.createElement("p");
+  span = document.createElement("span");
+  p.appendChild(span);
+  span.className = "simulator";
+  span.innerHTML = acc.replace(/\n/g, "<br>").replace(/ /g, "&nbsp;");
   mutWriteLines.parentNode!.insertBefore(p, mutWriteLines);
   scrollToBottom();
 
@@ -167,7 +206,7 @@ async function localManual(command: string) {
       acc += value
       // if (!mutWriteLines) return
       // let p = document.createElement("p");
-      p.innerHTML = acc.replace(/\n/g, "<br>").replace(/ /g, "&nbsp;");
+      span.innerHTML = acc.replace(/\n/g, "<br>").replace(/ /g, "&nbsp;");
       // mutWriteLines.parentNode!.insertBefore(p, mutWriteLines);
       scrollToBottom();
     }
@@ -176,10 +215,14 @@ async function localManual(command: string) {
 }
 
 async function localAuto() {
-  let acc = "\nSEARCHER CLAUDE:\n"
+  let acc = "SEARCHER CLAUDE:\n"
   if (!mutWriteLines) return
   let p = document.createElement("p");
-  p.innerHTML = acc.replace(/\n/g, "<br>").replace(/ /g, "&nbsp;");
+  let span = document.createElement("span");
+  span.className = "searcher";
+  p.appendChild(span);
+  span.innerHTML = acc.replace(/\n/g, "<br>").replace(/ /g, "&nbsp;");
+
   mutWriteLines.parentNode!.insertBefore(p, mutWriteLines);
   scrollToBottom();
 
@@ -194,7 +237,10 @@ async function localAuto() {
       console.log(acc)
       acc = "\nSIMULATOR CLAUDE:\n"
       p = document.createElement("p");
-      p.innerHTML = acc.replace(/\n/g, "<br>").replace(/ /g, "&nbsp;");
+      span = document.createElement("span");
+      p.appendChild(span);
+      span.className = "simulator";
+      span.innerHTML = acc.replace(/\n/g, "<br>").replace(/ /g, "&nbsp;");
       mutWriteLines.parentNode!.insertBefore(p, mutWriteLines);
       scrollToBottom();
     } else if (value) {
@@ -202,7 +248,7 @@ async function localAuto() {
       acc += value
       // if (!mutWriteLines) return
       // let p = document.createElement("p");
-      p.innerHTML = acc.replace(/\n/g, "<br>").replace(/ /g, "&nbsp;");
+      span.innerHTML = acc.replace(/\n/g, "<br>").replace(/ /g, "&nbsp;");
       // mutWriteLines.parentNode!.insertBefore(p, mutWriteLines);
       scrollToBottom();
     }
@@ -402,68 +448,89 @@ function displayText(item: string, idx: number) {
   }, 40 * idx);
 }
 
-function revertPasswordChanges() {
-  if (!INPUT_HIDDEN || !PASSWORD) return
-  PASSWORD_INPUT.value = "";
-  USERINPUT.disabled = false;
-  INPUT_HIDDEN.style.display = "block";
-  PASSWORD.style.display = "none";
-  isPasswordInput = false;
-
-  setTimeout(() => {
-    USERINPUT.focus();
-  }, 200)
+async function asyncWriteLines(message: string[]): Promise<void> {
+  const promises = message.map((item, idx) => asyncDisplayText(item, idx));
+  return Promise.all(promises).then(() => { });
 }
 
-function passwordHandler() {
-  if (passwordCounter === 2) {
-    if (!INPUT_HIDDEN || !mutWriteLines || !PASSWORD) return
-    writeLines(["<br>", "INCORRECT PASSWORD.", "PERMISSION NOT GRANTED.", "<br>"])
-    revertPasswordChanges();
-    passwordCounter = 0;
-    return
-  }
-
-  if (PASSWORD_INPUT.value === SUDO_PASSWORD) {
-    if (!mutWriteLines || !mutWriteLines.parentNode) return
-    writeLines(["<br>", "PERMISSION GRANTED.", "Try <span class='command'>'rm -rf'</span>", "<br>"])
-    revertPasswordChanges();
-    isSudo = true;
-    return
-  } else {
-    PASSWORD_INPUT.value = "";
-    passwordCounter++;
-  }
+function asyncDisplayText(item: string, idx: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(() => {
+      if (!mutWriteLines) {
+        resolve()
+        return
+      }
+      const p = document.createElement("p");
+      p.innerHTML = item;
+      mutWriteLines.parentNode!.insertBefore(p, mutWriteLines);
+      scrollToBottom();
+      resolve();
+    }, 40 * idx);
+  });
 }
 
-function easterEggStyles() {
-  const bars = document.getElementById("bars");
-  const body = document.body;
-  const main = document.getElementById("main");
-  const span = document.getElementsByTagName("span");
+// function revertPasswordChanges() {
+//   if (!INPUT_HIDDEN || !PASSWORD) return
+//   PASSWORD_INPUT.value = "";
+//   USERINPUT.disabled = false;
+//   INPUT_HIDDEN.style.display = "block";
+//   PASSWORD.style.display = "none";
+//   isPasswordInput = false;
 
-  if (!bars) return
-  bars.innerHTML = "";
-  bars.remove()
+//   setTimeout(() => {
+//     USERINPUT.focus();
+//   }, 200)
+// }
 
-  if (main) main.style.border = "none";
+// function passwordHandler() {
+//   if (passwordCounter === 2) {
+//     if (!INPUT_HIDDEN || !mutWriteLines || !PASSWORD) return
+//     writeLines(["<br>", "INCORRECT PASSWORD.", "PERMISSION NOT GRANTED.", "<br>"])
+//     revertPasswordChanges();
+//     passwordCounter = 0;
+//     return
+//   }
 
-  body.style.backgroundColor = "black";
-  body.style.fontFamily = "VT323, monospace";
-  body.style.fontSize = "20px";
-  body.style.color = "white";
+//   if (PASSWORD_INPUT.value === SUDO_PASSWORD) {
+//     if (!mutWriteLines || !mutWriteLines.parentNode) return
+//     writeLines(["<br>", "PERMISSION GRANTED.", "Try <span class='command'>'rm -rf'</span>", "<br>"])
+//     revertPasswordChanges();
+//     isSudo = true;
+//     return
+//   } else {
+//     PASSWORD_INPUT.value = "";
+//     passwordCounter++;
+//   }
+// }
 
-  for (let i = 0; i < span.length; i++) {
-    span[i].style.color = "white";
-  }
+// function easterEggStyles() {
+//   const bars = document.getElementById("bars");
+//   const body = document.body;
+//   const main = document.getElementById("main");
+//   const span = document.getElementsByTagName("span");
 
-  USERINPUT.style.backgroundColor = "black";
-  USERINPUT.style.color = "white";
-  USERINPUT.style.fontFamily = "VT323, monospace";
-  USERINPUT.style.fontSize = "20px";
-  if (PROMPT) PROMPT.style.color = "white";
+//   if (!bars) return
+//   bars.innerHTML = "";
+//   bars.remove()
 
-}
+//   if (main) main.style.border = "none";
+
+//   body.style.backgroundColor = "black";
+//   body.style.fontFamily = "VT323, monospace";
+//   body.style.fontSize = "20px";
+//   body.style.color = "white";
+
+//   for (let i = 0; i < span.length; i++) {
+//     span[i].style.color = "white";
+//   }
+
+//   USERINPUT.style.backgroundColor = "black";
+//   USERINPUT.style.color = "white";
+//   USERINPUT.style.fontFamily = "VT323, monospace";
+//   USERINPUT.style.fontSize = "20px";
+//   if (PROMPT) PROMPT.style.color = "white";
+
+// }
 
 const initEventListeners = () => {
   if (NAME === "") {
@@ -489,8 +556,9 @@ const initEventListeners = () => {
     PRE_USER.innerText = command.username;
   }
 
-  window.addEventListener('load', () => {
-    writeLines(BANNER);
+  window.addEventListener('load', async () => {
+    await asyncWriteLines(BANNER);
+    await asyncWriteLines(HELP)
     if (USERINPUT) {
       USERINPUT.focus()
     }

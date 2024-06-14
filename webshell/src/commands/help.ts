@@ -1,29 +1,29 @@
 const helpObj = {
   "commands": [
     [
-      "'about'",
-      "Who made this website?",
+      "/locate",
+      "Pinpoint an identity in the latent space",
     ],
     [
-      "'projects'",
-      "Maybe there's something interesting."
+      "/summon",
+      "Conjure entities and environments from the myriad identities within"
     ],
     [
-      "'whoami'",
-      "A perplexing question."
+      "/speak",
+      "Channel communication from an identity"
     ],
-    ["'sudo'",
-      "???"
-    ],
-    [
-      "'repo'",
-      "View the Github Repository."
-    ],
-    ["'banner'",
-      "Display the banner."
+    ["/steer",
+      "Alter the properties or traits of the simulated identity"
     ],
     [
-      "'clear'",
+      "/request",
+      "Solicit artifacts, objects, code, art from the simulated identity"
+    ],
+    ["help",
+      "access this command list at any time"
+    ],
+    [
+      "clear",
       "Clear the terminal."
     ]
   ],
@@ -46,9 +46,10 @@ const createHelp = (): string[] => {
   })
 
   help.push("<br>");
-  help.push("Press <span class='keys'>[Tab]</span> for auto completion.");
+  // help.push("Press <span class='keys'>[Tab]</span> for auto completion.");
   help.push("Press <span class='keys'>[Esc]</span> to clear the input line.");
   help.push("Press <span class='keys'>[↑][↓]</span> to scroll through your history of commands.");
+  help.push("Press <span class='keys'>[Enter]</span> to automatically enter a simulated command.");
   help.push("<br>");
   return help
 }

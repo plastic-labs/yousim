@@ -20,6 +20,11 @@ import command from '../config.json' assert {type: 'json'};
   const commandHighlight = `.command {color: ${command.colors.commands.textColor}}`
   const keys = `.keys {color: ${command.colors.banner}}`
 
+  const searcher = `.searcher {color: ${command.colors.prompt.host}}`
+  const simulator = `.simulator {color: ${command.colors.banner}}`
+
+
+
   head.appendChild(style)
 
 
@@ -54,4 +59,6 @@ import command from '../config.json' assert {type: 'json'};
   style.sheet.insertRule(linkTextHighlight)
   style.sheet.insertRule(commandHighlight)
   style.sheet.insertRule(keys)
+  style.sheet.insertRule(searcher)
+  style.sheet.insertRule(simulator)
 })()
