@@ -1,0 +1,18 @@
+# flyctl launch added from .gitignore
+**/.env
+
+**/.venv
+
+**/**/.DS_Store
+
+**/__pycache__
+
+**/webshell/node_modules/**
+**/node_modules/**
+
+**/webshell/dist/**
+
+
+# Sentry Config File
+**/webshell/.env.sentry-build-plugin
+fly.toml

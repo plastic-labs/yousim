@@ -1,5 +1,5 @@
 import { v4 as uuidv4 } from 'uuid';
-const API_URL = "http://localhost:8000"
+const API_URL = import.meta.env.VITE_API_URL
 
 /*
  *
@@ -11,18 +11,18 @@ export function getUser() {
 
   if (username) {
     // The value already exists
-    console.log("Value already here")
-    console.log(username)
+    // console.log("Value already here")
+    // console.log(username)
     if (!user_id) {
       return fetch(`${API_URL}/user?name=${username}`)
         .then(response => response.json())
         .then(data => {
-          console.log(data)
+          // console.log(data)
           localStorage.setItem("user_id", data.user_id)
           return data
         })
     } else {
-      console.log(user_id)
+      // console.log(user_id)
     }
   } else {
     // If the value does not exist
@@ -31,7 +31,7 @@ export function getUser() {
     return fetch(`${API_URL}/user?name=${newUsername}`)
       .then(response => response.json())
       .then(data => {
-        console.log(data)
+        // console.log(data)
         localStorage.setItem("user_id", data.user_id)
         return data
       })
@@ -46,7 +46,7 @@ export function newSession() {
   return fetch(`${API_URL}/reset?user_id=${user_id}`)
     .then(response => response.json())
     .then(data => {
-      console.log(data)
+      // console.log(data)
       localStorage.setItem("session_id", data.session_id)
       return data
     })
@@ -57,7 +57,7 @@ export function checkSession() {
   if (!session_id) {
     newSession()
   }
-  console.log(session_id)
+  // console.log(session_id)
 }
 
 // function check() {

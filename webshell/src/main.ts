@@ -202,7 +202,7 @@ async function localManual(command: string) {
       more = false;
     }
     if (value) {
-      console.log(value)
+      // console.log(value)
       acc += value
       // if (!mutWriteLines) return
       // let p = document.createElement("p");
@@ -244,7 +244,7 @@ async function localAuto() {
       mutWriteLines.parentNode!.insertBefore(p, mutWriteLines);
       scrollToBottom();
     } else if (value) {
-      console.log(value)
+      // console.log(value)
       acc += value
       // if (!mutWriteLines) return
       // let p = document.createElement("p");
@@ -253,6 +253,8 @@ async function localAuto() {
       scrollToBottom();
     }
   }
+
+  console.log(acc)
 }
 
 function tabKey() {
