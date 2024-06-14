@@ -143,7 +143,9 @@ async def auto(res: BaseRequest):
             user_id=res.user_id, session_id=res.session_id, command=gaslit_response
         )
 
-        yield "|<X SWITCHING CONVERSATION X>|"
+        yield ""
+        yield "|<X❁X>|"
+        yield ""
 
         reponse = manual_turn(req)
 

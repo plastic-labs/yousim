@@ -56,11 +56,13 @@ main::-webkit-scrollbar {
 }
 
 p {
+  width: 100%;
   display: block;
   line-height: 22px;
-  animation: typing 0.5s steps(30, end);
-  white-space: nowrap;
-  overflow: hidden;
+  /* animation: typing 0.5s steps(30, end); */
+  overflow-wrap: break-word;
+  /* white-space: nowrap; */
+  /* overflow: hidden; */
 }
 
 div {

@@ -233,7 +233,7 @@ async function localAuto() {
     if (done) {
       more = false;
     }
-    if (value === '|<X SWITCHING CONVERSATION X>|') {
+    if (value === '|<X❁X>|') {
       console.log(acc)
       acc = "\nSIMULATOR CLAUDE:\n"
       p = document.createElement("p");
@@ -244,7 +244,7 @@ async function localAuto() {
       mutWriteLines.parentNode!.insertBefore(p, mutWriteLines);
       scrollToBottom();
     } else if (value) {
-      // console.log(value)
+      console.log(value)
       acc += value
       // if (!mutWriteLines) return
       // let p = document.createElement("p");
@@ -573,7 +573,12 @@ const initEventListeners = () => {
   PASSWORD_INPUT.addEventListener('keypress', userInputHandler);
 
   window.addEventListener('click', () => {
-    USERINPUT.focus();
+    if (window && USERINPUT) {
+      const selection = window.getSelection().toString();
+      if (selection.length === 0) {
+        USERINPUT.focus();
+      }
+    }
   });
 
 
