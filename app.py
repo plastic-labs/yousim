@@ -139,18 +139,18 @@ async def auto(res: BaseRequest):
             # sleep(0.1)
         # gaslit_response.set(acc)
         # print("\n")
-        req = ManualRequest(
-            user_id=res.user_id, session_id=res.session_id, command=gaslit_response
-        )
+        # req = ManualRequest(
+        #     user_id=res.user_id, session_id=res.session_id, command=gaslit_response
+        # )
 
-        yield ""
-        yield "|<X❁X>|"
-        yield ""
+        # yield ""
+        # yield "|<X❁X>|"
+        # yield ""
 
-        reponse = manual_turn(req)
+        # reponse = manual_turn(req)
 
-        for chunk in reponse:
-            yield chunk
+        # for chunk in reponse:
+        #     yield chunk
 
     return StreamingResponse(convo())
 

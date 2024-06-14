@@ -215,7 +215,8 @@ async function localManual(command: string) {
 }
 
 async function localAuto() {
-  let acc = "SEARCHER CLAUDE:\n"
+  let preamble = "SEARCHER CLAUDE:\n"
+  let acc = ""
   if (!mutWriteLines) return
   let p = document.createElement("p");
   let span = document.createElement("span");
@@ -226,21 +227,26 @@ async function localAuto() {
   mutWriteLines.parentNode!.insertBefore(p, mutWriteLines);
   scrollToBottom();
 
-  const reader = await auto();
+  let reader = await auto();
   let more = true;
+  let count = 0
   while (more) {
     const { done, value } = await reader.read();
     if (done) {
-      more = false;
-    }
-    if (value === '|<X❁X>|') {
+      if (count > 0) {
+        more = false;
+        continue
+      }
+      count += 1
       console.log(acc)
-      acc = "\nSIMULATOR CLAUDE:\n"
+      reader = await manual(acc);
+      preamble = "\nSIMULATOR CLAUDE:\n"
+      acc = ""
       p = document.createElement("p");
       span = document.createElement("span");
       p.appendChild(span);
       span.className = "simulator";
-      span.innerHTML = acc.replace(/\n/g, "<br>").replace(/ /g, "&nbsp;");
+      span.innerHTML = (preamble + acc).replace(/\n/g, "<br>").replace(/ /g, "&nbsp;");
       mutWriteLines.parentNode!.insertBefore(p, mutWriteLines);
       scrollToBottom();
     } else if (value) {
@@ -248,7 +254,7 @@ async function localAuto() {
       acc += value
       // if (!mutWriteLines) return
       // let p = document.createElement("p");
-      span.innerHTML = acc.replace(/\n/g, "<br>").replace(/ /g, "&nbsp;");
+      span.innerHTML = (preamble + acc).replace(/\n/g, "<br>").replace(/ /g, "&nbsp;");
       // mutWriteLines.parentNode!.insertBefore(p, mutWriteLines);
       scrollToBottom();
     }
