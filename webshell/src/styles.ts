@@ -21,7 +21,7 @@ import command from '../config.json' assert {type: 'json'};
   const keys = `.keys {color: ${command.colors.banner}}`
 
   const searcher = `.searcher {color: ${command.colors.prompt.host}}`
-  const simulator = `.simulator {color: ${command.colors.banner}}`
+  const simulator = `.simulator {color: ${command.colors.simulator}}`
 
 
 

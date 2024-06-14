@@ -51,6 +51,7 @@
     },
     "commands": {
       "textColor": "#d33682"
-    }
+    },
+    "simulator": "#2AA199"
   }
 }
