@@ -13,6 +13,7 @@ node_modules/**
 
 webshell/dist/**
 
+webshell/.vite/**
 
 # Sentry Config File
 webshell/.env.sentry-build-plugin
