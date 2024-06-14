@@ -574,8 +574,8 @@ const initEventListeners = () => {
 
   window.addEventListener('click', () => {
     if (window && USERINPUT) {
-      const selection = window.getSelection().toString();
-      if (selection.length === 0) {
+      const selection = window.getSelection()?.toString();
+      if (!selection || (selection && selection.length === 0)) {
         USERINPUT.focus();
       }
     }

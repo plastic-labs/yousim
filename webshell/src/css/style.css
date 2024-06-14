@@ -120,6 +120,20 @@ a:hover {
   color: var(--bg);
   line-height: 36px;
   padding-left: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+#social-buttons>a>button {
+  background: none;
+  border: none;
+  color: #FDF6E3;
+}
+
+#social-buttons>a>button:hover {
+  color: var(--bg);
+  cursor: pointer;
 }
 
 #bar-2 {
