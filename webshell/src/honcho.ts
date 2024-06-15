@@ -35,6 +35,10 @@ export async function getUser() {
         localStorage.setItem("user_id", data.user_id)
         return data
       })
+      .catch((err) => {
+        console.log(err)
+        alert("possible error try refreshing the page")
+      })
   }
 
 }
@@ -50,6 +54,11 @@ export async function newSession() {
       localStorage.setItem("session_id", data.session_id)
       return data
     })
+    .catch((err) => {
+      console.log(err)
+      alert("possible error try refreshing the page")
+    })
+
 }
 
 export function checkSession() {

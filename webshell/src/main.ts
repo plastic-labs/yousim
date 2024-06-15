@@ -565,13 +565,17 @@ const initEventListeners = () => {
   }
 
   window.addEventListener('load', async () => {
-    await asyncWriteLines(BANNER);
-    await asyncWriteLines(HELP)
     if (USERINPUT) {
-      USERINPUT.focus()
+      USERINPUT.disabled = true
     }
     await getUser();
     await newSession();
+    await asyncWriteLines(BANNER);
+    await asyncWriteLines(HELP)
+    if (USERINPUT) {
+      USERINPUT.disabled = false
+      USERINPUT.focus()
+    }
   });
 
   USERINPUT.addEventListener('keypress', userInputHandler);
