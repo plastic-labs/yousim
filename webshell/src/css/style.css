@@ -2,7 +2,7 @@
 
 :root {
   font-family: 'IBM Plex Mono', monospace;
-  font-weight: 200;
+  font-weight: 400;
   --bg: #0C0623;
   --border: #FFADE2;
   --text: #F8DDE5;
@@ -190,9 +190,9 @@ a:hover {
 
 @media (max-width: 600px) {
   body {
-    font-size: 10px;
+    font-size: 12px;
     padding: 2px;
-    font-weight: 300;
+    font-weight: 400;
   }
 
   input {

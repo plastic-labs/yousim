@@ -1,14 +1,12 @@
 import os
-
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
 from contextvars import ContextVar
 
 import sentry_sdk
-from pydantic import BaseModel
-
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from honcho import Honcho
+from pydantic import BaseModel
 
 # from .main import manual, auto, honcho
 # from .main import app as honcho_app
@@ -134,8 +132,8 @@ async def auto(res: BaseRequest):
         # print("\033[94mSEARCHER CLAUDE:\033[0m")
         for chunk in response:
             # print(f"\033[94m{chunk.content}\033[0m", end="", flush=True)
-            yield chunk.content
             gaslit_response += chunk.content
+            yield chunk.content
             # sleep(0.1)
         # gaslit_response.set(acc)
         # print("\n")
