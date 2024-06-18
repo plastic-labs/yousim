@@ -5,43 +5,41 @@ const API_URL = import.meta.env.VITE_API_URL
  *
  * */
 export async function getUser() {
-  const username = localStorage.getItem("username")
-  const user_id = localStorage.getItem("user_id")
+  let username = localStorage.getItem("username")
+  // let user_id = localStorage.getItem("user_id")
   // const session_id = localStorage.getItem("session_id")
 
-  if (username) {
+  if (!username) {
+    const newUsername = uuidv4();
+    localStorage.setItem("username", newUsername)
+    username = newUsername;
     // The value already exists
     // console.log("Value already here")
     // console.log(username)
-    if (!user_id) {
-      return fetch(`${API_URL}/user?name=${username}`)
-        .then(response => response.json())
-        .then(data => {
-          // console.log(data)
-          localStorage.setItem("user_id", data.user_id)
-          return data
-        })
-    } else {
-      // console.log(user_id)
-    }
-  } else {
-    // If the value does not exist
-    const newUsername = uuidv4();
-    localStorage.setItem("username", newUsername)
-    return fetch(`${API_URL}/user?name=${newUsername}`)
-      .then(response => response.json())
-      .then(data => {
-        // console.log(data)
-        localStorage.setItem("user_id", data.user_id)
-        return data
-      })
-      .catch((err) => {
-        console.log(err)
-        alert("possible error try refreshing the page")
-      })
-  }
-
+    // if (!user_id) {
+    //   fetch(`${API_URL}/user?name=${username}`)
+    //     .then(response => response.json())
+    //     .then(data => {
+    //       // console.log(data)
+    //       localStorage.setItem("user_id", data.user_id)
+    //       user_id = data.user_id
+    //     })
+    // }
+  }// If the value does not exist
+  return fetch(`${API_URL}/user?name=${username}`)
+    .then(response => response.json())
+    .then(data => {
+      console.log(data)
+      localStorage.setItem("user_id", data.user_id)
+      return data
+    })
+    .catch((err) => {
+      console.log(err)
+      alert("possible error try refreshing the page")
+    })
 }
+
+
 
 
 

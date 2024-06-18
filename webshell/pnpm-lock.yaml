@@ -20,6 +20,9 @@ importers:
       posthog-js:
         specifier: ^1.139.1
         version: 1.139.1
+      sweetalert2:
+        specifier: ^11.11.1
+        version: 11.11.1
       uuid:
         specifier: ^10.0.0
         version: 10.0.0
@@ -743,6 +746,9 @@ packages:
   supports-color@5.5.0:
     resolution: {integrity: sha512-QjVjwdXIt408MIiAqCX4oUKsgU2EqAGzs2Ppkm4aQYbjm+ZEWEcW4SfFNTr4uMNZma0ey4f5lgLrkB0aX0QMow==}
     engines: {node: '>=4'}
+
+  sweetalert2@11.11.1:
+    resolution: {integrity: sha512-7jumu0I0/QdRa5R7K1mh05ZdhmsMV6rZOVtjpratZGidxyJD4Sn7rDSA+zmKHzvMef9hVTwPmDU3VxnvhVQMNg==}
 
   to-fast-properties@2.0.0:
     resolution: {integrity: sha512-/OaKK0xYrs3DmxRYqL/yDc+FxFUVYhDlXMhRmv3z915w2HF1tnN1omB354j8VUGO/hbRzyD6Y3sA7v7GS/ceog==}
@@ -1488,6 +1494,8 @@ snapshots:
   supports-color@5.5.0:
     dependencies:
       has-flag: 3.0.0
+
+  sweetalert2@11.11.1: {}
 
   to-fast-properties@2.0.0: {}
 

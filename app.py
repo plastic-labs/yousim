@@ -12,7 +12,7 @@ from pydantic import BaseModel
 # from .main import app as honcho_app
 from calls import GaslitClaude, Simulator
 
-honcho = Honcho(environment="demo")
+honcho = Honcho(base_url=os.getenv("HONCHO_ENV"))  # TODO
 honcho_app = honcho.apps.get_or_create("NYTW Yousim Demo")
 
 # gaslit_claude = GaslitClaude(name="", insights="", history=[])
@@ -27,7 +27,7 @@ simulator_ctx = ContextVar("simulator", default=Simulator(history=[], name=""))
 # simulator_response = ContextVar("simulator_response", default="")
 
 sentry_sdk.init(
-    dsn=os.getenv("SENTRY_DSN"),
+    # dsn=os.getenv("SENTRY_DSN"),
     # Set traces_sample_rate to 1.0 to capture 100%
     # of transactions for performance monitoring.
     traces_sample_rate=1.0,

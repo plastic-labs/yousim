@@ -19,6 +19,7 @@
     "@sentry/vite-plugin": "^2.18.0",
     "js-yaml": "^4.1.0",
     "posthog-js": "^1.139.1",
+    "sweetalert2": "^11.11.1",
     "uuid": "^10.0.0"
   }
 }
