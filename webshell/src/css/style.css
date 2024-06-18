@@ -3,7 +3,7 @@
 :root {
   font-family: 'IBM Plex Mono', monospace;
   font-weight: 400;
-  /* --bg: #0C0623; */
+  --bg: #0C0623;
   --border: #FFADE2;
   /* --text: #F8DDE5; */
   /* --prompt-default: #A5A7A7; */
@@ -135,6 +135,24 @@ a:hover {
 #social-buttons>a>button:hover {
   color: var(--bg);
   cursor: pointer;
+}
+
+#social-buttons-alert i {
+  font-size: 24px;
+}
+
+#social-buttons-alert>a>button {
+  background: none;
+  border: none;
+}
+#social-buttons-alert>a:hover {
+background: none;
+}
+
+#social-buttons-alert>a>button:hover {
+  cursor: pointer;
+  color: #268BD2;
+  background: none;
 }
 
 #bar-2 {

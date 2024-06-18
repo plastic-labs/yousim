@@ -10,12 +10,14 @@ import { DEFAULT } from "./commands/default";
 import posthog from 'posthog-js'
 import { getUser, newSession, manual, auto } from "./honcho"
 
-posthog.init(import.meta.env.VITE_POSTHOG_KEY,
-  {
-    api_host: 'https://us.i.posthog.com',
-    person_profiles: 'always' // or 'always' to create profiles for anonymous users as well
-  }
-)
+if (!window.location.host.includes('127.0.0.1') && !window.location.host.includes('localhost')) {
+  posthog.init(import.meta.env.VITE_POSTHOG_KEY,
+    {
+      api_host: 'https://us.i.posthog.com',
+      person_profiles: 'always' // or 'always' to create profiles for anonymous users as well
+    }
+  )
+}
 
 Sentry.init({
   dsn: import.meta.env.VITE_SENTRY_DSN,
@@ -253,7 +255,7 @@ async function localAuto() {
       mutWriteLines.parentNode!.insertBefore(p, mutWriteLines);
       scrollToBottom();
     } else if (value) {
-      console.log(value)
+      // console.log(value)
       acc += value
       // if (!mutWriteLines) return
       // let p = document.createElement("p");
@@ -571,7 +573,13 @@ const initEventListeners = () => {
       return newSession()
     })
 
-  let sweetAlertHTML = ""
+  let sweetAlertHTML = `<div id='social-buttons-alert'>
+      <a href='https://x.com/plastic_labs' target='_blank'><button><i class='fab fa-twitter'></i></button></a>
+          <a href='https://github.com/plastic-labs' target='_blank'><button><i
+                class='fa-brands fa-github'></i></button></a>
+          <a href='https://discord.gg/plasticlabs' target='_blank'><button><i
+                class='fa-brands fa-discord'></i></button></a>
+        </div><br>`
   sweetAlertHTML += "<p>YouSim is a fun open-ended demo to explore the multiverse of identities</p><br>"
   // sweetAlertHTML += "<p>to glimpse a (mere infinite) sliver of the (transfinite) diversity within the latent space.</p><br>"
   // sweetAlertHTML += "<p>Inspired by WorldSim, WebSim, & Infinite Backrooms, YouSim leverages Claude to let you locate, modify, & interact with any entity you can imagine.</p><br>"
