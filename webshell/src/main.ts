@@ -1,4 +1,5 @@
 import command from '../config.json' assert {type: 'json'};
+import Swal from 'sweetalert2';
 import * as Sentry from "@sentry/browser";
 import { HELP } from "./commands/help";
 import { BANNER } from "./commands/banner";
@@ -18,6 +19,8 @@ posthog.init(import.meta.env.VITE_POSTHOG_KEY,
 
 Sentry.init({
   dsn: import.meta.env.VITE_SENTRY_DSN,
+  environment: import.meta.env.VITE_SENTRY_ENVIRONMENT,
+  release: import.meta.env.VITE_SENTRY_RELEASE,
   integrations: [
     Sentry.browserTracingIntegration(),
     Sentry.replayIntegration(),
@@ -542,7 +545,6 @@ function asyncDisplayText(item: string, idx: number): Promise<void> {
 
 const initEventListeners = () => {
   if (NAME === "") {
-    console.log("check")
     if (MAIN_PROMPT) {
       MAIN_PROMPT.innerHTML = "Enter a Name to Simulate >>> ";
     }
@@ -564,14 +566,37 @@ const initEventListeners = () => {
     PRE_USER.innerText = command.username;
   }
 
+  const setupPromise = getUser()
+    .then(() => {
+      return newSession()
+    })
+
+  let sweetAlertHTML = ""
+  sweetAlertHTML += "<p>YouSim is a fun open-ended demo to explore the multiverse of identities</p><br>"
+  // sweetAlertHTML += "<p>to glimpse a (mere infinite) sliver of the (transfinite) diversity within the latent space.</p><br>"
+  // sweetAlertHTML += "<p>Inspired by WorldSim, WebSim, & Infinite Backrooms, YouSim leverages Claude to let you locate, modify, & interact with any entity you can imagine.</p><br>"
+  sweetAlertHTML += "<p> It’s a game that can simulate anyone you like.</p><br>"
+  sweetAlertHTML += "<p>Who will you summon?</p><br>"
+  sweetAlertHTML += "<a href='https://blog.plasticlabs.ai/blog/YouSim;-Explore-The-Multiverse-of-Identity' target='_blank'>Read more on our blog</a>"
+
   window.addEventListener('load', async () => {
     if (USERINPUT) {
       USERINPUT.disabled = true
     }
-    await getUser();
-    await newSession();
-    await asyncWriteLines(BANNER);
-    await asyncWriteLines(HELP)
+    await setupPromise;
+    // await newSession();
+    const welcomePromises = asyncWriteLines(BANNER)
+      .then(() => {
+        return asyncWriteLines(HELP)
+      })
+    const swalPromise = Swal.fire({
+      title: "Welcome to YouSim",
+      html: sweetAlertHTML,
+      icon: "info",
+      heightAuto: false,
+
+    })
+    await Promise.all([welcomePromises, swalPromise])
     if (USERINPUT) {
       USERINPUT.disabled = false
       USERINPUT.focus()

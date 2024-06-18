@@ -3,12 +3,12 @@
 :root {
   font-family: 'IBM Plex Mono', monospace;
   font-weight: 400;
-  --bg: #0C0623;
+  /* --bg: #0C0623; */
   --border: #FFADE2;
-  --text: #F8DDE5;
-  --prompt-default: #A5A7A7;
-  --prompt-1: #FE6BC9;
-  --prompt-2: #70FDFF;
+  /* --text: #F8DDE5; */
+  /* --prompt-default: #A5A7A7; */
+  /* --prompt-1: #FE6BC9; */
+  /* --prompt-2: #70FDFF; */
 }
 
 @keyframes typing {
@@ -186,6 +186,15 @@ a:hover {
 .keys {
   color: #FF9951;
   font-weight: 400;
+}
+
+.swal2-html-container > p {
+  line-height: 18px;
+}
+
+
+.swal2-title {
+  line-height: 30px;
 }
 
 @media (max-width: 600px) {
