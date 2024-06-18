@@ -199,21 +199,23 @@ async function localManual(command: string) {
   mutWriteLines.parentNode!.insertBefore(p, mutWriteLines);
   scrollToBottom();
 
-  const reader = await manual(command);
+  const reader: ReadableStreamDefaultReader<string> | void = await manual(command);
   let more = true;
-  while (more) {
-    const { done, value } = await reader.read();
-    if (done) {
-      more = false;
-    }
-    if (value) {
-      // console.log(value)
-      acc += value
-      // if (!mutWriteLines) return
-      // let p = document.createElement("p");
-      span.innerHTML = acc.replace(/\n/g, "<br>").replace(/ /g, "&nbsp;");
-      // mutWriteLines.parentNode!.insertBefore(p, mutWriteLines);
-      scrollToBottom();
+  if (reader) {
+    while (more) {
+      const { done, value } = await reader.read();
+      if (done) {
+        more = false;
+      }
+      if (value) {
+        // console.log(value)
+        acc += value
+        // if (!mutWriteLines) return
+        // let p = document.createElement("p");
+        span.innerHTML = acc.replace(/\n/g, "<br>").replace(/ /g, "&nbsp;");
+        // mutWriteLines.parentNode!.insertBefore(p, mutWriteLines);
+        scrollToBottom();
+      }
     }
   }
   console.log(acc)
@@ -232,36 +234,40 @@ async function localAuto() {
   mutWriteLines.parentNode!.insertBefore(p, mutWriteLines);
   scrollToBottom();
 
-  let reader = await auto();
+  let reader: ReadableStreamDefaultReader<string> | void = await auto();
   let more = true;
   let count = 0
   while (more) {
-    const { done, value } = await reader.read();
-    if (done) {
-      if (count > 0) {
-        more = false;
-        continue
+    if (reader) {
+      const { done, value } = await reader.read();
+      if (done) {
+        if (count > 0) {
+          more = false;
+          continue
+        }
+        count += 1
+        console.log(acc)
+        reader = await manual(acc);
+        preamble = "\nSIMULATOR CLAUDE:\n"
+        acc = ""
+        p = document.createElement("p");
+        span = document.createElement("span");
+        p.appendChild(span);
+        span.className = "simulator";
+        span.innerHTML = (preamble + acc).replace(/\n/g, "<br>").replace(/ /g, "&nbsp;");
+        mutWriteLines.parentNode!.insertBefore(p, mutWriteLines);
+        scrollToBottom();
+      } else if (value) {
+        // console.log(value)
+        acc += value
+        // if (!mutWriteLines) return
+        // let p = document.createElement("p");
+        span.innerHTML = (preamble + acc).replace(/\n/g, "<br>").replace(/ /g, "&nbsp;");
+        // mutWriteLines.parentNode!.insertBefore(p, mutWriteLines);
+        scrollToBottom();
       }
-      count += 1
-      console.log(acc)
-      reader = await manual(acc);
-      preamble = "\nSIMULATOR CLAUDE:\n"
-      acc = ""
-      p = document.createElement("p");
-      span = document.createElement("span");
-      p.appendChild(span);
-      span.className = "simulator";
-      span.innerHTML = (preamble + acc).replace(/\n/g, "<br>").replace(/ /g, "&nbsp;");
-      mutWriteLines.parentNode!.insertBefore(p, mutWriteLines);
-      scrollToBottom();
-    } else if (value) {
-      // console.log(value)
-      acc += value
-      // if (!mutWriteLines) return
-      // let p = document.createElement("p");
-      span.innerHTML = (preamble + acc).replace(/\n/g, "<br>").replace(/ /g, "&nbsp;");
-      // mutWriteLines.parentNode!.insertBefore(p, mutWriteLines);
-      scrollToBottom();
+    } else {
+      more = false;
     }
   }
 

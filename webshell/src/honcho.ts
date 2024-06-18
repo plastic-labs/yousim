@@ -4,13 +4,18 @@ const API_URL = import.meta.env.VITE_API_URL
 
 // https://developer.mozilla.org/en-US/docs/Web/API/Web_Storage_API/Using_the_Web_Storage_API
 function storageAvailable(type: string) {
-  let storage;
+  let storage: Storage | null = null;
   try {
+    // @ts-ignore
     storage = window[type];
-    const x = "__storage_test__";
-    storage.setItem(x, x);
-    storage.removeItem(x);
-    return true;
+    if (storage) {
+      const x = "__storage_test__";
+      storage.setItem(x, x);
+      storage.removeItem(x);
+      return true;
+    } else {
+      return false;
+    }
   } catch (e) {
     return (
       e instanceof DOMException &&
@@ -24,8 +29,8 @@ function storageAvailable(type: string) {
         // Firefox
         e.name === "NS_ERROR_DOM_QUOTA_REACHED") &&
       // acknowledge QuotaExceededError only if there's something already stored
-      storage &&
-      storage.length !== 0
+      storage
+      && storage.length !== 0
     );
   }
 }
@@ -156,8 +161,6 @@ export async function manual(command: string) {
         console.error(err)
         alert("Something went wrong - we recommend refreshing the page")
       })
-    // const reader = req.body?.pipeThrough(new TextDecoderStream()).getReader()!;
-    // return reader
   } {
     Sentry.captureException({ user_id, session_id })
     alert("possible error try refreshing the page")
