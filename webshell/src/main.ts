@@ -572,11 +572,12 @@ const initEventListeners = () => {
     })
 
   let sweetAlertHTML = ""
-  sweetAlertHTML += "<p>YouSim is a fun demo to explore the multiverse of identities</p><br>"
-  sweetAlertHTML += "<p>to glimpse a (mere infinite) sliver of the (transfinite) diversity within the latent space.</p><br>"
-  sweetAlertHTML += "<p>Inspired by WorldSim, WebSim, & Infinite Backrooms, YouSim leverages Claude to let you locate, modify, & interact with any entity you can imagine.</p><br>"
-  sweetAlertHTML += "<p> It’s a game for simulating any person you like.</p><br>"
-  sweetAlertHTML += "<a href='https://blog.plasticlabs.ai/' target='_blank'>Learn more on our Blog</a>"
+  sweetAlertHTML += "<p>YouSim is a fun open-ended demo to explore the multiverse of identities</p><br>"
+  // sweetAlertHTML += "<p>to glimpse a (mere infinite) sliver of the (transfinite) diversity within the latent space.</p><br>"
+  // sweetAlertHTML += "<p>Inspired by WorldSim, WebSim, & Infinite Backrooms, YouSim leverages Claude to let you locate, modify, & interact with any entity you can imagine.</p><br>"
+  sweetAlertHTML += "<p> It’s a game that can simulate anyone you like.</p><br>"
+  sweetAlertHTML += "<p>Who will you summon?</p><br>"
+  sweetAlertHTML += "<a href='https://blog.plasticlabs.ai/blog/YouSim;-Explore-The-Multiverse-of-Identity' target='_blank'>Read more on our blog</a>"
 
   window.addEventListener('load', async () => {
     if (USERINPUT) {
