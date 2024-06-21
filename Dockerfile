@@ -33,7 +33,6 @@ USER app
 
 COPY --chown=app:app app.py /app/app.py
 COPY --chown=app:app calls.py /app/calls.py
-COPY --chown=app:app gcp.json /app/gcp.json
 
 EXPOSE 8000
 
