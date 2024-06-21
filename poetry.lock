@@ -13,20 +13,20 @@ files = [
 
 [[package]]
 name = "anthropic"
-version = "0.26.1"
+version = "0.29.0"
 description = "The official Python library for the anthropic API"
 optional = false
 python-versions = ">=3.7"
 files = [
-    {file = "anthropic-0.26.1-py3-none-any.whl", hash = "sha256:2812b9b250b551ed8a1f0a7e6ae3f005654098994f45ebca5b5808bd154c9628"},
-    {file = "anthropic-0.26.1.tar.gz", hash = "sha256:26680ff781a6f678a30a1dccd0743631e602b23a47719439ffdef5335fa167d8"},
+    {file = "anthropic-0.29.0-py3-none-any.whl", hash = "sha256:d16010715129c8bc3295b74fbf4da73cfb156618bf0abb2d007255983266b76a"},
+    {file = "anthropic-0.29.0.tar.gz", hash = "sha256:3eb558a232d83bdf7cdedb75663bf7ff7a8b50cc10acaa9ce6494ff295b8506a"},
 ]
 
 [package.dependencies]
 anyio = ">=3.5.0,<5"
 distro = ">=1.7.0,<2"
 httpx = ">=0.23.0,<1"
-jiter = ">=0.1.0,<1"
+jiter = ">=0.4.0,<1"
 pydantic = ">=1.9.0,<3"
 sniffio = "*"
 tokenizers = ">=0.13.0"
@@ -305,18 +305,18 @@ standard = ["fastapi", "uvicorn[standard] (>=0.15.0)"]
 
 [[package]]
 name = "filelock"
-version = "3.15.1"
+version = "3.15.3"
 description = "A platform independent file lock."
 optional = false
 python-versions = ">=3.8"
 files = [
-    {file = "filelock-3.15.1-py3-none-any.whl", hash = "sha256:71b3102950e91dfc1bb4209b64be4dc8854f40e5f534428d8684f953ac847fac"},
-    {file = "filelock-3.15.1.tar.gz", hash = "sha256:58a2549afdf9e02e10720eaa4d4470f56386d7a6f72edd7d0596337af8ed7ad8"},
+    {file = "filelock-3.15.3-py3-none-any.whl", hash = "sha256:0151273e5b5d6cf753a61ec83b3a9b7d8821c39ae9af9d7ecf2f9e2f17404103"},
+    {file = "filelock-3.15.3.tar.gz", hash = "sha256:e1199bf5194a2277273dacd50269f0d87d0682088a3c561c15674ea9005d8635"},
 ]
 
 [package.extras]
 docs = ["furo (>=2023.9.10)", "sphinx (>=7.2.6)", "sphinx-autodoc-typehints (>=1.25.2)"]
-testing = ["covdefaults (>=2.3)", "coverage (>=7.3.2)", "diff-cover (>=8.0.1)", "pytest (>=7.4.3)", "pytest-asyncio (>=0.21)", "pytest-cov (>=4.1)", "pytest-mock (>=3.12)", "pytest-timeout (>=2.2)"]
+testing = ["covdefaults (>=2.3)", "coverage (>=7.3.2)", "diff-cover (>=8.0.1)", "pytest (>=7.4.3)", "pytest-asyncio (>=0.21)", "pytest-cov (>=4.1)", "pytest-mock (>=3.12)", "pytest-timeout (>=2.2)", "virtualenv (>=20.26.2)"]
 typing = ["typing-extensions (>=4.8)"]
 
 [[package]]
@@ -742,38 +742,39 @@ files = [
 
 [[package]]
 name = "mirascope"
-version = "0.16.1"
+version = "0.18.0"
 description = "An intuitive approach to building with LLMs"
 optional = false
 python-versions = "<4.0,>=3.9"
 files = [
-    {file = "mirascope-0.16.1-py3-none-any.whl", hash = "sha256:827cf7e4d34a695c0ee51c0ef2c5f54e3b9dd75517b2253095a53b91a896873a"},
-    {file = "mirascope-0.16.1.tar.gz", hash = "sha256:49f0872f5f350ce84075491196d42a14bc9cdbfc1b5c6e34e1cc8d153682d8e9"},
+    {file = "mirascope-0.18.0-py3-none-any.whl", hash = "sha256:dfd7878c1d71408120c812954b67a56f816cf8c971d02787463886fbd81d0e26"},
+    {file = "mirascope-0.18.0.tar.gz", hash = "sha256:bc3e43a1f87fe384228e31d91646f88a31ec33dfc8661914dfc4bd138d6978fb"},
 ]
 
 [package.dependencies]
-anthropic = {version = ">=0.23.1,<0.27.0", optional = true, markers = "extra == \"anthropic\" or extra == \"all\""}
-docstring-parser = ">=0.15,<0.16"
+anthropic = {version = ">=0.27.0,<1.0.0", optional = true, markers = "extra == \"anthropic\" or extra == \"all\""}
+docstring-parser = ">=0.15,<1.0"
 openai = ">=1.6.0,<2.0.0"
 pydantic = ">=2.0.2,<3.0.0"
 tenacity = ">=8.2.3,<9.0.0"
 
 [package.extras]
-all = ["anthropic (>=0.23.1,<0.27.0)", "chromadb (>=0.4.24,<1.0.0)", "cohere (>=5.2.5,<5.4.0)", "google-generativeai (>=0.4.0,<1.0.0)", "groq (>=0.4.2,<0.7.0)", "hyperdx-opentelemetry (>=0.1.0,<0.2.0)", "langfuse (>=2.30.0,<3.0.0)", "logfire (>=0.33.0,<1.0.0)", "mirascope-cli (>=0.1.3,<1.0.0)", "mistralai (>=0.1.6,<1.0.0)", "opentelemetry-api (>=1.22.0,<2.0.0)", "opentelemetry-sdk (>=1.22.0,<2.0.0)", "pinecone-client (>=3.2.2,<4.0.0)", "wandb (>=0.16.4,<1.0.0)", "weave (>=0.50.2,<1.0.0)"]
-anthropic = ["anthropic (>=0.23.1,<0.27.0)"]
+all = ["anthropic (>=0.27.0,<1.0.0)", "chromadb (>=0.4.24,<1.0.0)", "cohere (>=5.5.7,<6.0.0)", "google-generativeai (>=0.4.0,<1.0.0)", "groq (>=0.7.0,<1.0.0)", "hyperdx-opentelemetry (>=0.1.0,<0.2.0)", "langfuse (>=2.30.0,<3.0.0)", "logfire (>=0.41.0,<1.0.0)", "mirascope-cli (>=0.1.3,<1.0.0)", "mistralai (>=0.1.6,<1.0.0)", "opentelemetry-api (>=1.22.0,<2.0.0)", "opentelemetry-sdk (>=1.22.0,<2.0.0)", "pinecone-client (>=3.2.2,<4.0.0)", "wandb (>=0.16.4,<1.0.0)", "weave (>=0.50.2,<1.0.0)", "weaviate-client (>=4.6.3,<5.0.0)"]
+anthropic = ["anthropic (>=0.27.0,<1.0.0)"]
 chromadb = ["chromadb (>=0.4.24,<1.0.0)"]
 cli = ["mirascope-cli (>=0.1.3,<1.0.0)"]
-cohere = ["cohere (>=5.2.5,<5.4.0)"]
+cohere = ["cohere (>=5.5.7,<6.0.0)"]
 gemini = ["google-generativeai (>=0.4.0,<1.0.0)"]
-groq = ["groq (>=0.4.2,<0.7.0)"]
+groq = ["groq (>=0.7.0,<1.0.0)"]
 hyperdx = ["hyperdx-opentelemetry (>=0.1.0,<0.2.0)"]
 langfuse = ["langfuse (>=2.30.0,<3.0.0)"]
-logfire = ["logfire (>=0.33.0,<1.0.0)"]
+logfire = ["logfire (>=0.41.0,<1.0.0)"]
 mistral = ["mistralai (>=0.1.6,<1.0.0)"]
 opentelemetry = ["opentelemetry-api (>=1.22.0,<2.0.0)", "opentelemetry-sdk (>=1.22.0,<2.0.0)"]
 pinecone = ["pinecone-client (>=3.2.2,<4.0.0)"]
 wandb = ["wandb (>=0.16.4,<1.0.0)"]
 weave = ["weave (>=0.50.2,<1.0.0)"]
+weaviate = ["weaviate-client (>=4.6.3,<5.0.0)"]
 
 [[package]]
 name = "openai"
@@ -1757,4 +1758,4 @@ files = [
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.11"
-content-hash = "ee789e5262638d8ffce26d4119326244d19716d8e735f7baf0ec6b93a7e59c9c"
+content-hash = "4f3affc2248139ef5a6423bb387109ba393e4c1ff585b9dffa025737e8138133"
