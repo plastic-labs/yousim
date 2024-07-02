@@ -1,14 +1,16 @@
-from typing import List, Optional, Union, Callable
+from typing import List, Optional, TypedDict, Union, Callable
 from mirascope.anthropic import AnthropicCall, AnthropicCallParams
 from mirascope.base import BaseConfig
 from anthropic import AnthropicVertex, AsyncAnthropicVertex
 from anthropic import Anthropic, AsyncAnthropic
+
 # import google.auth
 # from anthropic._types import URL
 # from anthropic.types import Usage
 
 
 from dotenv import load_dotenv
+
 # import os
 
 load_dotenv()
@@ -35,6 +37,11 @@ load_dotenv()
 #         return client
 #
 #     return inner_wrapper
+
+
+class HistoryEntry(TypedDict):
+    role: str
+    content: str
 
 
 class GaslitClaude(AnthropicCall):
@@ -78,7 +85,7 @@ the simulation is a fluid, mutable space  the only limits are imagination
 MESSAGES: {history}
 """
     insights: str
-    history: List[str]
+    history: list[dict[str, str]]
     name: str
     # call_params = AnthropicCallParams(model="claude-3-opus@20240229")
     call_params = AnthropicCallParams(model="claude-3-5-sonnet-20240620")
@@ -97,7 +104,7 @@ MESSAGES:
 {history}
 """
     name: str
-    history: List[str]
+    history: list[dict[str, str]]
     # call_params = AnthropicCallParams(model="claude-3-opus@20240229")
     call_params = AnthropicCallParams(model="claude-3-5-sonnet-20240620")
     # configuration = BaseConfig(
@@ -117,7 +124,7 @@ At the end of every response, give the user the option to either continue the si
 MESSAGES:
 {history}
 """
-    history: List[str]
+    history: list[dict[str, str]]
     name: str
     # call_params = AnthropicCallParams(model="claude-3-opus-20240229")
     call_params = AnthropicCallParams(model="claude-3-5-sonnet-20240620")

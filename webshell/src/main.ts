@@ -1,5 +1,5 @@
-import command from '../config.json' assert {type: 'json'};
-import Swal from 'sweetalert2';
+import command from "../config.json" assert { type: "json" };
+import Swal from "sweetalert2";
 import * as Sentry from "@sentry/browser";
 import { HELP } from "./commands/help";
 import { BANNER } from "./commands/banner";
@@ -7,16 +7,19 @@ import { BANNER } from "./commands/banner";
 import { DEFAULT } from "./commands/default";
 // import { PROJECTS } from "./commands/projects";
 // import { createWhoami } from "./commands/whoami";
-import posthog from 'posthog-js'
-import { getUser, newSession, manual, auto } from "./honcho"
+import posthog from "posthog-js";
+import { newSession, manual, auto } from "./honcho";
+import { getJWT } from "./auth";
+import { login, verifyOTP } from "./commands/login";
 
-if (!window.location.host.includes('127.0.0.1') && !window.location.host.includes('localhost')) {
-  posthog.init(import.meta.env.VITE_POSTHOG_KEY,
-    {
-      api_host: 'https://us.i.posthog.com',
-      person_profiles: 'always' // or 'always' to create profiles for anonymous users as well
-    }
-  )
+if (
+  !window.location.host.includes("127.0.0.1") &&
+  !window.location.host.includes("localhost")
+) {
+  posthog.init(import.meta.env.VITE_POSTHOG_KEY, {
+    api_host: "https://us.i.posthog.com",
+    person_profiles: "always", // or 'always' to create profiles for anonymous users as well
+  });
 }
 
 Sentry.init({
@@ -30,7 +33,11 @@ Sentry.init({
   // Performance Monitoring
   tracesSampleRate: 1.0, //  Capture 100% of the transactions
   // Set 'tracePropagationTargets' to control for which URLs distributed tracing should be enabled
-  tracePropagationTargets: ["localhost", /^https:\/\/yourserver\.io\/api/, "yousim.ai"],
+  tracePropagationTargets: [
+    "localhost",
+    /^https:\/\/yourserver\.io\/api/,
+    "yousim.ai",
+  ],
   // Session Replay
   replaysSessionSampleRate: 0.1, // This sets the sample rate at 10%. You may want to change it to 100% while in development and then sample at a lower rate in production.
   replaysOnErrorSampleRate: 1.0, // If you're not already sampling the entire session, change the sample rate to 100% when sampling sessions where errors occur.
@@ -38,8 +45,8 @@ Sentry.init({
 
 //mutWriteLines gets deleted and reassigned
 let mutWriteLines = document.getElementById("write-lines");
-let historyIdx = 0
-let tempInput = ""
+let historyIdx = 0;
+let tempInput = "";
 let userInput: string;
 // let isSudo = false;
 let isPasswordInput = false;
@@ -53,24 +60,34 @@ const TERMINAL = document.getElementById("terminal");
 const USERINPUT = document.getElementById("user-input") as HTMLInputElement;
 // const INPUT_HIDDEN = document.getElementById("input-hidden");
 // const PASSWORD = document.getElementById("password-input");
-const PASSWORD_INPUT = document.getElementById("password-field") as HTMLInputElement;
+const PASSWORD_INPUT = document.getElementById(
+  "password-field"
+) as HTMLInputElement;
 const PRE_HOST = document.getElementById("pre-host");
 const PRE_USER = document.getElementById("pre-user");
 // const HOST = document.getElementById("host");
 // const USER = document.getElementById("user");
 const PROMPT = document.getElementById("prompt");
 const MAIN_PROMPT = document.querySelector("#input-hidden > span#prompt");
-const COMMANDS = ["help", "about", "projects", "whoami", "repo", "banner", "clear"];
+const COMMANDS = [
+  "help",
+  "about",
+  "projects",
+  "whoami",
+  "repo",
+  "banner",
+  "clear",
+];
 const HISTORY: string[] = [];
 // const SUDO_PASSWORD = command.password;
 // const REPO_LINK = command.repoLink;
 
 const scrollToBottom = () => {
   const MAIN = document.getElementById("main");
-  if (!MAIN) return
+  if (!MAIN) return;
 
   MAIN.scrollTop = MAIN.scrollHeight;
-}
+};
 
 function userInputHandler(e: KeyboardEvent) {
   const key = e.key;
@@ -104,12 +121,12 @@ function userInputHandler(e: KeyboardEvent) {
 }
 
 async function enterKey() {
-  if (!mutWriteLines || !PROMPT) return
+  if (!mutWriteLines || !PROMPT) return;
   const resetInput = "";
   let newUserInput;
   userInput = USERINPUT.value;
 
-  posthog.capture('command sent', { command: userInput })
+  posthog.capture("command sent", { command: userInput });
 
   if (bareMode) {
     newUserInput = userInput;
@@ -118,23 +135,58 @@ async function enterKey() {
   }
 
   HISTORY.push(userInput);
-  historyIdx = HISTORY.length
+  historyIdx = HISTORY.length;
+
+  if (userInput.startsWith("login")) {
+    const components = userInput.split(" ");
+    if (components.length !== 2) {
+      writeLines(["Usage: login &lt;email&gt; or login &lt;code&gt;", "<br>"]);
+      return;
+    }
+    const emailRegex =
+      /^(([^<>()\[\]\\.,;:\s@"]+(\.[^<>()\[\]\\.,;:\s@"]+)*)|(".+"))@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}])|(([a-zA-Z\-0-9]+\.)+[a-zA-Z]{2,}))$/;
+
+    const codeRegex = /^\d{6}$/;
+
+    switch (true) {
+      case emailRegex.test(components[1]):
+        const emailResponse = await login(components[1]);
+        writeLines([emailResponse, "<br>"]);
+        break;
+      case codeRegex.test(components[1]):
+        const codeResponse = await verifyOTP(components[1]);
+        writeLines([codeResponse, "<br>"]);
+        break;
+      default:
+        writeLines([
+          "Invalid usage. Please provide an email address or a 6 digit numeric code.",
+          "<br>",
+        ]);
+        break;
+    }
+
+    USERINPUT.value = resetInput;
+    userInput = resetInput;
+    const div = document.createElement("div");
+    div.innerHTML = `<span id="prompt">${PROMPT.innerHTML}</span> ${newUserInput}`;
+    return;
+  }
 
   //if clear then early return
-  if (userInput === 'clear') {
+  if (userInput === "clear") {
     commandHandler(userInput.toLowerCase().trim());
     USERINPUT.value = resetInput;
     userInput = resetInput;
-    return
+    return;
   }
 
-  if (userInput === 'help') {
+  if (userInput === "help") {
     commandHandler(userInput.toLowerCase().trim());
     USERINPUT.value = resetInput;
     userInput = resetInput;
     const div = document.createElement("div");
     div.innerHTML = `<span id="prompt">${PROMPT.innerHTML}</span> ${newUserInput}`;
-    return
+    return;
   }
 
   const div = document.createElement("div");
@@ -148,39 +200,38 @@ async function enterKey() {
 
   USERINPUT.disabled = true;
   if (MAIN_PROMPT) {
-    MAIN_PROMPT.innerHTML = "LOADING..."
+    MAIN_PROMPT.innerHTML = "LOADING...";
   }
-  if (NAME === '') {
+  if (NAME === "") {
     if (userInput) {
-      NAME = userInput
-      await localManual(`/locate ${userInput}`)
+      NAME = userInput;
+      await localManual(`/locate ${userInput}`);
       if (MAIN_PROMPT) {
-        MAIN_PROMPT.innerHTML = `<span id="prompt"><span id="user">${command.username}</span>@<span id="host">${command.hostname}</span>:$ ~ `
+        MAIN_PROMPT.innerHTML = `<span id="prompt"><span id="user">${command.username}</span>@<span id="host">${command.hostname}</span>:$ ~ `;
       }
     }
-  } else if (userInput === '') {
+  } else if (userInput === "") {
     await localAuto();
   } else {
-    await localManual(userInput)
+    await localManual(userInput);
   }
   if (MAIN_PROMPT) {
-    if (NAME === '') {
+    if (NAME === "") {
       MAIN_PROMPT.innerHTML = "Enter a Name to Simulate >>> ";
     } else {
-      MAIN_PROMPT.innerHTML = `<span id="prompt"><span id="user">${command.username}</span>@<span id="host">${command.hostname}</span>:$ ~ `
+      MAIN_PROMPT.innerHTML = `<span id="prompt"><span id="user">${command.username}</span>@<span id="host">${command.hostname}</span>:$ ~ `;
     }
   }
   USERINPUT.disabled = false;
   USERINPUT.focus();
 
   userInput = resetInput;
-
 }
 
 async function localManual(command: string) {
-  let acc = "SEARCHER CLAUDE:\n"
+  let acc = "SEARCHER CLAUDE:\n";
   acc += command.replace(/\n/g, "<br>").replace(/ /g, "&nbsp;");
-  if (!mutWriteLines) return
+  if (!mutWriteLines) return;
   let p = document.createElement("p");
   let span = document.createElement("span");
   span.className = "searcher";
@@ -189,8 +240,8 @@ async function localManual(command: string) {
   mutWriteLines.parentNode!.insertBefore(p, mutWriteLines);
   scrollToBottom();
 
-  acc = "\nSIMULATOR CLAUDE:\n"
-  if (!mutWriteLines) return
+  acc = "\nSIMULATOR CLAUDE:\n";
+  if (!mutWriteLines) return;
   p = document.createElement("p");
   span = document.createElement("span");
   p.appendChild(span);
@@ -199,7 +250,9 @@ async function localManual(command: string) {
   mutWriteLines.parentNode!.insertBefore(p, mutWriteLines);
   scrollToBottom();
 
-  const reader: ReadableStreamDefaultReader<string> | void = await manual(command);
+  const reader: ReadableStreamDefaultReader<string> | void = await manual(
+    command
+  );
   let more = true;
   if (reader) {
     while (more) {
@@ -209,7 +262,7 @@ async function localManual(command: string) {
       }
       if (value) {
         // console.log(value)
-        acc += value
+        acc += value;
         // if (!mutWriteLines) return
         // let p = document.createElement("p");
         span.innerHTML = acc.replace(/\n/g, "<br>").replace(/ /g, "&nbsp;");
@@ -218,13 +271,13 @@ async function localManual(command: string) {
       }
     }
   }
-  console.log(acc)
+  console.log(acc);
 }
 
 async function localAuto() {
-  let preamble = "SEARCHER CLAUDE:\n"
-  let acc = ""
-  if (!mutWriteLines) return
+  let preamble = "SEARCHER CLAUDE:\n";
+  let acc = "";
+  if (!mutWriteLines) return;
   let p = document.createElement("p");
   let span = document.createElement("span");
   span.className = "searcher";
@@ -236,33 +289,37 @@ async function localAuto() {
 
   let reader: ReadableStreamDefaultReader<string> | void = await auto();
   let more = true;
-  let count = 0
+  let count = 0;
   while (more) {
     if (reader) {
       const { done, value } = await reader.read();
       if (done) {
         if (count > 0) {
           more = false;
-          continue
+          continue;
         }
-        count += 1
-        console.log(acc)
+        count += 1;
+        console.log(acc);
         reader = await manual(acc);
-        preamble = "\nSIMULATOR CLAUDE:\n"
-        acc = ""
+        preamble = "\nSIMULATOR CLAUDE:\n";
+        acc = "";
         p = document.createElement("p");
         span = document.createElement("span");
         p.appendChild(span);
         span.className = "simulator";
-        span.innerHTML = (preamble + acc).replace(/\n/g, "<br>").replace(/ /g, "&nbsp;");
+        span.innerHTML = (preamble + acc)
+          .replace(/\n/g, "<br>")
+          .replace(/ /g, "&nbsp;");
         mutWriteLines.parentNode!.insertBefore(p, mutWriteLines);
         scrollToBottom();
       } else if (value) {
         // console.log(value)
-        acc += value
+        acc += value;
         // if (!mutWriteLines) return
         // let p = document.createElement("p");
-        span.innerHTML = (preamble + acc).replace(/\n/g, "<br>").replace(/ /g, "&nbsp;");
+        span.innerHTML = (preamble + acc)
+          .replace(/\n/g, "<br>")
+          .replace(/ /g, "&nbsp;");
         // mutWriteLines.parentNode!.insertBefore(p, mutWriteLines);
         scrollToBottom();
       }
@@ -271,7 +328,7 @@ async function localAuto() {
     }
   }
 
-  console.log(acc)
+  console.log(acc);
 }
 
 function tabKey() {
@@ -280,7 +337,7 @@ function tabKey() {
   for (const ele of COMMANDS) {
     if (ele.startsWith(currInput)) {
       USERINPUT.value = ele;
-      return
+      return;
     }
   }
 }
@@ -342,24 +399,24 @@ function commandHandler(input: string) {
   // }
 
   switch (input) {
-    case 'clear':
+    case "clear":
       setTimeout(() => {
-        if (!TERMINAL || !WRITELINESCOPY) return
+        if (!TERMINAL || !WRITELINESCOPY) return;
         TERMINAL.innerHTML = "";
         TERMINAL.appendChild(WRITELINESCOPY);
         mutWriteLines = WRITELINESCOPY;
-      })
+      });
       break;
-    case 'banner':
+    case "banner":
       if (bareMode) {
-        writeLines(["WebShell v1.0.0", "<br>"])
+        writeLines(["WebShell v1.0.0", "<br>"]);
         break;
       }
       writeLines(BANNER);
       break;
-    case 'help':
+    case "help":
       if (bareMode) {
-        writeLines(["maybe restarting your browser will fix this.", "<br>"])
+        writeLines(["maybe restarting your browser will fix this.", "<br>"]);
         break;
       }
       writeLines(HELP);
@@ -442,7 +499,7 @@ function commandHandler(input: string) {
     //   break;
     default:
       if (bareMode) {
-        writeLines(["type 'help'", "<br>"])
+        writeLines(["type 'help'", "<br>"]);
         break;
       }
 
@@ -459,7 +516,7 @@ function writeLines(message: string[]) {
 
 function displayText(item: string, idx: number) {
   setTimeout(() => {
-    if (!mutWriteLines) return
+    if (!mutWriteLines) return;
     const p = document.createElement("p");
     p.innerHTML = item;
     mutWriteLines.parentNode!.insertBefore(p, mutWriteLines);
@@ -469,15 +526,15 @@ function displayText(item: string, idx: number) {
 
 async function asyncWriteLines(message: string[]): Promise<void> {
   const promises = message.map((item, idx) => asyncDisplayText(item, idx));
-  return Promise.all(promises).then(() => { });
+  return Promise.all(promises).then(() => {});
 }
 
 function asyncDisplayText(item: string, idx: number): Promise<void> {
   return new Promise((resolve) => {
     setTimeout(() => {
       if (!mutWriteLines) {
-        resolve()
-        return
+        resolve();
+        return;
       }
       const p = document.createElement("p");
       p.innerHTML = item;
@@ -561,10 +618,9 @@ const initEventListeners = () => {
     // }
   } else {
     if (PROMPT) {
-      PROMPT.innerHTML = `<span id="prompt"><span id="user">${command.username}</span>@<span id="host">${command.hostname}</span>:$ ~ `
+      PROMPT.innerHTML = `<span id="prompt"><span id="user">${command.username}</span>@<span id="host">${command.hostname}</span>:$ ~ `;
     }
   }
-
 
   if (PRE_HOST) {
     PRE_HOST.innerText = command.hostname;
@@ -574,10 +630,9 @@ const initEventListeners = () => {
     PRE_USER.innerText = command.username;
   }
 
-  const setupPromise = getUser()
-    .then(() => {
-      return newSession()
-    })
+  const setupPromise = getJWT().then(() => {
+    return newSession();
+  });
 
   let sweetAlertHTML = `<div id='social-buttons-alert'>
       <a href='https://x.com/plastic_labs' target='_blank'><button><i class='fab fa-twitter'></i></button></a>
@@ -585,43 +640,44 @@ const initEventListeners = () => {
                 class='fa-brands fa-github'></i></button></a>
           <a href='https://discord.gg/plasticlabs' target='_blank'><button><i
                 class='fa-brands fa-discord'></i></button></a>
-        </div><br>`
-  sweetAlertHTML += "<p>YouSim is a fun open-ended demo to explore the multiverse of identities</p><br>"
+        </div><br>`;
+  sweetAlertHTML +=
+    "<p>YouSim is a fun open-ended demo to explore the multiverse of identities</p><br>";
   // sweetAlertHTML += "<p>to glimpse a (mere infinite) sliver of the (transfinite) diversity within the latent space.</p><br>"
   // sweetAlertHTML += "<p>Inspired by WorldSim, WebSim, & Infinite Backrooms, YouSim leverages Claude to let you locate, modify, & interact with any entity you can imagine.</p><br>"
-  sweetAlertHTML += "<p> It’s a game that can simulate anyone you like.</p><br>"
-  sweetAlertHTML += "<p>Who will you summon?</p><br>"
-  sweetAlertHTML += "<a href='https://blog.plasticlabs.ai/blog/YouSim;-Explore-The-Multiverse-of-Identity' target='_blank'>Read more on our blog</a>"
+  sweetAlertHTML +=
+    "<p> It’s a game that can simulate anyone you like.</p><br>";
+  sweetAlertHTML += "<p>Who will you summon?</p><br>";
+  sweetAlertHTML +=
+    "<a href='https://blog.plasticlabs.ai/blog/YouSim;-Explore-The-Multiverse-of-Identity' target='_blank'>Read more on our blog</a>";
 
-  window.addEventListener('load', async () => {
+  window.addEventListener("load", async () => {
     if (USERINPUT) {
-      USERINPUT.disabled = true
+      USERINPUT.disabled = true;
     }
     await setupPromise;
     // await newSession();
-    const welcomePromises = asyncWriteLines(BANNER)
-      .then(() => {
-        return asyncWriteLines(HELP)
-      })
+    const welcomePromises = asyncWriteLines(BANNER).then(() => {
+      return asyncWriteLines(HELP);
+    });
     const swalPromise = Swal.fire({
       title: "Welcome to YouSim",
       html: sweetAlertHTML,
       icon: "info",
       heightAuto: false,
-
-    })
-    await Promise.all([welcomePromises, swalPromise])
+    });
+    await Promise.all([welcomePromises, swalPromise]);
     if (USERINPUT) {
-      USERINPUT.disabled = false
-      USERINPUT.focus()
+      USERINPUT.disabled = false;
+      USERINPUT.focus();
     }
   });
 
-  USERINPUT.addEventListener('keypress', userInputHandler);
-  USERINPUT.addEventListener('keydown', userInputHandler);
-  PASSWORD_INPUT.addEventListener('keypress', userInputHandler);
+  USERINPUT.addEventListener("keypress", userInputHandler);
+  USERINPUT.addEventListener("keydown", userInputHandler);
+  PASSWORD_INPUT.addEventListener("keypress", userInputHandler);
 
-  window.addEventListener('click', () => {
+  window.addEventListener("click", () => {
     if (window && USERINPUT) {
       const selection = window.getSelection()?.toString();
       if (!selection || (selection && selection.length === 0)) {
@@ -630,9 +686,7 @@ const initEventListeners = () => {
     }
   });
 
-
-
   // console.log(`%cPassword: ${command.password}`, "color: red; font-size: 20px;");
-}
+};
 
 initEventListeners();

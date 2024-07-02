@@ -17,6 +17,7 @@
   "dependencies": {
     "@sentry/browser": "^8.9.2",
     "@sentry/vite-plugin": "^2.18.0",
+    "@supabase/supabase-js": "^2.44.2",
     "js-yaml": "^4.1.0",
     "posthog-js": "^1.139.1",
     "sweetalert2": "^11.11.1",
