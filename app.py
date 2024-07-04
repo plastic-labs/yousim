@@ -228,3 +228,47 @@ async def reset(
         "user_id": user_id,
         "session_id": session.id,
     }
+
+
+@app.get("/session")
+async def get_session_messages(
+    session_id: str | None = None, user_id: str = Depends(get_current_user)
+):
+    if not session_id:
+        # Fetch the latest session if session_id is not provided
+        sessions = honcho.apps.users.sessions.list(
+            app_id=honcho_app.id, user_id=user_id, size=1, reverse=True
+        )
+        session_id = sessions.items[0].id
+    try:
+        # Fetch messages for the given or latest session
+        messages = honcho.apps.users.sessions.messages.list(
+            app_id=honcho_app.id, user_id=user_id, session_id=session_id
+        )
+        return {
+            "session_id": session_id,
+            "messages": [
+                {
+                    "id": msg.id,
+                    "content": msg.content,
+                    "created_at": msg.created_at,
+                    "is_user": msg.is_user,
+                }
+                for msg in messages
+            ],
+        }
+    except Exception as e:
+        return {"error": f"Failed to fetch messages: {str(e)}"}
+
+
+@app.get("/sessions")
+async def get_sessions(user_id: str = Depends(get_current_user)):
+    try:
+        sessions = honcho.apps.users.sessions.list(
+            app_id=honcho_app.id,
+            user_id=user_id,
+            reverse=True,  # Get the most recent sessions first
+        )
+        return [session for session in sessions]
+    except Exception as e:
+        return {"error": f"Failed to fetch sessions: {str(e)}"}

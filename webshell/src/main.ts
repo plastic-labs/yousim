@@ -8,9 +8,18 @@ import { DEFAULT } from "./commands/default";
 // import { PROJECTS } from "./commands/projects";
 // import { createWhoami } from "./commands/whoami";
 import posthog from "posthog-js";
-import { newSession, manual, auto } from "./honcho";
-import { getJWT } from "./auth";
+import {
+  newSession,
+  manual,
+  auto,
+  getSessionMessages,
+  getSessions,
+  SessionData,
+} from "./honcho";
+import { getJWT, isAnon } from "./auth";
 import { login, verifyOTP } from "./commands/login";
+import { getStorage, setStorage } from "./utils";
+import { load } from "js-yaml";
 
 if (
   !window.location.host.includes("127.0.0.1") &&
@@ -51,7 +60,6 @@ let userInput: string;
 // let isSudo = false;
 let isPasswordInput = false;
 // let passwordCounter = 0;
-let bareMode = false;
 let NAME = "";
 
 //WRITELINESCOPY is used to during the "clear" command
@@ -128,11 +136,7 @@ async function enterKey() {
 
   posthog.capture("command sent", { command: userInput });
 
-  if (bareMode) {
-    newUserInput = userInput;
-  } else {
-    newUserInput = `<span class='output'>${userInput}</span>`;
-  }
+  newUserInput = `<span class='output'>${userInput}</span>`;
 
   HISTORY.push(userInput);
   historyIdx = HISTORY.length;
@@ -169,6 +173,64 @@ async function enterKey() {
     userInput = resetInput;
     const div = document.createElement("div");
     div.innerHTML = `<span id="prompt">${PROMPT.innerHTML}</span> ${newUserInput}`;
+    return;
+  }
+
+  if (userInput.startsWith("sessions")) {
+    USERINPUT.value = resetInput;
+
+    if (await isAnon()) {
+      writeLines(["You are not logged in.", "<br>"]);
+      return;
+    }
+
+    const components = userInput.split(" ");
+
+    if (components.length === 1) {
+      const sessions = await getSessions();
+      if (sessions && sessions.length > 0) {
+        const sessionList = sessions.map((session, index) => {
+          const date = new Date(session.created_at).toLocaleString();
+          return `${index}: ${date}`;
+        });
+        writeLines(["Available sessions:", ...sessionList, "<br>"]);
+      } else {
+        writeLines(["No sessions found.", "<br>"]);
+      }
+    }
+
+    if (components.length === 2) {
+      const sessionIdx = parseInt(components[1]);
+      const sessions = await getSessions();
+
+      if (!sessions || sessions.length === 0) {
+        writeLines(["No sessions found.", "<br>"]);
+        return;
+      }
+
+      const session = sessions[sessionIdx];
+
+      if (!session) {
+        writeLines(["Session not found.", "<br>"]);
+        return;
+      }
+
+      commandHandler("clear");
+      const sessionData = await getSessionMessages(session.id);
+      console.trace(sessionData);
+      if (sessionData) {
+        setStorage("session_id", session.id);
+        loadSession(sessionData);
+      }
+    }
+
+    userInput = resetInput;
+    return;
+  }
+
+  if (userInput === "reset") {
+    setStorage("session_id", "");
+    window.location.reload();
     return;
   }
 
@@ -362,42 +424,6 @@ function arrowKeys(e: string) {
 }
 
 function commandHandler(input: string) {
-  // if (input.startsWith("rm -rf") && input.trim() !== "rm -rf") {
-  //   if (isSudo) {
-  //     if (input === "rm -rf src" && !bareMode) {
-  //       bareMode = true;
-
-  //       setTimeout(() => {
-  //         if (!TERMINAL || !WRITELINESCOPY) return
-  //         TERMINAL.innerHTML = "";
-  //         TERMINAL.appendChild(WRITELINESCOPY);
-  //         mutWriteLines = WRITELINESCOPY;
-  //       });
-
-  //       easterEggStyles();
-  //       setTimeout(() => {
-  //         writeLines(["What made you think that was a good idea?", "<br>"]);
-  //       }, 200)
-
-  //       setTimeout(() => {
-  //         writeLines(["Now everything is ruined.", "<br>"]);
-  //       }, 1200)
-
-  //     } else if (input === "rm -rf src" && bareMode) {
-  //       writeLines(["there's no more src folder.", "<br>"])
-  //     } else {
-  //       if (bareMode) {
-  //         writeLines(["What else are you trying to delete?", "<br>"])
-  //       } else {
-  //         writeLines(["<br>", "Directory not found.", "type <span class='command'>'ls'</span> for a list of directories.", "<br>"]);
-  //       }
-  //     }
-  //   } else {
-  //     writeLines(["Permission not granted.", "<br>"]);
-  //   }
-  //   return
-  // }
-
   switch (input) {
     case "clear":
       setTimeout(() => {
@@ -408,101 +434,12 @@ function commandHandler(input: string) {
       });
       break;
     case "banner":
-      if (bareMode) {
-        writeLines(["WebShell v1.0.0", "<br>"]);
-        break;
-      }
       writeLines(BANNER);
       break;
     case "help":
-      if (bareMode) {
-        writeLines(["maybe restarting your browser will fix this.", "<br>"]);
-        break;
-      }
       writeLines(HELP);
       break;
-    // case 'whoami':
-    //   if (bareMode) {
-    //     writeLines([`${command.username}`, "<br>"])
-    //     break;
-    //   }
-    //   writeLines(createWhoami());
-    //   break;
-    // case 'about':
-    //   if (bareMode) {
-    //     writeLines(["Nothing to see here.", "<br>"])
-    //     break;
-    //   }
-    //   writeLines(ABOUT);
-    //   break;
-    // case 'projects':
-    //   if (bareMode) {
-    //     writeLines(["I don't want you to break the other projects.", "<br>"])
-    //     break;
-    //   }
-    //   writeLines(PROJECTS);
-    //   break;
-    // case 'repo':
-    //   writeLines(["Redirecting to github.com...", "<br>"]);
-    //   setTimeout(() => {
-    //     window.open(REPO_LINK, '_blank');
-    //   }, 500);
-    //   break;
-    // case 'linkedin':
-    //   //add stuff here
-    //   break;
-    // case 'github':
-    //   //add stuff here
-    //   break;
-    // case 'email':
-    //   //add stuff here
-    //   break;
-    // case 'rm -rf':
-    //   if (bareMode) {
-    //     writeLines(["don't try again.", "<br>"])
-    //     break;
-    //   }
-
-    //   if (isSudo) {
-    //     writeLines(["Usage: <span class='command'>'rm -rf &lt;dir&gt;'</span>", "<br>"]);
-    //   } else {
-    //     writeLines(["Permission not granted.", "<br>"])
-    //   }
-    //   break;
-    // case 'sudo':
-    //   if (bareMode) {
-    //     writeLines(["no.", "<br>"])
-    //     break;
-    //   }
-    //   if (!PASSWORD) return
-    //   isPasswordInput = true;
-    //   USERINPUT.disabled = true;
-
-    //   if (INPUT_HIDDEN) INPUT_HIDDEN.style.display = "none";
-    //   PASSWORD.style.display = "block";
-    //   setTimeout(() => {
-    //     PASSWORD_INPUT.focus();
-    //   }, 100);
-
-    //   break;
-    // case 'ls':
-    //   if (bareMode) {
-    //     writeLines(["", "<br>"])
-    //     break;
-    //   }
-
-    //   if (isSudo) {
-    //     writeLines(["src", "<br>"]);
-    //   } else {
-    //     writeLines(["Permission not granted.", "<br>"]);
-    //   }
-    //   break;
     default:
-      if (bareMode) {
-        writeLines(["type 'help'", "<br>"]);
-        break;
-      }
-
       writeLines(DEFAULT);
       break;
   }
@@ -608,20 +545,32 @@ function asyncDisplayText(item: string, idx: number): Promise<void> {
 
 // }
 
-const initEventListeners = () => {
-  if (NAME === "") {
-    if (MAIN_PROMPT) {
-      MAIN_PROMPT.innerHTML = "Enter a Name to Simulate >>> ";
+function loadSession(data: SessionData) {
+  data?.messages.forEach((message) => {
+    if (message.is_user) {
+      let p = document.createElement("p");
+      let span = document.createElement("span");
+      span.className = "user";
+      p.appendChild(span);
+      span.innerHTML = message.content
+        .replace(/\n/g, "<br>")
+        .replace(/ /g, "&nbsp;");
+      mutWriteLines?.parentNode!.insertBefore(p, mutWriteLines);
+    } else {
+      let p = document.createElement("p");
+      let span = document.createElement("span");
+      span.className = "simulator";
+      p.appendChild(span);
+      span.innerHTML = message.content
+        .replace(/\n/g, "<br>")
+        .replace(/ /g, "&nbsp;");
+      mutWriteLines?.parentNode!.insertBefore(p, mutWriteLines);
     }
-    // if (USERINPUT) {
-    //   USERINPUT.focus()
-    // }
-  } else {
-    if (PROMPT) {
-      PROMPT.innerHTML = `<span id="prompt"><span id="user">${command.username}</span>@<span id="host">${command.hostname}</span>:$ ~ `;
-    }
-  }
+    scrollToBottom();
+  });
+}
 
+const initEventListeners = () => {
   if (PRE_HOST) {
     PRE_HOST.innerText = command.hostname;
   }
@@ -630,8 +579,18 @@ const initEventListeners = () => {
     PRE_USER.innerText = command.username;
   }
 
-  const setupPromise = getJWT().then(() => {
-    return newSession();
+  const setupPromise = getJWT().then(async () => {
+    const existingSessionId = getStorage("session_id");
+    if (existingSessionId) {
+      NAME = "something";
+      const sessionMessages = await getSessionMessages(existingSessionId);
+
+      if (sessionMessages) {
+        loadSession(sessionMessages);
+      }
+    } else {
+      return newSession();
+    }
   });
 
   let sweetAlertHTML = `<div id='social-buttons-alert'>
@@ -655,7 +614,7 @@ const initEventListeners = () => {
     if (USERINPUT) {
       USERINPUT.disabled = true;
     }
-    await setupPromise;
+
     // await newSession();
     const welcomePromises = asyncWriteLines(BANNER).then(() => {
       return asyncWriteLines(HELP);
@@ -667,6 +626,22 @@ const initEventListeners = () => {
       heightAuto: false,
     });
     await Promise.all([welcomePromises, swalPromise]);
+
+    await setupPromise;
+
+    if (NAME === "") {
+      if (MAIN_PROMPT) {
+        MAIN_PROMPT.innerHTML = "Enter a Name to Simulate >>> ";
+      }
+      // if (USERINPUT) {
+      //   USERINPUT.focus()
+      // }
+    } else {
+      if (PROMPT) {
+        PROMPT.innerHTML = `<span id="prompt"><span id="user">${command.username}</span>@<span id="host">${command.hostname}</span>:$ ~ `;
+      }
+    }
+
     if (USERINPUT) {
       USERINPUT.disabled = false;
       USERINPUT.focus();

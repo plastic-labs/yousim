@@ -1,37 +1,7 @@
-import { v4 as uuidv4 } from "uuid";
 import * as Sentry from "@sentry/browser";
 const API_URL = import.meta.env.VITE_API_URL;
 import { getStorage, setStorage } from "./utils";
-import auth, { getJWT } from "./auth";
-
-// export async function getUserId() {
-//   const sessionResponse = await auth.getSession();
-//   const { data: sessionData, error: sessionError } = sessionResponse;
-//   if (sessionError) {
-//     console.log(sessionError);
-//     alert("possible error try refreshing the page");
-//     return;
-//   }
-
-//   if (sessionData.session?.user?.id) {
-//     return sessionData.session.user.id;
-//   }
-
-//   const { data: userData, error } = await auth.signInAnonymously();
-
-//   if (error) {
-//     console.log(error);
-//     alert("possible error try refreshing the page");
-//     return;
-//   }
-
-//   if (userData.user?.id) {
-//     return userData.user.id;
-//   }
-
-//   alert("Something went wrong");
-//   return;
-// }
+import { getJWT } from "./auth";
 
 export async function newSession() {
   const jwt = await getJWT();
@@ -120,5 +90,92 @@ export async function auto() {
   } else {
     Sentry.captureException({ jwt, session_id });
     alert("possible error try refreshing the page");
+  }
+}
+
+interface Message {
+  id: string;
+  content: string;
+  created_at: string;
+  is_user: boolean;
+}
+
+export interface SessionData {
+  session_id: string;
+  messages: Message[];
+}
+
+export async function getSessionMessages(sessionId?: string) {
+  const jwt = await getJWT();
+
+  if (jwt) {
+    const url = new URL(`${API_URL}/session`);
+    if (sessionId) {
+      url.searchParams.append("session_id", sessionId);
+    }
+
+    try {
+      const response = await fetch(url, {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${jwt}`,
+          "Content-Type": "application/json",
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data: SessionData = await response.json();
+      return data;
+    } catch (err) {
+      Sentry.captureException(err);
+      console.error("Failed to fetch session messages:", err);
+      alert("Failed to fetch session messages. Please try again.");
+    }
+  } else {
+    Sentry.captureException({ jwt });
+    alert("Authentication error. Please try refreshing the page.");
+  }
+}
+
+interface Session {
+  created_at: string;
+  id: string;
+  is_active: boolean;
+  location_id: string;
+  metadata: Record<string, string>;
+  user_id: string;
+}
+
+export async function getSessions() {
+  const jwt = await getJWT();
+
+  if (jwt) {
+    const url = new URL(`${API_URL}/sessions`);
+
+    try {
+      const response = await fetch(url, {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${jwt}`,
+          "Content-Type": "application/json",
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data: Session[] = await response.json();
+
+      console.trace(data);
+      return data;
+    } catch (err) {
+      Sentry.captureException(err);
+      console.error("Failed to fetch sessions:", err);
+      alert("Failed to fetch sessions. Please try again.");
+    }
   }
 }

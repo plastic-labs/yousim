@@ -41,3 +41,21 @@ export async function getJWT() {
 
   return jwt;
 }
+
+export async function isAnon(): Promise<boolean> {
+  const {
+    data: { user },
+    error,
+  } = await auth.getUser();
+
+  if (error) {
+    console.error("Error fetching user:", error.message);
+    return true; // Consider anonymous if there's an error
+  }
+
+  if (!user) {
+    return true; // Anonymous if no user
+  }
+
+  return !user.email; // Anonymous if no email, otherwise authenticated
+}
