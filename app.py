@@ -1,6 +1,6 @@
 import os
 from contextvars import ContextVar
-from typing import Annotated
+from typing import Annotated, Any, Dict
 from functools import cache
 from fastapi.security import OAuth2PasswordBearer
 
@@ -272,3 +272,21 @@ async def get_sessions(user_id: str = Depends(get_current_user)):
         return [session for session in sessions]
     except Exception as e:
         return {"error": f"Failed to fetch sessions: {str(e)}"}
+
+
+@app.put("/sessions/{session_id}/metadata")
+async def update_session_metadata(
+    session_id: str, metadata: Dict[str, Any], user_id: str = Depends(get_current_user)
+):
+    try:
+        updated_session = honcho.apps.users.sessions.update(
+            session_id=session_id,
+            app_id=honcho_app.id,
+            user_id=user_id,
+            metadata=metadata,
+        )
+        return {"session_id": updated_session.id, "metadata": updated_session.metadata}
+    except Exception as e:
+        raise HTTPException(
+            status_code=400, detail=f"Failed to update session metadata: {str(e)}"
+        )

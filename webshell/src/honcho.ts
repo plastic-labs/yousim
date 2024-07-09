@@ -179,3 +179,44 @@ export async function getSessions() {
     }
   }
 }
+
+export async function updateSessionMetadata(metadata: Record<string, any>) {
+  const jwt = await getJWT();
+  const sessionId = getStorage("session_id");
+
+  if (!sessionId) {
+    console.error("No session ID found in local storage");
+    alert("No active session found. Please start a new session.");
+    return;
+  }
+
+  if (jwt) {
+    const url = new URL(`${API_URL}/sessions/${sessionId}/metadata`);
+
+    try {
+      const response = await fetch(url, {
+        method: "PUT",
+        headers: {
+          Authorization: `Bearer ${jwt}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ metadata }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const updatedSession: Session = await response.json();
+      console.log("Session metadata updated:", updatedSession);
+      return updatedSession;
+    } catch (err) {
+      Sentry.captureException(err);
+      console.error("Failed to update session metadata:", err);
+      alert("Failed to update session metadata. Please try again.");
+    }
+  } else {
+    Sentry.captureException({ jwt });
+    alert("Authentication error. Please try refreshing the page.");
+  }
+}

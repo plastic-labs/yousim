@@ -15,8 +15,9 @@ import {
   getSessionMessages,
   getSessions,
   SessionData,
+  updateSessionMetadata,
 } from "./honcho";
-import { getJWT, isAnon } from "./auth";
+import auth, { getJWT, isAnon } from "./auth";
 import { login, verifyOTP } from "./commands/login";
 import { getStorage, setStorage } from "./utils";
 import { load } from "js-yaml";
@@ -129,6 +130,13 @@ function userInputHandler(e: KeyboardEvent) {
 }
 
 async function enterKey() {
+  console.table({
+    NAME,
+    username: command.username,
+    hostname: command.hostname,
+    MAIN_PROMPT,
+  });
+
   if (!mutWriteLines || !PROMPT) return;
   const resetInput = "";
   let newUserInput;
@@ -176,22 +184,48 @@ async function enterKey() {
     return;
   }
 
+  if (userInput.startsWith("logout")) {
+    auth.signOut();
+    await getJWT();
+    writeLines(["You have been logged out.", "<br>"]);
+    setStorage("session_id", "");
+    window.location.reload();
+    return;
+  }
+
+  if (userInput.startsWith("whoami")) {
+    USERINPUT.value = resetInput;
+    const session = await auth.getSession();
+    const email = session.data.session?.user.email;
+    if (email) {
+      writeLines([`You are logged in as ${email}`, "<br>"]);
+    }
+    const div = document.createElement("div");
+    div.innerHTML = `<span id="prompt">${PROMPT.innerHTML}</span> ${newUserInput}`;
+    return;
+  }
+
   if (userInput.startsWith("sessions")) {
     USERINPUT.value = resetInput;
 
-    if (await isAnon()) {
-      writeLines(["You are not logged in.", "<br>"]);
-      return;
-    }
+    // if (await isAnon()) {
+    //   writeLines(["You are not logged in.", "<br>"]);
+    //   return;
+    // }
 
     const components = userInput.split(" ");
 
     if (components.length === 1) {
       const sessions = await getSessions();
+      console.trace(sessions);
       if (sessions && sessions.length > 0) {
         const sessionList = sessions.map((session, index) => {
           const date = new Date(session.created_at).toLocaleString();
-          return `${index}: ${date}`;
+          let sessionName = "UNKNOWN";
+          if (session.metadata.metadata) {
+            sessionName = session.metadata.metadata.name;
+          }
+          return `${index}: ${date} - ${sessionName}`;
         });
         writeLines(["Available sessions:", ...sessionList, "<br>"]);
       } else {
@@ -229,7 +263,7 @@ async function enterKey() {
   }
 
   if (userInput === "reset") {
-    setStorage("session_id", "");
+    await newSession();
     window.location.reload();
     return;
   }
@@ -267,7 +301,9 @@ async function enterKey() {
   if (NAME === "") {
     if (userInput) {
       NAME = userInput;
-      await localManual(`/locate ${userInput}`);
+      const updatePromise = updateSessionMetadata({ name: userInput });
+      const responsePromise = localManual(`/locate ${userInput}`);
+      await Promise.all([updatePromise, responsePromise]);
       if (MAIN_PROMPT) {
         MAIN_PROMPT.innerHTML = `<span id="prompt"><span id="user">${command.username}</span>@<span id="host">${command.hostname}</span>:$ ~ `;
       }
@@ -482,69 +518,6 @@ function asyncDisplayText(item: string, idx: number): Promise<void> {
   });
 }
 
-// function revertPasswordChanges() {
-//   if (!INPUT_HIDDEN || !PASSWORD) return
-//   PASSWORD_INPUT.value = "";
-//   USERINPUT.disabled = false;
-//   INPUT_HIDDEN.style.display = "block";
-//   PASSWORD.style.display = "none";
-//   isPasswordInput = false;
-
-//   setTimeout(() => {
-//     USERINPUT.focus();
-//   }, 200)
-// }
-
-// function passwordHandler() {
-//   if (passwordCounter === 2) {
-//     if (!INPUT_HIDDEN || !mutWriteLines || !PASSWORD) return
-//     writeLines(["<br>", "INCORRECT PASSWORD.", "PERMISSION NOT GRANTED.", "<br>"])
-//     revertPasswordChanges();
-//     passwordCounter = 0;
-//     return
-//   }
-
-//   if (PASSWORD_INPUT.value === SUDO_PASSWORD) {
-//     if (!mutWriteLines || !mutWriteLines.parentNode) return
-//     writeLines(["<br>", "PERMISSION GRANTED.", "Try <span class='command'>'rm -rf'</span>", "<br>"])
-//     revertPasswordChanges();
-//     isSudo = true;
-//     return
-//   } else {
-//     PASSWORD_INPUT.value = "";
-//     passwordCounter++;
-//   }
-// }
-
-// function easterEggStyles() {
-//   const bars = document.getElementById("bars");
-//   const body = document.body;
-//   const main = document.getElementById("main");
-//   const span = document.getElementsByTagName("span");
-
-//   if (!bars) return
-//   bars.innerHTML = "";
-//   bars.remove()
-
-//   if (main) main.style.border = "none";
-
-//   body.style.backgroundColor = "black";
-//   body.style.fontFamily = "VT323, monospace";
-//   body.style.fontSize = "20px";
-//   body.style.color = "white";
-
-//   for (let i = 0; i < span.length; i++) {
-//     span[i].style.color = "white";
-//   }
-
-//   USERINPUT.style.backgroundColor = "black";
-//   USERINPUT.style.color = "white";
-//   USERINPUT.style.fontFamily = "VT323, monospace";
-//   USERINPUT.style.fontSize = "20px";
-//   if (PROMPT) PROMPT.style.color = "white";
-
-// }
-
 function loadSession(data: SessionData) {
   data?.messages.forEach((message) => {
     if (message.is_user) {
@@ -580,12 +553,16 @@ const initEventListeners = () => {
   }
 
   const setupPromise = getJWT().then(async () => {
+    // const sessions = await getSessions();
     const existingSessionId = getStorage("session_id");
+    // console.trace(sessions);
     if (existingSessionId) {
-      NAME = "something";
       const sessionMessages = await getSessionMessages(existingSessionId);
 
+      // const sessionMessages = await getSessionMessages(sessions[0].id);
       if (sessionMessages) {
+        if (sessionMessages.messages.length > 0) NAME = "something";
+
         loadSession(sessionMessages);
       }
     } else {
@@ -616,9 +593,14 @@ const initEventListeners = () => {
     }
 
     // await newSession();
-    const welcomePromises = asyncWriteLines(BANNER).then(() => {
-      return asyncWriteLines(HELP);
-    });
+    const welcomePromises = asyncWriteLines(BANNER)
+      .then(() => {
+        return asyncWriteLines(HELP);
+      })
+      .then(() => {
+        return setupPromise;
+      });
+
     const swalPromise = Swal.fire({
       title: "Welcome to YouSim",
       html: sweetAlertHTML,
@@ -626,9 +608,6 @@ const initEventListeners = () => {
       heightAuto: false,
     });
     await Promise.all([welcomePromises, swalPromise]);
-
-    await setupPromise;
-
     if (NAME === "") {
       if (MAIN_PROMPT) {
         MAIN_PROMPT.innerHTML = "Enter a Name to Simulate >>> ";
@@ -637,8 +616,8 @@ const initEventListeners = () => {
       //   USERINPUT.focus()
       // }
     } else {
-      if (PROMPT) {
-        PROMPT.innerHTML = `<span id="prompt"><span id="user">${command.username}</span>@<span id="host">${command.hostname}</span>:$ ~ `;
+      if (MAIN_PROMPT) {
+        MAIN_PROMPT.innerHTML = `<span id="prompt"><span id="user">${command.username}</span>@<span id="host">${command.hostname}</span>:$ ~ `;
       }
     }
 

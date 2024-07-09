@@ -18,6 +18,7 @@ const helpObj = {
       "login [code]",
       "Submit the code you recieved to finish the login process",
     ],
+    ["logout", "Log out of the current session"],
     ["sessions", "List all available sessions. Must be logged in."],
     ["session [index]", "Load a specific session. Must be logged in."],
     ["reset", "Create a new session."],
