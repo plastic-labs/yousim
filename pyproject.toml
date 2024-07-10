@@ -14,6 +14,7 @@ python-dotenv = "^1.0.1"
 google-auth = "^2.30.0"
 fastapi = "^0.111.0"
 sentry-sdk = {extras = ["fastapi"], version = "^2.5.1"}
+pyjwt = "^2.8.0"
 
 
 [build-system]
