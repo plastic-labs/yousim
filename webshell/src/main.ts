@@ -17,10 +17,9 @@ import {
   SessionData,
   updateSessionMetadata,
 } from "./honcho";
-import auth, { getJWT, isAnon } from "./auth";
+import auth, { getJWT } from "./auth";
 import { login, verifyOTP } from "./commands/login";
 import { getStorage, setStorage } from "./utils";
-import { load } from "js-yaml";
 
 if (
   !window.location.host.includes("127.0.0.1") &&

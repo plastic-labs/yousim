@@ -145,8 +145,12 @@ interface Session {
   id: string;
   is_active: boolean;
   location_id: string;
-  metadata: Record<string, string>;
+  metadata: Metadata;
   user_id: string;
+}
+
+interface Metadata {
+  metadata: Record<string, string>;
 }
 
 export async function getSessions() {

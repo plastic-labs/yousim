@@ -4,11 +4,5 @@
     "reportMissingModuleSource": "none",
     "reportShadowedImports": "none"
   },
-  "python.analysis.extraPaths": [
-    "",
-    "/Users/ayush/.cursor/extensions/joedevivo.vscode-circuitpython-0.2.0-darwin-arm64/stubs",
-    "/Users/ayush/Library/Application Support/Cursor/User/globalStorage/joedevivo.vscode-circuitpython/bundle/20240707/adafruit-circuitpython-bundle-py-20240707/lib"
-  ],
-  "circuitpython.board.version": null,
   "python.analysis.typeCheckingMode": "basic"
 }
