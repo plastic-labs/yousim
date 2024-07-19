@@ -167,6 +167,8 @@ async function enterKey() {
       case codeRegex.test(components[1]):
         const codeResponse = await verifyOTP(components[1]);
         writeLines([codeResponse, "<br>"]);
+        await newSession();
+        window.location.reload();
         break;
       default:
         writeLines([
