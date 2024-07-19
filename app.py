@@ -26,10 +26,10 @@ HONCHO_ENV = os.getenv("HONCHO_ENV")
 if not HONCHO_ENV:
     raise ValueError("HONCHO_ENV is not set in .env")
 
-CLIENT_ADDRESS = os.getenv("CLIENT_ADDRESS")
-print(CLIENT_ADDRESS)
-if not CLIENT_ADDRESS:
-    raise ValueError("CLIENT_ADDRESS is not set in .env")
+CLIENT_REGEX = os.getenv("CLIENT_REGEX")
+print(CLIENT_REGEX)
+if not CLIENT_REGEX:
+    raise ValueError("CLIENT_REGEX is not set in .env")
 
 JWT_SECRET = os.getenv("JWT_SECRET")
 if not JWT_SECRET:
@@ -65,7 +65,7 @@ app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
-    # allow_origin_regex=os.getenv("CLIENT_REGEX"),
+    allow_origin_regex=os.getenv("CLIENT_REGEX"),
     allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
@@ -101,8 +101,8 @@ async def get_current_user(token: Annotated[str, Depends(oauth2_scheme)]):
         detail="Could not validate credentials",
         headers={"WWW-Authenticate": "Bearer"},
     )
-    print(token)
-    print(JWT_SECRET)
+    # print(token)
+    # print(JWT_SECRET)
 
     try:
         payload = jwt.decode(

@@ -129,12 +129,12 @@ function userInputHandler(e: KeyboardEvent) {
 }
 
 async function enterKey() {
-  console.table({
-    NAME,
-    username: command.username,
-    hostname: command.hostname,
-    MAIN_PROMPT,
-  });
+  // console.table({
+  //   NAME,
+  //   username: command.username,
+  //   hostname: command.hostname,
+  //   MAIN_PROMPT,
+  // });
 
   if (!mutWriteLines || !PROMPT) return;
   const resetInput = "";
@@ -196,6 +196,7 @@ async function enterKey() {
     USERINPUT.value = resetInput;
     const session = await auth.getSession();
     const email = session.data.session?.user.email;
+    console.log(session)
     if (email) {
       writeLines([`You are logged in as ${email}`, "<br>"]);
     }
@@ -204,7 +205,8 @@ async function enterKey() {
     return;
   }
 
-  if (userInput.startsWith("sessions")) {
+  // if (userInput.startsWith("sessions")) {
+  if (userInput.startsWith("session")) {
     USERINPUT.value = resetInput;
 
     // if (await isAnon()) {
@@ -498,7 +500,7 @@ function displayText(item: string, idx: number) {
 
 async function asyncWriteLines(message: string[]): Promise<void> {
   const promises = message.map((item, idx) => asyncDisplayText(item, idx));
-  return Promise.all(promises).then(() => {});
+  return Promise.all(promises).then(() => { });
 }
 
 function asyncDisplayText(item: string, idx: number): Promise<void> {
@@ -562,10 +564,10 @@ const initEventListeners = () => {
       if (sessionMessages) {
         if (sessionMessages.messages.length > 0) NAME = "something";
 
-        loadSession(sessionMessages);
+        return () => loadSession(sessionMessages);
       }
     } else {
-      return newSession();
+      return newSession;
     }
   });
 
@@ -593,12 +595,13 @@ const initEventListeners = () => {
 
     // await newSession();
     const welcomePromises = asyncWriteLines(BANNER)
-      .then(() => {
-        return asyncWriteLines(HELP);
+      .then(() => asyncWriteLines(HELP))
+      .then(() => setupPromise)
+      .then(sessionLoader => {
+        if (typeof sessionLoader === "function") {
+          sessionLoader();
+        }
       })
-      .then(() => {
-        return setupPromise;
-      });
 
     const swalPromise = Swal.fire({
       title: "Welcome to YouSim",
