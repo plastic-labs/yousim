@@ -25,7 +25,7 @@ export function checkSession() {
   if (!session_id) {
     newSession();
   }
-  // console.log(session_id)
+  console.log(session_id)
 }
 
 export async function manual(command: string) {
@@ -174,7 +174,7 @@ export async function getSessions() {
 
       const data: Session[] = await response.json();
 
-      console.trace(data);
+      // console.trace(data);
       return data;
     } catch (err) {
       Sentry.captureException(err);

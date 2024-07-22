@@ -1,3 +1,5 @@
+import DOMPurify from "dompurify";
+
 // https://developer.mozilla.org/en-US/docs/Web/API/Web_Storage_API/Using_the_Web_Storage_API
 function storageAvailable(type: string) {
   let storage: Storage | null = null;
@@ -67,4 +69,26 @@ function setStorage(key: string, value: string) {
   }
 }
 
-export { getStorage, setStorage };
+function sanitize(content: string) {
+  // Replace newlines with <br> tags before sanitizing
+  content = content
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;')
+    .replace(/\n/g, '<br>');
+
+  // Sanitize the content
+  let sanitized = DOMPurify.sanitize(content, {
+    ALLOW_UNKNOWN_PROTOCOLS: true,
+    ADD_ATTR: ['target']
+  });
+
+  // Replace spaces with non-breaking spaces after sanitizing
+  sanitized = sanitized.replace(/ /g, '&nbsp;');
+
+  return sanitized;
+}
+
+export { getStorage, setStorage, sanitize };

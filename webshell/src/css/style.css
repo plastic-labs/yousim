@@ -71,17 +71,17 @@ div {
   line-height: 22px;
 }
 
-@font-face {
-  font-family: ascii;
-  src: url("./font/IBMPlexMono-Thin.ttf")
-}
+/* @font-face { */
+/*   font-family: ascii; */
+/*   src: url("./font/IBMPlexMono-Thin.ttf") */
+/* } */
 
 pre {
   margin: 0;
   padding: 0;
   line-height: 20px !important;
   color: #FF9951;
-  font-family: "ascii", monospace;
+  /* font-family: "ascii", monospace; */
 }
 
 input {
