@@ -50,21 +50,22 @@ const scrollToBottom = () => {
 
 function loadSession(data: SessionData) {
   data?.messages.forEach((message) => {
-    if (message.is_user) {
-      let p = document.createElement("p");
-      let span = document.createElement("span");
-      span.className = "user";
-      p.appendChild(span);
-      span.innerHTML = sanitize(message.content)
-      mutWriteLines?.parentNode!.insertBefore(p, mutWriteLines);
-    } else {
-      let p = document.createElement("p");
-      let span = document.createElement("span");
-      span.className = "simulator";
-      p.appendChild(span);
-      span.innerHTML = sanitize(message.content)
-      mutWriteLines?.parentNode!.insertBefore(p, mutWriteLines);
-    }
+    let p = document.createElement("p");
+    let span = document.createElement("span");
+    let acc = message.is_user ? "\nSEARCHER CLAUDE:\n" : "\nSIMULATOR CLAUDE:\n";
+    acc += message.content
+    span.className = message.is_user ? "searcher" : "simulator";
+    // if (message.is_user) {
+    //   span.className = "searcher";
+    //   p.appendChild(span);
+    //   span.innerHTML = sanitize(acc)
+    //   mutWriteLines?.parentNode!.insertBefore(p, mutWriteLines);
+    // } else {
+    // span.className = "simulator";
+    p.appendChild(span);
+    span.innerHTML = sanitize(acc)
+    mutWriteLines?.parentNode!.insertBefore(p, mutWriteLines);
+    // }
     scrollToBottom();
   });
 }
