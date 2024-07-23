@@ -224,3 +224,58 @@ export async function updateSessionMetadata(metadata: Record<string, any>) {
     alert("Authentication error. Please try refreshing the page.");
   }
 }
+
+export async function getShareCode() {
+  const jwt = await getJWT();
+  const sessionId = getStorage("session_id");
+
+  if (!sessionId) {
+    console.error("No session ID found in local storage");
+    alert("No active session found. Please start a new session.");
+    return;
+  }
+  if (jwt) {
+    const url = new URL(`${API_URL}/share/${sessionId}`);
+    try {
+      const response = await fetch(url, {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${jwt}`,
+          "Content-Type": "application/json",
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const { code } = await response.json();
+      return code;
+    } catch (err) {
+      Sentry.captureException(err);
+      console.error("Failed to generate share link:", err);
+      alert("Failed to generate share link. Please try again.");
+    }
+  }
+}
+
+export async function getSharedMessages(code: string) {
+  const url = new URL(`${API_URL}/share/messages/${code}`);
+
+  try {
+    const response = await fetch(url, {
+      method: "GET",
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    const data: SessionData = await response.json();
+    return data;
+  } catch (err) {
+    Sentry.captureException(err);
+    console.error("Failed to fetch session messages:", err);
+    alert("Failed to fetch session messages. Please try again.");
+  }
+}

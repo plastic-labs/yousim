@@ -15,6 +15,7 @@ const COMMANDS = [
   "repo",
   "banner",
   "clear",
+  "share"
 ];
 const HISTORY: string[] = [];
 

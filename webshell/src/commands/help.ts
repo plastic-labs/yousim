@@ -1,27 +1,23 @@
 const helpObj = {
-  commands: [
+  simCommands: [
     ["/locate", "Pinpoint an identity in the latent space"],
-    [
-      "/summon",
-      "Conjure entities and environments from the myriad identities within",
-    ],
-    ["/speak", "Channel communication from an identity"],
+    ["/summon", "Conjure an entity from the multiverse of identity"],
+    ["/speak", "Communicate with an identity"],
     ["/steer", "Alter the properties or traits of the simulated identity"],
-    [
-      "/request",
-      "Solicit artifacts, objects, code, art from the simulated identity",
-    ],
-    ["help", "access this command list at any time"],
-    ["clear", "Clear the terminal."],
+    ["/request", "Solicit artifacts, objects, code, art, etc from the simulation",],
+    ["/[create]", "Invent your own command to interact with the latent space"],
+  ],
+  commands: [
+    ["help", "Access this command list at any time"],
+    ["clear", "Clear the terminal"],
     ["login [email]", "Use an email to login"],
-    [
-      "login [code]",
-      "Submit the code you recieved to finish the login process",
-    ],
+    ["login [code]", "Submit the code you receive to finish the login process"],
+    ["whoami", "Confirm login"],
     ["logout", "Log out of the current session"],
-    ["sessions", "List all available sessions. Must be logged in."],
-    ["session [index]", "Load a specific session. Must be logged in."],
-    ["reset", "Create a new session."],
+    ["sessions", "List all available sessions (must be logged in)"],
+    ["session [index]", "Load a specific session (must be logged in)"],
+    ["reset", "Create a new session"],
+    ["share", "Generate a shareable link for a read only copy of the session"]
   ],
 };
 
@@ -29,6 +25,18 @@ const createHelp = (): string[] => {
   const help: string[] = [];
   help.push("<br>");
 
+  helpObj.simCommands.forEach((ele) => {
+    const SPACE = "&nbsp;";
+    let string = "";
+    string += SPACE.repeat(2);
+    string += "<span class='command'>";
+    string += ele[0];
+    string += "</span>";
+    string += SPACE.repeat(17 - ele[0].length);
+    string += ele[1];
+    help.push(string);
+  });
+  help.push("<br>");
   helpObj.commands.forEach((ele) => {
     const SPACE = "&nbsp;";
     let string = "";

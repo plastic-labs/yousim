@@ -11,6 +11,9 @@ from fastapi.responses import StreamingResponse
 from honcho import Honcho
 from pydantic import BaseModel
 
+from cryptography.fernet import Fernet
+import base64
+
 # from .main import manual, auto, honcho
 # from .main import app as honcho_app
 from calls import GaslitClaude, Simulator
@@ -35,6 +38,8 @@ JWT_SECRET = os.getenv("JWT_SECRET")
 if not JWT_SECRET:
     raise ValueError("JWT_SECRET is not set in .env")
 
+SECRET_KEY = base64.b64decode(os.getenv("SECRET_KEY"))
+fernet = Fernet(SECRET_KEY)
 
 honcho = Honcho(base_url=HONCHO_ENV)  # TODO
 honcho_app = honcho.apps.get_or_create("NYTW Yousim Demo")
@@ -290,3 +295,20 @@ async def update_session_metadata(
         raise HTTPException(
             status_code=400, detail=f"Failed to update session metadata: {str(e)}"
         )
+
+
+@app.get("/share/{session_id}")
+async def share(session_id: str, user_id: str = Depends(get_current_user)):
+    # return encrypted session_id and user_id
+    encrypted = fernet.encrypt(f"{session_id}:{user_id}".encode())
+    return {"code": encrypted.decode()}
+
+
+@app.get("/share/messages/{code}")
+async def share_messages(code: str):
+    try:
+        decrypted = fernet.decrypt(code.encode()).decode()
+        session_id, user_id = decrypted.split(":")
+        return await get_session_messages(session_id=session_id, user_id=user_id)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid encrypted data")
