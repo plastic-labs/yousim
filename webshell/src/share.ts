@@ -1,11 +1,11 @@
 import { loadSession } from "./input";
 import Swal from "sweetalert2";
-import { writeLines } from "./display";
+import { asyncWriteLines } from "./display";
 import { getSharedMessages } from "./honcho";
 import { BANNER } from "./commands/banner";
 
 document.addEventListener('DOMContentLoaded', async () => {
-  writeLines(BANNER);
+  await asyncWriteLines(BANNER);
   const sessionId = new URLSearchParams(window.location.search).get("code");
   if (sessionId) {
     const sessionMessages = await getSharedMessages(sessionId);
