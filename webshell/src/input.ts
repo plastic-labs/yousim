@@ -176,6 +176,8 @@ async function enterKey() {
     console.log(session)
     if (email) {
       writeLines([`You are logged in as ${email}`, "<br>"]);
+    } else {
+      writeLines([`You are not currently logged in`, "<br>"]);
     }
     // const div = document.createElement("div");
     // div.innerHTML = `<span id="prompt">${PROMPT.innerHTML}</span> ${newUserInput}`;
