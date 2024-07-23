@@ -216,8 +216,9 @@ export async function updateSessionMetadata(metadata: Record<string, any>) {
       return updatedSession;
     } catch (err) {
       Sentry.captureException(err);
-      console.error("Failed to update session metadata:", err);
-      alert("Failed to update session metadata. Please try again.");
+      throw err;
+      // console.error("Failed to update session metadata:", err);
+      // alert("Failed to update session metadata. Please try resetting the conversation");
     }
   } else {
     Sentry.captureException({ jwt });

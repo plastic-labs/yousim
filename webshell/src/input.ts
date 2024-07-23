@@ -311,9 +311,20 @@ async function enterKey() {
   if (NAME === "") {
     if (userInput) {
       NAME = userInput;
-      const updatePromise = updateSessionMetadata({ name: userInput });
-      const responsePromise = localManual(`/locate ${userInput}`);
-      await Promise.all([updatePromise, responsePromise]);
+      try {
+        await updateSessionMetadata({ name: userInput });
+      } catch (e) {
+        console.error(e);
+        try {
+          await newSession();
+          await updateSessionMetadata({ name: userInput });
+        } catch (e2) {
+          console.error("Failed to update session metadata:", e2);
+          alert("Failed to update session metadata. Please try resetting the conversation");
+        }
+      }
+      await localManual(`/locate ${userInput}`);
+      // await Promise.all([updatePromise, responsePromise]);
       if (MAIN_PROMPT) {
         MAIN_PROMPT.innerHTML = `<span id="prompt"><span id="user">${command.username}</span>@<span id="host">${command.hostname}</span>:$ ~ `;
       }
