@@ -9,6 +9,7 @@ import {
   getSessionMessages,
   getSessions,
   updateSessionMetadata,
+  getShareCode,
   SessionData
 } from "./honcho";
 import {
@@ -176,8 +177,23 @@ async function enterKey() {
     if (email) {
       writeLines([`You are logged in as ${email}`, "<br>"]);
     }
-    const div = document.createElement("div");
-    div.innerHTML = `<span id="prompt">${PROMPT.innerHTML}</span> ${newUserInput}`;
+    // const div = document.createElement("div");
+    // div.innerHTML = `<span id="prompt">${PROMPT.innerHTML}</span> ${newUserInput}`;
+    return;
+  }
+
+  if (userInput.startsWith("share")) {
+    USERINPUT.value = resetInput;
+    const code = await getShareCode();
+    const link = `https://yousim.ai/share?code=${code}`
+    writeLines(
+      ["Share Link:",
+        "<br>",
+        `<a href="${link}" target="_blank" rel="noopener noreferrer">${link}</a>`,
+        "<br>"
+      ]);
+    // const div = document.createElement("div");
+    // div.innerHTML = `<span id="prompt">${PROMPT.innerHTML}</span> ${newUserInput}`;
     return;
   }
 

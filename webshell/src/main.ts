@@ -90,7 +90,7 @@ const initEventListeners = () => {
   sweetAlertHTML +=
     "<a href='https://blog.plasticlabs.ai/blog/YouSim;-Explore-The-Multiverse-of-Identity' target='_blank'>Read more on our blog</a>";
 
-  window.addEventListener("load", async () => {
+  document.addEventListener("DOMContentLoaded", async () => {
     if (USERINPUT) {
       USERINPUT.disabled = true;
     }

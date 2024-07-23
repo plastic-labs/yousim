@@ -7,7 +7,8 @@ import { sanitize } from "./utils";
 
 async function localManual(command: string) {
   let acc = "SEARCHER CLAUDE:\n";
-  acc += command.replace(/\n/g, "<br>").replace(/ /g, "&nbsp;");
+  // acc += command.replace(/\n/g, "<br>").replace(/ /g, "&nbsp;");
+  acc += command
   if (!mutWriteLines) return;
   let p = document.createElement("p");
   let span = document.createElement("span");

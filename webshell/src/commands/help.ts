@@ -22,6 +22,7 @@ const helpObj = {
     ["sessions", "List all available sessions. Must be logged in."],
     ["session [index]", "Load a specific session. Must be logged in."],
     ["reset", "Create a new session."],
+    ["share", "Generate a shareable link for a read only copy of the session."]
   ],
 };
 
