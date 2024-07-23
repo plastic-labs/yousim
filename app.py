@@ -1,18 +1,47 @@
 import os
 from contextvars import ContextVar
+from typing import Annotated, Any, Dict
+from functools import cache
+from fastapi.security import OAuth2PasswordBearer
 
 import sentry_sdk
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
+from fastapi import Depends, FastAPI, HTTPException, status
+from starlette.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from honcho import Honcho
 from pydantic import BaseModel
+
+from cryptography.fernet import Fernet
+import base64
 
 # from .main import manual, auto, honcho
 # from .main import app as honcho_app
 from calls import GaslitClaude, Simulator
 
-honcho = Honcho(base_url=os.getenv("HONCHO_ENV"))  # TODO
+import jwt
+
+
+from dotenv import load_dotenv
+
+load_dotenv(override=True)
+
+HONCHO_ENV = os.getenv("HONCHO_ENV")
+if not HONCHO_ENV:
+    raise ValueError("HONCHO_ENV is not set in .env")
+
+CLIENT_REGEX = os.getenv("CLIENT_REGEX")
+print(CLIENT_REGEX)
+if not CLIENT_REGEX:
+    raise ValueError("CLIENT_REGEX is not set in .env")
+
+JWT_SECRET = os.getenv("JWT_SECRET")
+if not JWT_SECRET:
+    raise ValueError("JWT_SECRET is not set in .env")
+
+SECRET_KEY = base64.b64decode(os.getenv("SECRET_KEY"))
+fernet = Fernet(SECRET_KEY)
+
+honcho = Honcho(base_url=HONCHO_ENV)  # TODO
 honcho_app = honcho.apps.get_or_create("NYTW Yousim Demo")
 
 # gaslit_claude = GaslitClaude(name="", insights="", history=[])
@@ -42,6 +71,7 @@ app = FastAPI()
 app.add_middleware(
     CORSMiddleware,
     allow_origin_regex=os.getenv("CLIENT_REGEX"),
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -49,7 +79,6 @@ app.add_middleware(
 
 
 class BaseRequest(BaseModel):
-    user_id: str
     session_id: str
 
 
@@ -59,15 +88,48 @@ class ManualRequest(BaseRequest):
 
 class ChatResponse(BaseModel):
     message: str
-    user_id: str
     session_id: str
 
 
-def messages(res: BaseRequest):
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
+
+
+@cache
+async def get_or_create_user_from_name(user_id: str):
+    user = honcho.apps.users.get_or_create(app_id=honcho_app.id, name=user_id)
+    return user
+
+
+async def get_current_user(token: Annotated[str, Depends(oauth2_scheme)]):
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Could not validate credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    # print(token)
+    # print(JWT_SECRET)
+
+    try:
+        payload = jwt.decode(
+            token,
+            JWT_SECRET,
+            algorithms=["HS256"],
+            audience="authenticated",
+        )
+        user = honcho.apps.users.get_or_create(
+            app_id=honcho_app.id, name=payload["sub"]
+        )
+        return user.id
+    except jwt.InvalidTokenError as e:
+        print(e)
+        raise credentials_exception
+
+
+def messages(res: BaseRequest, user_id: str):
     gaslit_claude = GaslitClaude(name="", insights="", history=[])
     simulator = Simulator(history=[], name="")
     history_iter = honcho.apps.users.sessions.messages.list(
-        app_id=honcho_app.id, session_id=res.session_id, user_id=res.user_id
+        app_id=honcho_app.id, session_id=res.session_id, user_id=user_id
     )
 
     gaslit_claude.history = []
@@ -85,7 +147,7 @@ def messages(res: BaseRequest):
     simulator_ctx.set(simulator)
 
 
-def manual_turn(res: ManualRequest):
+def manual_turn(res: ManualRequest, user_id: str):
     gaslit_response = res.command
     simulator_response = ""
     simulator = simulator_ctx.get()
@@ -101,54 +163,37 @@ def manual_turn(res: ManualRequest):
     honcho.apps.users.sessions.messages.create(
         session_id=res.session_id,
         app_id=honcho_app.id,
-        user_id=res.user_id,
+        user_id=user_id,
         content=gaslit_response,
         is_user=True,
     )
     honcho.apps.users.sessions.messages.create(
         session_id=res.session_id,
         app_id=honcho_app.id,
-        user_id=res.user_id,
+        user_id=user_id,
         content=simulator_response,
         is_user=False,
     )
 
 
 @app.post("/manual")
-async def manual(res: ManualRequest):
-    messages(res)
-    return StreamingResponse(manual_turn(res))
+async def manual(res: ManualRequest, user_id: str = Depends(get_current_user)):
+    messages(res, user_id)
+    return StreamingResponse(manual_turn(res, user_id))
 
 
 @app.post("/auto")
-async def auto(res: BaseRequest):
+async def auto(res: BaseRequest, user_id: str = Depends(get_current_user)):
     # user = honcho.apps.users.get_or_create(app_id=honcho_app.id, name=res.user_id)
-    messages(res)
+    messages(res, user_id)
 
     def convo():
         gaslit_response = ""
         gaslit_claude = gaslit_ctx.get()
         response = gaslit_claude.stream()
-        # print("\033[94mSEARCHER CLAUDE:\033[0m")
         for chunk in response:
-            # print(f"\033[94m{chunk.content}\033[0m", end="", flush=True)
             gaslit_response += chunk.content
             yield chunk.content
-            # sleep(0.1)
-        # gaslit_response.set(acc)
-        # print("\n")
-        # req = ManualRequest(
-        #     user_id=res.user_id, session_id=res.session_id, command=gaslit_response
-        # )
-
-        # yield ""
-        # yield "|<X❁X>|"
-        # yield ""
-
-        # reponse = manual_turn(req)
-
-        # for chunk in reponse:
-        #     yield chunk
 
     return StreamingResponse(convo())
 
@@ -171,8 +216,9 @@ class Reset(BaseModel):
 
 
 @app.get("/reset")
-async def reset(user_id: str, session_id: str | None = None):
-    # user = honcho.apps.users.get_or_create(app_id=honcho_app.id, name=res.user_id)
+async def reset(
+    session_id: str | None = None, user_id: str = Depends(get_current_user)
+):
     if session_id:
         honcho.apps.users.sessions.delete(
             app_id=honcho_app.id, session_id=session_id, user_id=user_id
@@ -187,3 +233,82 @@ async def reset(user_id: str, session_id: str | None = None):
         "user_id": user_id,
         "session_id": session.id,
     }
+
+
+@app.get("/session")
+async def get_session_messages(
+    session_id: str | None = None, user_id: str = Depends(get_current_user)
+):
+    if not session_id:
+        # Fetch the latest session if session_id is not provided
+        sessions = honcho.apps.users.sessions.list(
+            app_id=honcho_app.id, user_id=user_id, size=1, reverse=True
+        )
+        session_id = sessions.items[0].id
+    try:
+        # Fetch messages for the given or latest session
+        messages = honcho.apps.users.sessions.messages.list(
+            app_id=honcho_app.id, user_id=user_id, session_id=session_id
+        )
+        return {
+            "session_id": session_id,
+            "messages": [
+                {
+                    "id": msg.id,
+                    "content": msg.content,
+                    "created_at": msg.created_at,
+                    "is_user": msg.is_user,
+                }
+                for msg in messages
+            ],
+        }
+    except Exception as e:
+        return {"error": f"Failed to fetch messages: {str(e)}"}
+
+
+@app.get("/sessions")
+async def get_sessions(user_id: str = Depends(get_current_user)):
+    try:
+        sessions = honcho.apps.users.sessions.list(
+            app_id=honcho_app.id,
+            user_id=user_id,
+            reverse=True,  # Get the most recent sessions first
+        )
+        return [session for session in sessions]
+    except Exception as e:
+        return {"error": f"Failed to fetch sessions: {str(e)}"}
+
+
+@app.put("/sessions/{session_id}/metadata")
+async def update_session_metadata(
+    session_id: str, metadata: Dict[str, Any], user_id: str = Depends(get_current_user)
+):
+    try:
+        updated_session = honcho.apps.users.sessions.update(
+            session_id=session_id,
+            app_id=honcho_app.id,
+            user_id=user_id,
+            metadata=metadata,
+        )
+        return {"session_id": updated_session.id, "metadata": updated_session.metadata}
+    except Exception as e:
+        raise HTTPException(
+            status_code=400, detail=f"Failed to update session metadata: {str(e)}"
+        )
+
+
+@app.get("/share/{session_id}")
+async def share(session_id: str, user_id: str = Depends(get_current_user)):
+    # return encrypted session_id and user_id
+    encrypted = fernet.encrypt(f"{session_id}:{user_id}".encode())
+    return {"code": encrypted.decode()}
+
+
+@app.get("/share/messages/{code}")
+async def share_messages(code: str):
+    try:
+        decrypted = fernet.decrypt(code.encode()).decode()
+        session_id, user_id = decrypted.split(":")
+        return await get_session_messages(session_id=session_id, user_id=user_id)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid encrypted data")

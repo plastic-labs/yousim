@@ -1,22 +1,27 @@
-import command from '../config.json' assert {type: 'json'};
-import Swal from 'sweetalert2';
+import command from "../config.json" assert { type: "json" };
+import Swal from "sweetalert2";
 import * as Sentry from "@sentry/browser";
 import { HELP } from "./commands/help";
 import { BANNER } from "./commands/banner";
-// import { ABOUT } from "./commands/about"
-import { DEFAULT } from "./commands/default";
-// import { PROJECTS } from "./commands/projects";
-// import { createWhoami } from "./commands/whoami";
-import posthog from 'posthog-js'
-import { getUser, newSession, manual, auto } from "./honcho"
+import posthog from "posthog-js";
+import {
+  newSession,
+  getSessionMessages,
+} from "./honcho";
+import { getJWT } from "./auth";
+import { getStorage } from "./utils";
+import { userInputHandler, NAME, setName, loadSession } from "./input";
+import { USERINPUT, MAIN_PROMPT, PRE_USER, PRE_HOST, PASSWORD_INPUT } from "./constants";
+import { asyncWriteLines } from "./display";
 
-if (!window.location.host.includes('127.0.0.1') && !window.location.host.includes('localhost')) {
-  posthog.init(import.meta.env.VITE_POSTHOG_KEY,
-    {
-      api_host: 'https://us.i.posthog.com',
-      person_profiles: 'always' // or 'always' to create profiles for anonymous users as well
-    }
-  )
+if (
+  !window.location.host.includes("127.0.0.1") &&
+  !window.location.host.includes("localhost")
+) {
+  posthog.init(import.meta.env.VITE_POSTHOG_KEY, {
+    api_host: "https://us.i.posthog.com",
+    person_profiles: "always", // or 'always' to create profiles for anonymous users as well
+  });
 }
 
 Sentry.init({
@@ -30,542 +35,18 @@ Sentry.init({
   // Performance Monitoring
   tracesSampleRate: 1.0, //  Capture 100% of the transactions
   // Set 'tracePropagationTargets' to control for which URLs distributed tracing should be enabled
-  tracePropagationTargets: ["localhost", /^https:\/\/yourserver\.io\/api/, "yousim.ai"],
+  tracePropagationTargets: [
+    "localhost",
+    /^https:\/\/yourserver\.io\/api/,
+    "yousim.ai",
+  ],
   // Session Replay
   replaysSessionSampleRate: 0.1, // This sets the sample rate at 10%. You may want to change it to 100% while in development and then sample at a lower rate in production.
   replaysOnErrorSampleRate: 1.0, // If you're not already sampling the entire session, change the sample rate to 100% when sampling sessions where errors occur.
 });
 
-//mutWriteLines gets deleted and reassigned
-let mutWriteLines = document.getElementById("write-lines");
-let historyIdx = 0
-let tempInput = ""
-let userInput: string;
-// let isSudo = false;
-let isPasswordInput = false;
-// let passwordCounter = 0;
-let bareMode = false;
-let NAME = "";
-
-//WRITELINESCOPY is used to during the "clear" command
-const WRITELINESCOPY = mutWriteLines;
-const TERMINAL = document.getElementById("terminal");
-const USERINPUT = document.getElementById("user-input") as HTMLInputElement;
-// const INPUT_HIDDEN = document.getElementById("input-hidden");
-// const PASSWORD = document.getElementById("password-input");
-const PASSWORD_INPUT = document.getElementById("password-field") as HTMLInputElement;
-const PRE_HOST = document.getElementById("pre-host");
-const PRE_USER = document.getElementById("pre-user");
-// const HOST = document.getElementById("host");
-// const USER = document.getElementById("user");
-const PROMPT = document.getElementById("prompt");
-const MAIN_PROMPT = document.querySelector("#input-hidden > span#prompt");
-const COMMANDS = ["help", "about", "projects", "whoami", "repo", "banner", "clear"];
-const HISTORY: string[] = [];
-// const SUDO_PASSWORD = command.password;
-// const REPO_LINK = command.repoLink;
-
-const scrollToBottom = () => {
-  const MAIN = document.getElementById("main");
-  if (!MAIN) return
-
-  MAIN.scrollTop = MAIN.scrollHeight;
-}
-
-function userInputHandler(e: KeyboardEvent) {
-  const key = e.key;
-
-  switch (key) {
-    case "Enter":
-      e.preventDefault();
-      if (!isPasswordInput) {
-        enterKey();
-      } else {
-        // passwordHandler();
-      }
-
-      scrollToBottom();
-      break;
-    case "Escape":
-      USERINPUT.value = "";
-      break;
-    case "ArrowUp":
-      arrowKeys(key);
-      e.preventDefault();
-      break;
-    case "ArrowDown":
-      arrowKeys(key);
-      break;
-    case "Tab":
-      tabKey();
-      e.preventDefault();
-      break;
-  }
-}
-
-async function enterKey() {
-  if (!mutWriteLines || !PROMPT) return
-  const resetInput = "";
-  let newUserInput;
-  userInput = USERINPUT.value;
-
-  posthog.capture('command sent', { command: userInput })
-
-  if (bareMode) {
-    newUserInput = userInput;
-  } else {
-    newUserInput = `<span class='output'>${userInput}</span>`;
-  }
-
-  HISTORY.push(userInput);
-  historyIdx = HISTORY.length
-
-  //if clear then early return
-  if (userInput === 'clear') {
-    commandHandler(userInput.toLowerCase().trim());
-    USERINPUT.value = resetInput;
-    userInput = resetInput;
-    return
-  }
-
-  if (userInput === 'help') {
-    commandHandler(userInput.toLowerCase().trim());
-    USERINPUT.value = resetInput;
-    userInput = resetInput;
-    const div = document.createElement("div");
-    div.innerHTML = `<span id="prompt">${PROMPT.innerHTML}</span> ${newUserInput}`;
-    return
-  }
-
-  const div = document.createElement("div");
-  div.innerHTML = `<span id="prompt">${PROMPT.innerHTML}</span> ${newUserInput}`;
-
-  if (mutWriteLines.parentNode) {
-    mutWriteLines.parentNode.insertBefore(div, mutWriteLines);
-  }
-
-  USERINPUT.value = resetInput;
-
-  USERINPUT.disabled = true;
-  if (MAIN_PROMPT) {
-    MAIN_PROMPT.innerHTML = "LOADING..."
-  }
-  if (NAME === '') {
-    if (userInput) {
-      NAME = userInput
-      await localManual(`/locate ${userInput}`)
-      if (MAIN_PROMPT) {
-        MAIN_PROMPT.innerHTML = `<span id="prompt"><span id="user">${command.username}</span>@<span id="host">${command.hostname}</span>:$ ~ `
-      }
-    }
-  } else if (userInput === '') {
-    await localAuto();
-  } else {
-    await localManual(userInput)
-  }
-  if (MAIN_PROMPT) {
-    if (NAME === '') {
-      MAIN_PROMPT.innerHTML = "Enter a Name to Simulate >>> ";
-    } else {
-      MAIN_PROMPT.innerHTML = `<span id="prompt"><span id="user">${command.username}</span>@<span id="host">${command.hostname}</span>:$ ~ `
-    }
-  }
-  USERINPUT.disabled = false;
-  USERINPUT.focus();
-
-  userInput = resetInput;
-
-}
-
-async function localManual(command: string) {
-  let acc = "SEARCHER CLAUDE:\n"
-  acc += command.replace(/\n/g, "<br>").replace(/ /g, "&nbsp;");
-  if (!mutWriteLines) return
-  let p = document.createElement("p");
-  let span = document.createElement("span");
-  span.className = "searcher";
-  p.appendChild(span);
-  span.innerHTML = acc.replace(/\n/g, "<br>").replace(/ /g, "&nbsp;");
-  mutWriteLines.parentNode!.insertBefore(p, mutWriteLines);
-  scrollToBottom();
-
-  acc = "\nSIMULATOR CLAUDE:\n"
-  if (!mutWriteLines) return
-  p = document.createElement("p");
-  span = document.createElement("span");
-  p.appendChild(span);
-  span.className = "simulator";
-  span.innerHTML = acc.replace(/\n/g, "<br>").replace(/ /g, "&nbsp;");
-  mutWriteLines.parentNode!.insertBefore(p, mutWriteLines);
-  scrollToBottom();
-
-  const reader: ReadableStreamDefaultReader<string> | void = await manual(command);
-  let more = true;
-  if (reader) {
-    while (more) {
-      const { done, value } = await reader.read();
-      if (done) {
-        more = false;
-      }
-      if (value) {
-        // console.log(value)
-        acc += value
-        // if (!mutWriteLines) return
-        // let p = document.createElement("p");
-        span.innerHTML = acc.replace(/\n/g, "<br>").replace(/ /g, "&nbsp;");
-        // mutWriteLines.parentNode!.insertBefore(p, mutWriteLines);
-        scrollToBottom();
-      }
-    }
-  }
-  console.log(acc)
-}
-
-async function localAuto() {
-  let preamble = "SEARCHER CLAUDE:\n"
-  let acc = ""
-  if (!mutWriteLines) return
-  let p = document.createElement("p");
-  let span = document.createElement("span");
-  span.className = "searcher";
-  p.appendChild(span);
-  span.innerHTML = acc.replace(/\n/g, "<br>").replace(/ /g, "&nbsp;");
-
-  mutWriteLines.parentNode!.insertBefore(p, mutWriteLines);
-  scrollToBottom();
-
-  let reader: ReadableStreamDefaultReader<string> | void = await auto();
-  let more = true;
-  let count = 0
-  while (more) {
-    if (reader) {
-      const { done, value } = await reader.read();
-      if (done) {
-        if (count > 0) {
-          more = false;
-          continue
-        }
-        count += 1
-        console.log(acc)
-        reader = await manual(acc);
-        preamble = "\nSIMULATOR CLAUDE:\n"
-        acc = ""
-        p = document.createElement("p");
-        span = document.createElement("span");
-        p.appendChild(span);
-        span.className = "simulator";
-        span.innerHTML = (preamble + acc).replace(/\n/g, "<br>").replace(/ /g, "&nbsp;");
-        mutWriteLines.parentNode!.insertBefore(p, mutWriteLines);
-        scrollToBottom();
-      } else if (value) {
-        // console.log(value)
-        acc += value
-        // if (!mutWriteLines) return
-        // let p = document.createElement("p");
-        span.innerHTML = (preamble + acc).replace(/\n/g, "<br>").replace(/ /g, "&nbsp;");
-        // mutWriteLines.parentNode!.insertBefore(p, mutWriteLines);
-        scrollToBottom();
-      }
-    } else {
-      more = false;
-    }
-  }
-
-  console.log(acc)
-}
-
-function tabKey() {
-  let currInput = USERINPUT.value;
-
-  for (const ele of COMMANDS) {
-    if (ele.startsWith(currInput)) {
-      USERINPUT.value = ele;
-      return
-    }
-  }
-}
-
-function arrowKeys(e: string) {
-  switch (e) {
-    case "ArrowDown":
-      if (historyIdx !== HISTORY.length) {
-        historyIdx += 1;
-        USERINPUT.value = HISTORY[historyIdx];
-        if (historyIdx === HISTORY.length) USERINPUT.value = tempInput;
-      }
-      break;
-    case "ArrowUp":
-      if (historyIdx === HISTORY.length) tempInput = USERINPUT.value;
-      if (historyIdx !== 0) {
-        historyIdx -= 1;
-        USERINPUT.value = HISTORY[historyIdx];
-      }
-      break;
-  }
-}
-
-function commandHandler(input: string) {
-  // if (input.startsWith("rm -rf") && input.trim() !== "rm -rf") {
-  //   if (isSudo) {
-  //     if (input === "rm -rf src" && !bareMode) {
-  //       bareMode = true;
-
-  //       setTimeout(() => {
-  //         if (!TERMINAL || !WRITELINESCOPY) return
-  //         TERMINAL.innerHTML = "";
-  //         TERMINAL.appendChild(WRITELINESCOPY);
-  //         mutWriteLines = WRITELINESCOPY;
-  //       });
-
-  //       easterEggStyles();
-  //       setTimeout(() => {
-  //         writeLines(["What made you think that was a good idea?", "<br>"]);
-  //       }, 200)
-
-  //       setTimeout(() => {
-  //         writeLines(["Now everything is ruined.", "<br>"]);
-  //       }, 1200)
-
-  //     } else if (input === "rm -rf src" && bareMode) {
-  //       writeLines(["there's no more src folder.", "<br>"])
-  //     } else {
-  //       if (bareMode) {
-  //         writeLines(["What else are you trying to delete?", "<br>"])
-  //       } else {
-  //         writeLines(["<br>", "Directory not found.", "type <span class='command'>'ls'</span> for a list of directories.", "<br>"]);
-  //       }
-  //     }
-  //   } else {
-  //     writeLines(["Permission not granted.", "<br>"]);
-  //   }
-  //   return
-  // }
-
-  switch (input) {
-    case 'clear':
-      setTimeout(() => {
-        if (!TERMINAL || !WRITELINESCOPY) return
-        TERMINAL.innerHTML = "";
-        TERMINAL.appendChild(WRITELINESCOPY);
-        mutWriteLines = WRITELINESCOPY;
-      })
-      break;
-    case 'banner':
-      if (bareMode) {
-        writeLines(["WebShell v1.0.0", "<br>"])
-        break;
-      }
-      writeLines(BANNER);
-      break;
-    case 'help':
-      if (bareMode) {
-        writeLines(["maybe restarting your browser will fix this.", "<br>"])
-        break;
-      }
-      writeLines(HELP);
-      break;
-    // case 'whoami':
-    //   if (bareMode) {
-    //     writeLines([`${command.username}`, "<br>"])
-    //     break;
-    //   }
-    //   writeLines(createWhoami());
-    //   break;
-    // case 'about':
-    //   if (bareMode) {
-    //     writeLines(["Nothing to see here.", "<br>"])
-    //     break;
-    //   }
-    //   writeLines(ABOUT);
-    //   break;
-    // case 'projects':
-    //   if (bareMode) {
-    //     writeLines(["I don't want you to break the other projects.", "<br>"])
-    //     break;
-    //   }
-    //   writeLines(PROJECTS);
-    //   break;
-    // case 'repo':
-    //   writeLines(["Redirecting to github.com...", "<br>"]);
-    //   setTimeout(() => {
-    //     window.open(REPO_LINK, '_blank');
-    //   }, 500);
-    //   break;
-    // case 'linkedin':
-    //   //add stuff here
-    //   break;
-    // case 'github':
-    //   //add stuff here
-    //   break;
-    // case 'email':
-    //   //add stuff here
-    //   break;
-    // case 'rm -rf':
-    //   if (bareMode) {
-    //     writeLines(["don't try again.", "<br>"])
-    //     break;
-    //   }
-
-    //   if (isSudo) {
-    //     writeLines(["Usage: <span class='command'>'rm -rf &lt;dir&gt;'</span>", "<br>"]);
-    //   } else {
-    //     writeLines(["Permission not granted.", "<br>"])
-    //   }
-    //   break;
-    // case 'sudo':
-    //   if (bareMode) {
-    //     writeLines(["no.", "<br>"])
-    //     break;
-    //   }
-    //   if (!PASSWORD) return
-    //   isPasswordInput = true;
-    //   USERINPUT.disabled = true;
-
-    //   if (INPUT_HIDDEN) INPUT_HIDDEN.style.display = "none";
-    //   PASSWORD.style.display = "block";
-    //   setTimeout(() => {
-    //     PASSWORD_INPUT.focus();
-    //   }, 100);
-
-    //   break;
-    // case 'ls':
-    //   if (bareMode) {
-    //     writeLines(["", "<br>"])
-    //     break;
-    //   }
-
-    //   if (isSudo) {
-    //     writeLines(["src", "<br>"]);
-    //   } else {
-    //     writeLines(["Permission not granted.", "<br>"]);
-    //   }
-    //   break;
-    default:
-      if (bareMode) {
-        writeLines(["type 'help'", "<br>"])
-        break;
-      }
-
-      writeLines(DEFAULT);
-      break;
-  }
-}
-
-function writeLines(message: string[]) {
-  message.forEach((item, idx) => {
-    displayText(item, idx);
-  });
-}
-
-function displayText(item: string, idx: number) {
-  setTimeout(() => {
-    if (!mutWriteLines) return
-    const p = document.createElement("p");
-    p.innerHTML = item;
-    mutWriteLines.parentNode!.insertBefore(p, mutWriteLines);
-    scrollToBottom();
-  }, 40 * idx);
-}
-
-async function asyncWriteLines(message: string[]): Promise<void> {
-  const promises = message.map((item, idx) => asyncDisplayText(item, idx));
-  return Promise.all(promises).then(() => { });
-}
-
-function asyncDisplayText(item: string, idx: number): Promise<void> {
-  return new Promise((resolve) => {
-    setTimeout(() => {
-      if (!mutWriteLines) {
-        resolve()
-        return
-      }
-      const p = document.createElement("p");
-      p.innerHTML = item;
-      mutWriteLines.parentNode!.insertBefore(p, mutWriteLines);
-      scrollToBottom();
-      resolve();
-    }, 40 * idx);
-  });
-}
-
-// function revertPasswordChanges() {
-//   if (!INPUT_HIDDEN || !PASSWORD) return
-//   PASSWORD_INPUT.value = "";
-//   USERINPUT.disabled = false;
-//   INPUT_HIDDEN.style.display = "block";
-//   PASSWORD.style.display = "none";
-//   isPasswordInput = false;
-
-//   setTimeout(() => {
-//     USERINPUT.focus();
-//   }, 200)
-// }
-
-// function passwordHandler() {
-//   if (passwordCounter === 2) {
-//     if (!INPUT_HIDDEN || !mutWriteLines || !PASSWORD) return
-//     writeLines(["<br>", "INCORRECT PASSWORD.", "PERMISSION NOT GRANTED.", "<br>"])
-//     revertPasswordChanges();
-//     passwordCounter = 0;
-//     return
-//   }
-
-//   if (PASSWORD_INPUT.value === SUDO_PASSWORD) {
-//     if (!mutWriteLines || !mutWriteLines.parentNode) return
-//     writeLines(["<br>", "PERMISSION GRANTED.", "Try <span class='command'>'rm -rf'</span>", "<br>"])
-//     revertPasswordChanges();
-//     isSudo = true;
-//     return
-//   } else {
-//     PASSWORD_INPUT.value = "";
-//     passwordCounter++;
-//   }
-// }
-
-// function easterEggStyles() {
-//   const bars = document.getElementById("bars");
-//   const body = document.body;
-//   const main = document.getElementById("main");
-//   const span = document.getElementsByTagName("span");
-
-//   if (!bars) return
-//   bars.innerHTML = "";
-//   bars.remove()
-
-//   if (main) main.style.border = "none";
-
-//   body.style.backgroundColor = "black";
-//   body.style.fontFamily = "VT323, monospace";
-//   body.style.fontSize = "20px";
-//   body.style.color = "white";
-
-//   for (let i = 0; i < span.length; i++) {
-//     span[i].style.color = "white";
-//   }
-
-//   USERINPUT.style.backgroundColor = "black";
-//   USERINPUT.style.color = "white";
-//   USERINPUT.style.fontFamily = "VT323, monospace";
-//   USERINPUT.style.fontSize = "20px";
-//   if (PROMPT) PROMPT.style.color = "white";
-
-// }
 
 const initEventListeners = () => {
-  if (NAME === "") {
-    if (MAIN_PROMPT) {
-      MAIN_PROMPT.innerHTML = "Enter a Name to Simulate >>> ";
-    }
-    // if (USERINPUT) {
-    //   USERINPUT.focus()
-    // }
-  } else {
-    if (PROMPT) {
-      PROMPT.innerHTML = `<span id="prompt"><span id="user">${command.username}</span>@<span id="host">${command.hostname}</span>:$ ~ `
-    }
-  }
-
-
   if (PRE_HOST) {
     PRE_HOST.innerText = command.hostname;
   }
@@ -574,10 +55,23 @@ const initEventListeners = () => {
     PRE_USER.innerText = command.username;
   }
 
-  const setupPromise = getUser()
-    .then(() => {
-      return newSession()
-    })
+  const setupPromise = getJWT().then(async () => {
+    // const sessions = await getSessions();
+    const existingSessionId = getStorage("session_id");
+    // console.trace(existingSessionId);
+    if (existingSessionId) {
+      const sessionMessages = await getSessionMessages(existingSessionId);
+
+      // const sessionMessages = await getSessionMessages(sessions[0].id);
+      if (sessionMessages) {
+        if (sessionMessages.messages.length > 0) setName(sessionMessages.messages[0].content.slice(8));
+
+        return () => loadSession(sessionMessages);
+      }
+    } else {
+      return newSession;
+    }
+  });
 
   let sweetAlertHTML = `<div id='social-buttons-alert'>
       <a href='https://x.com/plastic_labs' target='_blank'><button><i class='fab fa-twitter'></i></button></a>
@@ -585,43 +79,62 @@ const initEventListeners = () => {
                 class='fa-brands fa-github'></i></button></a>
           <a href='https://discord.gg/plasticlabs' target='_blank'><button><i
                 class='fa-brands fa-discord'></i></button></a>
-        </div><br>`
-  sweetAlertHTML += "<p>YouSim is a fun open-ended demo to explore the multiverse of identities</p><br>"
+        </div><br>`;
+  sweetAlertHTML +=
+    "<p>YouSim is a fun open-ended demo to explore the multiverse of identities</p><br>";
   // sweetAlertHTML += "<p>to glimpse a (mere infinite) sliver of the (transfinite) diversity within the latent space.</p><br>"
   // sweetAlertHTML += "<p>Inspired by WorldSim, WebSim, & Infinite Backrooms, YouSim leverages Claude to let you locate, modify, & interact with any entity you can imagine.</p><br>"
-  sweetAlertHTML += "<p> It’s a game that can simulate anyone you like.</p><br>"
-  sweetAlertHTML += "<p>Who will you summon?</p><br>"
-  sweetAlertHTML += "<a href='https://blog.plasticlabs.ai/blog/YouSim;-Explore-The-Multiverse-of-Identity' target='_blank'>Read more on our blog</a>"
+  sweetAlertHTML +=
+    "<p> It’s a game that can simulate anyone you like.</p><br>";
+  sweetAlertHTML += "<p>Who will you summon?</p><br>";
+  sweetAlertHTML +=
+    "<a href='https://blog.plasticlabs.ai/blog/YouSim;-Explore-The-Multiverse-of-Identity' target='_blank'>Read more on our blog</a><br>";
+  sweetAlertHTML +=
+    "<a href='https://www.loom.com/share/b2fe578b183b400b88845656d7ceb232?sid=6cf3f677-6d42-45a7-bfa8-244626e6ebfe' target='_blank'>Watch a video tutorial</a><br>";
 
-  window.addEventListener('load', async () => {
+  document.addEventListener("DOMContentLoaded", async () => {
     if (USERINPUT) {
-      USERINPUT.disabled = true
+      USERINPUT.disabled = true;
     }
-    await setupPromise;
+
     // await newSession();
     const welcomePromises = asyncWriteLines(BANNER)
-      .then(() => {
-        return asyncWriteLines(HELP)
+      .then(() => asyncWriteLines(HELP))
+      .then(() => setupPromise)
+      .then(sessionLoader => {
+        if (typeof sessionLoader === "function") {
+          sessionLoader();
+        }
       })
+
     const swalPromise = Swal.fire({
       title: "Welcome to YouSim",
       html: sweetAlertHTML,
       icon: "info",
       heightAuto: false,
+    });
+    await Promise.all([welcomePromises, swalPromise]);
+    if (NAME === "") {
+      if (MAIN_PROMPT) {
+        MAIN_PROMPT.innerHTML = "Enter a Name to Simulate >>> ";
+      }
+    } else {
+      if (MAIN_PROMPT) {
+        MAIN_PROMPT.innerHTML = `<span id="prompt"><span id="user">${command.username}</span>@<span id="host">${command.hostname}</span>:$ ~ `;
+      }
+    }
 
-    })
-    await Promise.all([welcomePromises, swalPromise])
     if (USERINPUT) {
-      USERINPUT.disabled = false
-      USERINPUT.focus()
+      USERINPUT.disabled = false;
+      USERINPUT.focus();
     }
   });
 
-  USERINPUT.addEventListener('keypress', userInputHandler);
-  USERINPUT.addEventListener('keydown', userInputHandler);
-  PASSWORD_INPUT.addEventListener('keypress', userInputHandler);
+  USERINPUT.addEventListener("keypress", userInputHandler);
+  USERINPUT.addEventListener("keydown", userInputHandler);
+  PASSWORD_INPUT.addEventListener("keypress", userInputHandler);
 
-  window.addEventListener('click', () => {
+  window.addEventListener("click", () => {
     if (window && USERINPUT) {
       const selection = window.getSelection()?.toString();
       if (!selection || (selection && selection.length === 0)) {
@@ -630,9 +143,6 @@ const initEventListeners = () => {
     }
   });
 
-
-
-  // console.log(`%cPassword: ${command.password}`, "color: red; font-size: 20px;");
-}
+};
 
 initEventListeners();
