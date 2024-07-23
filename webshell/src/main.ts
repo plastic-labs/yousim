@@ -88,7 +88,9 @@ const initEventListeners = () => {
     "<p> It’s a game that can simulate anyone you like.</p><br>";
   sweetAlertHTML += "<p>Who will you summon?</p><br>";
   sweetAlertHTML +=
-    "<a href='https://blog.plasticlabs.ai/blog/YouSim;-Explore-The-Multiverse-of-Identity' target='_blank'>Read more on our blog</a>";
+    "<a href='https://blog.plasticlabs.ai/blog/YouSim;-Explore-The-Multiverse-of-Identity' target='_blank'>Read more on our blog</a><br>";
+  sweetAlertHTML +=
+    "<a href='https://www.loom.com/share/b2fe578b183b400b88845656d7ceb232?sid=6cf3f677-6d42-45a7-bfa8-244626e6ebfe' target='_blank'>Watch a video tutorial</a><br>";
 
   document.addEventListener("DOMContentLoaded", async () => {
     if (USERINPUT) {
