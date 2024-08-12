@@ -37,7 +37,7 @@ HONCHO_ENV = get_env("HONCHO_ENV")
 CLIENT_REGEX = get_env("CLIENT_REGEX")
 print(CLIENT_REGEX)
 JWT_SECRET = get_env("JWT_SECRET")
-SECRET_KEY = get_env("SECRET_KEY")
+SECRET_KEY = base64.b64decode(get_env("SECRET_KEY"))
 
 fernet = Fernet(SECRET_KEY)
 
