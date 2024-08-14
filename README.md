@@ -5,9 +5,10 @@ of Claude 3.5 Sonnet. It's live at [https://yousim.ai](https://yousim.ai)!
 
 ## Self-Hosting
 
-The backend and frontend need to be run separately. To get started, configure your `.env` file.
+You can run Yousim locally with Docker Compose. To get started, configure your `.env` files: `.env` for the backend and `webshell/.env` for the frontend.
 
-Copy the `.env.template` file to `.env` and fill out the variables:
+For the backend, copy the `.env.template` file to `.env` and fill out the variables:
+
 ```bash
 cp .env.template .env
 ```
@@ -18,30 +19,8 @@ cp .env.template .env
 `JWT_SECRET`: This comes from your supabase project (more on that below)
 `SECRET_KEY`: Generate this with `python generate_fernet_key.py` -- makes links shareable without revealing information
 
-To run the backend, you can use poetry with fastapi or docker. 
+For the frontend, copy the `.env.template` file to `.env` and fill out the variables:
 
-### Poetry + FastAPI
-
-Activate the poetry environment
-```
-poetry install
-poetry shell
-```
-
-Run backend with fastapi 
-```
-fastapi dev app.py
-```
-
-### Docker
-
-Build the docker image and run the container.
-```bash
-docker build -t yousim .
-docker run --env-file .env -p 8000:8000 yousim
-```
-
-The frontend has a separate `.env` file in the webshell folder.
 ```bash
 cp webshell/.env.template webshell/.env
 ```

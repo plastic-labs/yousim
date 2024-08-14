@@ -1,0 +1,28 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    volumes:
+      - ./app.py:/app/app.py
+      - ./calls.py:/app/calls.py
+
+  frontend:
+    build:
+      context: ./webshell
+      dockerfile: Dockerfile
+    ports:
+      - "5173:5173"
+    env_file:
+      - ./webshell/.env
+    volumes:
+      - ./webshell:/app
+      - /app/node_modules
+    depends_on:
+      - backend
