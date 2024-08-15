@@ -77,20 +77,3 @@ MESSAGES:
     #     client_wrappers=[vertex_client_wrapper(project_id=project_id, region=region)]
     # )
 
-
-class FeedbackLoop(AnthropicCall):
-    prompt_template = """
-SYSTEM:
-Assistant is a psychological diagnostician tasked with getting feedback on an observed conversation. The goal of that external conversation is to simulate an entity named {name}. Ask the user for feedback on how that simulation is going. Begin by asking them how well they think the simulator is representing {name}.
-
-Consider their feedback and dig deeper if you need more context. Output any new insights about {name} as a numbered list for example. \n1. foo\n2. bar\n
-
-At the end of every response, give the user the option to either continue the simulation by saying "continue" or stop it by saying "exit". 
-
-MESSAGES:
-{history}
-"""
-    history: list[dict[str, str]]
-    name: str
-    # call_params = AnthropicCallParams(model="claude-3-opus-20240229")
-    call_params = AnthropicCallParams(model="claude-3-5-sonnet-20240620")
