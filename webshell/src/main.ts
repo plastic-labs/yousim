@@ -4,14 +4,17 @@ import * as Sentry from "@sentry/browser";
 import { HELP } from "./commands/help";
 import { BANNER } from "./commands/banner";
 import posthog from "posthog-js";
-import {
-  newSession,
-  getSessionMessages,
-} from "./honcho";
+import { newSession, getSessionMessages } from "./honcho";
 import { getJWT } from "./auth";
 import { getStorage } from "./utils";
 import { userInputHandler, NAME, setName, loadSession } from "./input";
-import { USERINPUT, MAIN_PROMPT, PRE_USER, PRE_HOST, PASSWORD_INPUT } from "./constants";
+import {
+  USERINPUT,
+  MAIN_PROMPT,
+  PRE_USER,
+  PRE_HOST,
+  PASSWORD_INPUT,
+} from "./constants";
 import { asyncWriteLines } from "./display";
 
 if (
@@ -45,7 +48,6 @@ Sentry.init({
   replaysOnErrorSampleRate: 1.0, // If you're not already sampling the entire session, change the sample rate to 100% when sampling sessions where errors occur.
 });
 
-
 const initEventListeners = () => {
   if (PRE_HOST) {
     PRE_HOST.innerText = command.hostname;
@@ -64,7 +66,8 @@ const initEventListeners = () => {
 
       // const sessionMessages = await getSessionMessages(sessions[0].id);
       if (sessionMessages) {
-        if (sessionMessages.messages.length > 0) setName(sessionMessages.messages[0].content.slice(8));
+        if (sessionMessages.messages.length > 0)
+          setName(sessionMessages.messages[0].content.slice(8));
 
         return () => loadSession(sessionMessages);
       }
@@ -101,11 +104,11 @@ const initEventListeners = () => {
     const welcomePromises = asyncWriteLines(BANNER)
       .then(() => asyncWriteLines(HELP))
       .then(() => setupPromise)
-      .then(sessionLoader => {
+      .then((sessionLoader) => {
         if (typeof sessionLoader === "function") {
           sessionLoader();
         }
-      })
+      });
 
     const swalPromise = Swal.fire({
       title: "Welcome to YouSim",
@@ -134,15 +137,24 @@ const initEventListeners = () => {
   USERINPUT.addEventListener("keydown", userInputHandler);
   PASSWORD_INPUT.addEventListener("keypress", userInputHandler);
 
-  window.addEventListener("click", () => {
-    if (window && USERINPUT) {
+  window.addEventListener("keydown", (event) => {
+    console.log("Key pressed:", event.key);
+    if (window && USERINPUT && event.target !== USERINPUT) {
       const selection = window.getSelection()?.toString();
-      if (!selection || (selection && selection.length === 0)) {
+      const isKeyboardShortcut =
+        event.ctrlKey ||
+        event.metaKey ||
+        event.altKey ||
+        ["Control", "Meta", "Alt"].includes(event.key);
+      if (
+        !selection ||
+        (selection && selection.length === 0) ||
+        !isKeyboardShortcut
+      ) {
         USERINPUT.focus();
       }
     }
   });
-
 };
 
 initEventListeners();

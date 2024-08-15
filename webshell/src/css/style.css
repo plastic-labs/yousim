@@ -1,11 +1,11 @@
-@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@200;300;400;600&family=Pixelify+Sans&family=VT323&display=swap');
-@import url('https://fonts.googleapis.com/css2?family=Roboto+Mono:ital,wght@0,100..700;1,100..700&display=swap');
+@import url("https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@200;300;400;600&family=Pixelify+Sans&family=VT323&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Roboto+Mono:ital,wght@0,100..700;1,100..700&display=swap");
 
 :root {
-  font-family: 'Roboto Mono', 'IBM Plex Mono', monospace;
+  font-family: "Roboto Mono", "IBM Plex Mono", monospace;
   font-weight: 400;
-  --bg: #0C0623;
-  --border: #FFADE2;
+  --bg: #0c0623;
+  --border: #ffade2;
   /* --text: #F8DDE5; */
   /* --prompt-default: #A5A7A7; */
   /* --prompt-1: #FE6BC9; */
@@ -14,11 +14,11 @@
 
 @keyframes typing {
   from {
-    width: 0
+    width: 0;
   }
 
   to {
-    width: 100%
+    width: 100%;
   }
 }
 
@@ -80,25 +80,25 @@ pre {
   margin: 0;
   padding: 0;
   line-height: 20px !important;
-  color: #FF9951;
+  color: #ff9951;
   /* font-family: "ascii", monospace; */
 }
 
 input {
-  font-family: 'IBM Plex Mono', monospace;
+  font-family: "IBM Plex Mono", monospace;
   padding: 0px;
   margin: 0px;
   border: none;
   resize: none;
   outline: none;
   font-size: 16px;
-  color: #FF7685;
+  color: #ff7685;
   caret-color: var(--prompt-default);
   width: 50%;
 }
 
 a {
-  color: #B6AAEE;
+  color: #b6aaee;
 }
 
 a:hover {
@@ -107,7 +107,7 @@ a:hover {
 }
 
 #bars {
-  font-family: 'Pixelify Sans', sans-serif;
+  font-family: "Pixelify Sans", sans-serif;
   font-size: 20px;
   position: -webkit-sticky;
   position: sticky;
@@ -127,13 +127,13 @@ a:hover {
   justify-content: space-between;
 }
 
-#social-buttons>a>button {
+#social-buttons > a > button {
   background: none;
   border: none;
-  color: #FDF6E3;
+  color: #fdf6e3;
 }
 
-#social-buttons>a>button:hover {
+#social-buttons > a > button:hover {
   color: var(--bg);
   cursor: pointer;
 }
@@ -142,17 +142,17 @@ a:hover {
   font-size: 24px;
 }
 
-#social-buttons-alert>a>button {
+#social-buttons-alert > a > button {
   background: none;
   border: none;
 }
-#social-buttons-alert>a:hover {
-background: none;
+#social-buttons-alert > a:hover {
+  background: none;
 }
 
-#social-buttons-alert>a>button:hover {
+#social-buttons-alert > a > button:hover {
   cursor: pointer;
-  color: #268BD2;
+  color: #268bd2;
   background: none;
 }
 
@@ -174,7 +174,6 @@ background: none;
   margin-top: 3px;
 }
 
-
 #bar-5 {
   height: 1px;
   background-color: var(--border);
@@ -191,11 +190,15 @@ background: none;
   width: 100%;
 }
 
+#scroll-zone {
+  overflow-y: scroll;
+  overflow-x: clip;
+  height: 100%;
+}
+
 .command {
-  text-shadow:
-    0 0 7px #fff,
-    0 0 151px var(--border);
-  color: #FD9BDB;
+  text-shadow: 0 0 7px #fff, 0 0 151px var(--border);
+  color: #fd9bdb;
 }
 
 .output {
@@ -203,14 +206,13 @@ background: none;
 }
 
 .keys {
-  color: #FF9951;
+  color: #ff9951;
   font-weight: 400;
 }
 
 .swal2-html-container > p {
   line-height: 18px;
 }
-
 
 .swal2-title {
   line-height: 30px;

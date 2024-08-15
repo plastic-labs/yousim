@@ -36,6 +36,7 @@
 
 <body>
   <main id="main">
+    
     <div id="bars">
       <div id="bar-1">
         <div>YouSim.x64_x86</div>
@@ -52,26 +53,28 @@
       <div id="bar-4"></div>
       <div id="bar-5"></div>
     </div>
-    <br>
-    <div id="terminal">
-      <div>
-        <span id="prompt"><span id="pre-user"></span>@<span id="pre-host"></span>:$ ~ </span>
-      </div>
-      <!-- command output will be inserted before #write-lines-->
-      <a id="write-lines"></a>
-    </div>
-    <div id="input-line">
-      <div>
-        <p id="password-input" style="display: none;">Password: <input id="password-field" autocomplete="off"
-            type="password" /></p>
-        <p id="input-hidden">
-          <span id="prompt"><span id="user"></span>@<span id="host"></span>:$ ~
-          </span>
-          <input id="user-input" type="text" enterkeyhint="Enter" spellcheck="false" autocapitalize="none"
-            autocomplete="off" />
-        </p>
-      </div>
+    <div id="scroll-zone">
       <br>
+      <div id="terminal">
+        <div>
+          <span id="prompt"><span id="pre-user"></span>@<span id="pre-host"></span>:$ ~ </span>
+        </div>
+        <!-- command output will be inserted before #write-lines-->
+        <a id="write-lines"></a>
+      </div>
+      <div id="input-line">
+        <div>
+          <p id="password-input" style="display: none;">Password: <input id="password-field" autocomplete="off"
+              type="password" /></p>
+          <p id="input-hidden">
+            <span id="prompt"><span id="user"></span>@<span id="host"></span>:$ ~
+            </span>
+            <input id="user-input" type="text" enterkeyhint="Enter" spellcheck="false" autocapitalize="none"
+              autocomplete="off" />
+          </p>
+        </div>
+        <br>
+      </div>
     </div>
   </main>
 </body>

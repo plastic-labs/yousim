@@ -10,12 +10,9 @@ import {
   getSessions,
   updateSessionMetadata,
   getShareCode,
-  SessionData
+  SessionData,
 } from "./honcho";
-import {
-  localManual,
-  localAuto,
-} from "./sim"
+import { localManual, localAuto } from "./sim";
 import { HELP } from "./commands/help";
 import { BANNER } from "./commands/banner";
 import { DEFAULT } from "./commands/default";
@@ -42,19 +39,47 @@ function setName(name: string) {
   NAME = name;
 }
 
-const scrollToBottom = () => {
-  const MAIN = document.getElementById("main");
-  if (!MAIN) return;
+let SHOULD_SCROLL_TO_BOTTOM = true;
 
-  MAIN.scrollTop = MAIN.scrollHeight;
+const scrollToBottom = () => {
+  const scrollZone = document.getElementById("scroll-zone");
+  if (scrollZone && SHOULD_SCROLL_TO_BOTTOM) {
+    scrollZone.scrollTop = scrollZone.scrollHeight;
+  }
 };
+
+function setupScrollListener() {
+  const scrollZone = document.getElementById("scroll-zone");
+  if (!scrollZone) return;
+
+  let isAtBottom = true;
+
+  scrollZone.addEventListener("scroll", () => {
+    const { scrollTop, scrollHeight, clientHeight } = scrollZone;
+    const scrolledToBottom =
+      Math.abs(scrollHeight - clientHeight - scrollTop) < 1;
+
+    if (scrolledToBottom && !isAtBottom) {
+      isAtBottom = true;
+      SHOULD_SCROLL_TO_BOTTOM = true;
+    } else if (!scrolledToBottom && isAtBottom) {
+      isAtBottom = false;
+      SHOULD_SCROLL_TO_BOTTOM = false;
+    }
+  });
+}
+
+// Call this function to set up the scroll listener
+setupScrollListener();
 
 function loadSession(data: SessionData) {
   data?.messages.forEach((message) => {
     let p = document.createElement("p");
     let span = document.createElement("span");
-    let acc = message.is_user ? "\nSEARCHER CLAUDE:\n" : "\nSIMULATOR CLAUDE:\n";
-    acc += message.content
+    let acc = message.is_user
+      ? "\nSEARCHER CLAUDE:\n"
+      : "\nSIMULATOR CLAUDE:\n";
+    acc += message.content;
     span.className = message.is_user ? "searcher" : "simulator";
     // if (message.is_user) {
     //   span.className = "searcher";
@@ -64,7 +89,7 @@ function loadSession(data: SessionData) {
     // } else {
     // span.className = "simulator";
     p.appendChild(span);
-    span.innerHTML = sanitize(acc)
+    span.innerHTML = sanitize(acc);
     mutWriteLines?.parentNode!.insertBefore(p, mutWriteLines);
     // }
     scrollToBottom();
@@ -173,7 +198,7 @@ async function enterKey() {
     USERINPUT.value = resetInput;
     const session = await auth.getSession();
     const email = session.data.session?.user.email;
-    console.log(session)
+    console.log(session);
     if (email) {
       writeLines([`You are logged in as ${email}`, "<br>"]);
     } else {
@@ -187,13 +212,13 @@ async function enterKey() {
   if (userInput.startsWith("share")) {
     USERINPUT.value = resetInput;
     const code = await getShareCode();
-    const link = `https://yousim.ai/share?code=${code}`
-    writeLines(
-      ["Share Link:",
-        "<br>",
-        `<a href="${link}" target="_blank" rel="noopener noreferrer">${link}</a>`,
-        "<br>"
-      ]);
+    const link = `https://yousim.ai/share?code=${code}`;
+    writeLines([
+      "Share Link:",
+      "<br>",
+      `<a href="${link}" target="_blank" rel="noopener noreferrer">${link}</a>`,
+      "<br>",
+    ]);
     // const div = document.createElement("div");
     // div.innerHTML = `<span id="prompt">${PROMPT.innerHTML}</span> ${newUserInput}`;
     return;
@@ -252,12 +277,11 @@ async function enterKey() {
         if (sessionData.messages.length > 0) {
           setName(sessionData.messages[0].content.slice(8));
         } else {
-          setName("")
+          setName("");
         }
         loadSession(sessionData);
       }
     }
-
 
     // Ensure the prompt matches the state of the loaded session
     if (MAIN_PROMPT) {
@@ -320,7 +344,9 @@ async function enterKey() {
           await updateSessionMetadata({ name: userInput });
         } catch (e2) {
           console.error("Failed to update session metadata:", e2);
-          alert("Failed to update session metadata. Please try resetting the conversation");
+          alert(
+            "Failed to update session metadata. Please try resetting the conversation"
+          );
         }
       }
       await localManual(`/locate ${userInput}`);
@@ -400,4 +426,11 @@ function commandHandler(input: string) {
   }
 }
 
-export { userInputHandler, scrollToBottom, mutWriteLines, NAME, setName, loadSession };
+export {
+  userInputHandler,
+  scrollToBottom,
+  mutWriteLines,
+  NAME,
+  setName,
+  loadSession,
+};

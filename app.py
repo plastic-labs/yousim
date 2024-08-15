@@ -25,20 +25,20 @@ from dotenv import load_dotenv
 
 load_dotenv(override=True)
 
-HONCHO_ENV = os.getenv("HONCHO_ENV")
-if not HONCHO_ENV:
-    raise ValueError("HONCHO_ENV is not set in .env")
 
-CLIENT_REGEX = os.getenv("CLIENT_REGEX")
+def get_env(key: str):
+    var = os.getenv(key)
+    if not var:
+        raise ValueError(f"{key} is not set in .env")
+    return var
+
+
+HONCHO_ENV = get_env("HONCHO_ENV")
+CLIENT_REGEX = get_env("CLIENT_REGEX")
 print(CLIENT_REGEX)
-if not CLIENT_REGEX:
-    raise ValueError("CLIENT_REGEX is not set in .env")
+JWT_SECRET = get_env("JWT_SECRET")
+SECRET_KEY = base64.b64decode(get_env("SECRET_KEY"))
 
-JWT_SECRET = os.getenv("JWT_SECRET")
-if not JWT_SECRET:
-    raise ValueError("JWT_SECRET is not set in .env")
-
-SECRET_KEY = base64.b64decode(os.getenv("SECRET_KEY"))
 fernet = Fernet(SECRET_KEY)
 
 honcho = Honcho(base_url=HONCHO_ENV)  # TODO
