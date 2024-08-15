@@ -73,4 +73,7 @@ Magic Link template. Below is an example of a template you can use:
 ## Credits
 
 Thanks to [nasan16](https://github.com/nasan016) for their initial work on
-[webshell](https://github.com/nasan016/webshell).
+[webshell](https://github.com/nasan016/webshell) and [Andy
+Ayrey](https://x.com/AndyAyrey) for his work on [Infinite
+Backrooms](https://dreams-of-an-electric-mind.webflow.io/), whose prompts
+heavily inspired this project.
