@@ -14,8 +14,6 @@ from pydantic import BaseModel
 from cryptography.fernet import Fernet
 import base64
 
-# from .main import manual, auto, honcho
-# from .main import app as honcho_app
 from calls import GaslitClaude, Simulator
 
 import jwt
@@ -38,22 +36,19 @@ CLIENT_REGEX = get_env("CLIENT_REGEX")
 print(CLIENT_REGEX)
 JWT_SECRET = get_env("JWT_SECRET")
 SECRET_KEY = base64.b64decode(get_env("SECRET_KEY"))
+HONCHO_APP_NAME = get_env("HONCHO_APP_NAME")
 
 fernet = Fernet(SECRET_KEY)
 
-honcho = Honcho(base_url=HONCHO_ENV)  # TODO
-honcho_app = honcho.apps.get_or_create("NYTW Yousim Demo")
+honcho = Honcho(base_url=HONCHO_ENV)
+honcho_app = honcho.apps.get_or_create(HONCHO_APP_NAME)
 
-# gaslit_claude = GaslitClaude(name="", insights="", history=[])
-# simulator = Simulator(history=[], name="")
 
 gaslit_ctx = ContextVar(
     "gaslit_claude", default=GaslitClaude(name="", insights="", history=[])
 )
 simulator_ctx = ContextVar("simulator", default=Simulator(history=[], name=""))
 
-# gaslit_response = ContextVar("gaslit_response", default="")
-# simulator_response = ContextVar("simulator_response", default="")
 
 sentry_sdk.init(
     # dsn=os.getenv("SENTRY_DSN"),
@@ -106,8 +101,6 @@ async def get_current_user(token: Annotated[str, Depends(oauth2_scheme)]):
         detail="Could not validate credentials",
         headers={"WWW-Authenticate": "Bearer"},
     )
-    # print(token)
-    # print(JWT_SECRET)
 
     try:
         payload = jwt.decode(
@@ -153,12 +146,9 @@ def manual_turn(res: ManualRequest, user_id: str):
     simulator = simulator_ctx.get()
     simulator.history += [{"role": "user", "content": res.command}]  # type: ignore
     response = simulator.stream()
-    # print("\033[93mSIMULATOR CLAUDE:\033[0m")
     for chunk in response:
-        # print(f"\033[93m{chunk.content}\033[0m", end="", flush=True)
         simulator_response += chunk.content
         yield chunk.content
-    # print("\n")
 
     honcho.apps.users.sessions.messages.create(
         session_id=res.session_id,
@@ -184,7 +174,6 @@ async def manual(res: ManualRequest, user_id: str = Depends(get_current_user)):
 
 @app.post("/auto")
 async def auto(res: BaseRequest, user_id: str = Depends(get_current_user)):
-    # user = honcho.apps.users.get_or_create(app_id=honcho_app.id, name=res.user_id)
     messages(res, user_id)
 
     def convo():
@@ -223,9 +212,7 @@ async def reset(
         honcho.apps.users.sessions.delete(
             app_id=honcho_app.id, session_id=session_id, user_id=user_id
         )
-    session = honcho.apps.users.sessions.create(
-        app_id=honcho_app.id, user_id=user_id, location_id="cli"
-    )
+    session = honcho.apps.users.sessions.create(app_id=honcho_app.id, user_id=user_id)
     # TODO reset the session
     # gaslit_claude.history = []
     # simulator.history = []

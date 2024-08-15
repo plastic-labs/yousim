@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "prod": "serve dist/"
   },
   "devDependencies": {
     "@types/dompurify": "^3.0.5",
@@ -22,6 +23,7 @@
     "dompurify": "^3.1.6",
     "js-yaml": "^4.1.0",
     "posthog-js": "^1.139.1",
+    "serve": "^14.2.3",
     "sweetalert2": "^11.11.1",
     "uuid": "^10.0.0"
   }
