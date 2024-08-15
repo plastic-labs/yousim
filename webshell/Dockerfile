@@ -13,8 +13,10 @@ RUN npm install
 # Copy project files and folders to the current working directory (i.e. 'app' folder)
 COPY . .
 
+RUN npm run build
+
 # Expose the port the app runs on
-EXPOSE 5173
+EXPOSE 4173
 
 # Run the development server
-CMD ["npm", "run", "dev"]
+CMD ["npm", "run", "preview"]
