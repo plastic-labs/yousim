@@ -212,9 +212,7 @@ async def reset(
         honcho.apps.users.sessions.delete(
             app_id=honcho_app.id, session_id=session_id, user_id=user_id
         )
-    session = honcho.apps.users.sessions.create(
-        app_id=honcho_app.id, user_id=user_id, location_id="cli"
-    )
+    session = honcho.apps.users.sessions.create(app_id=honcho_app.id, user_id=user_id)
     # TODO reset the session
     # gaslit_claude.history = []
     # simulator.history = []

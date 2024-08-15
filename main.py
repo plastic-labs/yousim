@@ -10,9 +10,7 @@ load_dotenv()
 honcho = Honcho(environment="demo")
 app = honcho.apps.get_or_create("NYTW Yousim Demo")
 user = honcho.apps.users.get_or_create(app_id=app.id, name="YouSim_user")
-session = honcho.apps.users.sessions.create(
-    app_id=app.id, user_id=user.id, location_id="cli"
-)
+session = honcho.apps.users.sessions.create(app_id=app.id, user_id=user.id)
 
 insights: list[str] = []
 

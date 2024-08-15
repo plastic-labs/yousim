@@ -9,3 +9,4 @@ key = Fernet.generate_key()
 key_str = base64.b64encode(key).decode()
 
 print(f"Store this in your .env file: SECRET_KEY={key_str}")
+
