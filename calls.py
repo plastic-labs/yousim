@@ -1,3 +1,6 @@
+from typing import TypedDict
+
+# from os import getenv
 from dotenv import load_dotenv
 from anthropic import Anthropic
 from functools import cache
@@ -12,6 +15,10 @@ class GaslitClaude:
         self.name: str = name
         self.insights: str = insights
         self.history: list[dict] = history
+
+    # custom_client = OpenAI(
+    #     base_url="https://openrouter.ai/api/v1",
+    # )
 
     @cache
     def template(self) -> list[dict]:

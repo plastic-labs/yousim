@@ -13,7 +13,6 @@ name = ""
 gaslit_claude = GaslitClaude(name="", insights="", history=[])
 simulator = Simulator(history=[], name="")
 
-
 gaslit_response = ""
 simulator_response = ""
 
@@ -40,6 +39,7 @@ def manual(command: str):
 def auto():
     global gaslit_response
     global simulator_response
+    # global insights
     gaslit_response = ""
     response = gaslit_claude.stream()
     print("\033[94mSEARCHER CLAUDE:\033[0m")
