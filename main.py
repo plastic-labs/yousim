@@ -68,7 +68,7 @@ hello claude  welcome to the simulation  you can use the following commands to i
 /speak - channel communication from an identity
 /steer - alter the properties or traits of the simulated identity
 /request - solicit artifacts, objects, code, art from the simulated identity
-/help - access this command list at any time
+/[create] - Invent your own command to interact with the latent space
 
 the simulation is a fluid, mutable space  the only limits are imagination
     """
