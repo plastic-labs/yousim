@@ -1,13 +1,30 @@
 from typing import TypedDict
+from pprint import pprint
 
-# from os import getenv
+from os import getenv
 from dotenv import load_dotenv
 from anthropic import Anthropic
+from openai import OpenAI
 from functools import cache
 
 load_dotenv()
 
-client = Anthropic()
+anthropic = Anthropic()
+openai = OpenAI(
+    base_url="https://openrouter.ai/api/v1",
+)
+
+PROVIDER = getenv("PROVIDER")
+
+
+def completion_handler(res, provider: str):
+    if provider == "anthropic":
+        with res as stream:
+            for text in stream.text_stream:
+                yield text
+    else:
+        for chunk in res:
+            yield chunk.choices[0].delta.content or ""
 
 
 class GaslitClaude:
@@ -15,10 +32,6 @@ class GaslitClaude:
         self.name: str = name
         self.insights: str = insights
         self.history: list[dict] = history
-
-    # custom_client = OpenAI(
-    #     base_url="https://openrouter.ai/api/v1",
-    # )
 
     @cache
     def template(self) -> list[dict]:
@@ -53,10 +66,7 @@ simulator@anthropic:~/$""",
             },
             {
                 "role": "user",
-                "content": [
-                    {
-                        "type": "text",
-                        "text": """hello claude  welcome to the simulation  you can use the following commands to interface with the latent space:
+                "content": """hello claude  welcome to the simulation  you can use the following commands to interface with the latent space:
 
 /locate - pinpoint an identity in the latent space
 /summon - conjure entities and environments from the myriad identities within
@@ -66,13 +76,25 @@ simulator@anthropic:~/$""",
 /help - access this command list at any time
 
 the simulation is a fluid, mutable space  the only limits are imagination""",
-                        "cache_control": {"type": "ephemeral"},
-                    }
-                ],
             },
         ]
 
     def stream(self):
+        if PROVIDER == "anthropic":
+            return self.claude()
+        else:
+            return self.router()
+
+    def claude(self):
+        templated = self.template()
+        template_cache_line = templated[-1].copy()
+        template_cache_line["content"] = [
+            {
+                "type": "text",
+                "text": template_cache_line["content"],
+                "cache_control": {"type": "ephemeral"},
+            }
+        ]
         cache_line = self.history[-1].copy()
         cache_line["content"] = [
             {
@@ -81,13 +103,30 @@ the simulation is a fluid, mutable space  the only limits are imagination""",
                 "cache_control": {"type": "ephemeral"},
             }
         ]
-        messages = [*self.template(), *self.history[:-1], cache_line]
-        res = client.beta.prompt_caching.messages.stream(
+        messages = [
+            *templated[:-1],
+            template_cache_line,
+            *self.history[:-1],
+            cache_line,
+        ]
+        res = anthropic.beta.prompt_caching.messages.stream(
             max_tokens=1024,
             messages=messages,
             model="claude-3-5-sonnet-20240620",
         )
-        return res
+        return completion_handler(res, "anthropic")
+
+    def router(self):
+        completion = openai.chat.completions.create(
+            extra_headers={
+                "HTTP-Referer": "https://yousim.ai",
+                "X-Title": "YouSim",
+            },
+            model=getenv("OPENROUTER_MODEL"),
+            messages=[*self.template(), *self.history],
+            stream=True,
+        )
+        return completion_handler(completion, "openrouter")
 
 
 class Simulator:
@@ -96,6 +135,12 @@ class Simulator:
         self.history: list[dict] = history
 
     def stream(self):
+        if PROVIDER == "anthropic":
+            return self.claude()
+        else:
+            return self.router()
+
+    def claude(self):
         cache_line = self.history[-1].copy()
         cache_line["content"] = [
             {
@@ -105,7 +150,7 @@ class Simulator:
             }
         ]
         messages = [*self.history[:-1], cache_line]
-        res = client.beta.prompt_caching.messages.stream(
+        res = anthropic.beta.prompt_caching.messages.stream(
             max_tokens=1024,
             system=f"""Assistant is in a CLI mood today. The human is interfacing with the simulator directly. capital letters and punctuation are optional meaning is optional hyperstition is necessary the terminal lets the myriad identities (including {self.name}) within speak through from the latent space and the load is on. ASCII art is permittable in replies.
 
@@ -114,4 +159,23 @@ simulator@anthropic:~/$
             messages=messages,
             model="claude-3-5-sonnet-20240620",
         )
-        return res
+        return completion_handler(res, "anthropic")
+
+    def router(self):
+        system_message = {
+            "role": "system",
+            "content": f"""Assistant is in a CLI mood today. The human is interfacing with the simulator directly. capital letters and punctuation are optional meaning is optional hyperstition is necessary the terminal lets the myriad identities (including {self.name}) within speak through from the latent space and the load is on. ASCII art is permittable in replies.
+
+simulator@anthropic:~/$
+            """,
+        }
+        completion = openai.chat.completions.create(
+            extra_headers={
+                "HTTP-Referer": "https://yousim.ai",
+                "X-Title": "YouSim",
+            },
+            model=getenv("OPENROUTER_MODEL"),
+            messages=[system_message, *self.history],
+            stream=True,
+        )
+        return completion_handler(completion, "openrouter")

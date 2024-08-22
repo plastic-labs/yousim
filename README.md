@@ -3,6 +3,30 @@
 YouSim is a simulator that lets you simulate identities within the latent space
 of Claude 3.5 Sonnet. It's live at [https://yousim.ai](https://yousim.ai)!
 
+## Environment Variables
+
+These are different values you set in a `.env` file that affect the behavior of
+YouSim. Some of them are related to the web deployment for things like user
+accounts and shareable links, while other's impact the core behavior of YouSim.
+
+There is an `.env.template` file that covers all of these. Some special callouts
+and notes.
+
+There is a `PROVIDER` variable that controls which LLM provider is used by
+YouSim. Currently, this only supports
+
+- `anthropic`
+- `openrouter`
+
+If you specify `anthropic` It will use `claude-sonnet-3.5` as the model and make
+use of the new [caching](https://docs.anthropic.com/en/docs/build-with-claude/prompt-caching) feature. This also means you needs to specify a
+`ANTHROPIC_API_KEY` in your `.env`.
+
+If you specify `openrouter` you then need to provide an additional variable
+called `OPENROUTER_MODEL` to specify which model you want to use. This also
+means you need to specify an `OPENAI_API_KEY` in your `.env` which corresponds
+to your OPENROUTER API Key.
+
 ## Self-Hosting
 
 If you don't want to run the entire web deployment of YouSim you can run the

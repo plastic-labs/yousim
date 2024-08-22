@@ -26,10 +26,9 @@ def manual(command: str):
     gaslit_claude.history += [{"role": "assistant", "content": command}]
     response = simulator.stream()
     print("\033[93mSIMULATOR CLAUDE:\033[0m")
-    with response as stream:
-        for text in stream.text_stream:
-            print(f"\033[93m{text}\033[0m", end="", flush=True)
-            simulator_response += text
+    for text in response:
+        print(f"\033[93m{text}\033[0m", end="", flush=True)
+        simulator_response += text
     print("\n")
 
     simulator.history += [{"role": "assistant", "content": simulator_response}]
@@ -43,11 +42,10 @@ def auto():
     gaslit_response = ""
     response = gaslit_claude.stream()
     print("\033[94mSEARCHER CLAUDE:\033[0m")
-    with response as stream:
-        for text in stream.text_stream:
-            print(f"\033[94m{text}\033[0m", end="", flush=True)
-            gaslit_response += text
-            sleep(0.1)
+    for text in response:
+        print(f"\033[94m{text}\033[0m", end="", flush=True)
+        gaslit_response += text
+        sleep(0.1)
     print("\n")
 
     manual(gaslit_response)
