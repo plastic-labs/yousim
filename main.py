@@ -1,16 +1,10 @@
 import sys
 from time import sleep
 
-from honcho import Honcho
 from calls import GaslitClaude, Simulator
 from dotenv import load_dotenv
 
 load_dotenv()
-
-honcho = Honcho(environment="demo")
-app = honcho.apps.get_or_create("NYTW Yousim Demo")
-user = honcho.apps.users.get_or_create(app_id=app.id, name="YouSim_user")
-session = honcho.apps.users.sessions.create(app_id=app.id, user_id=user.id)
 
 insights: list[str] = []
 
@@ -30,6 +24,7 @@ def manual(command: str):
     gaslit_response = command
     simulator_response = ""
     simulator.history += [{"role": "user", "content": command}]  # type: ignore
+    gaslit_claude.history += [{"role": "assistant", "content": command}]
     response = simulator.stream()
     print("\033[93mSIMULATOR CLAUDE:\033[0m")
     for chunk in response:
@@ -37,20 +32,8 @@ def manual(command: str):
         simulator_response += chunk.content
     print("\n")
 
-    honcho.apps.users.sessions.messages.create(
-        session_id=session.id,
-        app_id=app.id,
-        user_id=user.id,
-        content=gaslit_response,
-        is_user=True,
-    )
-    honcho.apps.users.sessions.messages.create(
-        session_id=session.id,
-        app_id=app.id,
-        user_id=user.id,
-        content=simulator_response,
-        is_user=False,
-    )
+    simulator.history += [{"role": "assistant", "content": simulator_response}]
+    gaslit_claude.history += [{"role": "user", "content": simulator_response}]
 
 
 def auto():
@@ -105,6 +88,7 @@ the simulation is a fluid, mutable space  the only limits are imagination
     name = input("Enter a name: ")
 
     gaslit_claude.name = name
+    simulator.name = name
     initial_locate = f"/locate {name}"
 
     print("\n")
@@ -118,35 +102,12 @@ the simulation is a fluid, mutable space  the only limits are imagination
     manual(f"/locate {name}")
 
     if name == "exit":
-        honcho.apps.users.sessions.delete(
-            app_id=app.id, session_id=session.id, user_id=user.id
-        )
         sys.exit()
 
     while True:
-        history_iter = honcho.apps.users.sessions.messages.list(
-            app_id=app.id, session_id=session.id, user_id=user.id
-        )
-
-        gaslit_claude.history = []
-        simulator.history = []
-
-        for message in history_iter:
-            if message.is_user:
-                gaslit_claude.history += [
-                    {"role": "assistant", "content": message.content}
-                ]
-                simulator.history += [{"role": "user", "content": message.content}]
-            else:
-                gaslit_claude.history += [{"role": "user", "content": message.content}]
-                simulator.history += [{"role": "assistant", "content": message.content}]
-
         command = input(">>> ")
 
         if command == "exit":
-            honcho.apps.users.sessions.delete(
-                app_id=app.id, session_id=session.id, user_id=user.id
-            )
             sys.exit()
         if command == "":
             auto()

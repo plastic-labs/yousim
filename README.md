@@ -5,6 +5,22 @@ of Claude 3.5 Sonnet. It's live at [https://yousim.ai](https://yousim.ai)!
 
 ## Self-Hosting
 
+If you don't want to run the entire web deployment of YouSim you can run the
+main conversation loop experience all from the terminal by running the `main.py`
+file. This won't save conversations, let you share, or link them to any account,
+but it's a quick way to get started.
+
+Run the following commands to run the terminal experience:
+
+```bash
+poetry install
+poetry run python main.py
+```
+
+Make sure you have the appropriate API keys specified in your `.env`
+
+### Web Experience
+
 You can run Yousim locally with Docker Compose. To get started, configure your `.env` files: `.env` for the backend and `webshell/.env` for the frontend.
 
 For the backend, copy the `.env.template` file to `.env` and fill out the variables:
