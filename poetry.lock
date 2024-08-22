@@ -13,13 +13,13 @@ files = [
 
 [[package]]
 name = "anthropic"
-version = "0.34.0"
+version = "0.34.1"
 description = "The official Python library for the anthropic API"
 optional = false
 python-versions = ">=3.7"
 files = [
-    {file = "anthropic-0.34.0-py3-none-any.whl", hash = "sha256:4f4b3b5cb7647f5879ee72c22543a10af6da83b18c8401938053b9b4965a9595"},
-    {file = "anthropic-0.34.0.tar.gz", hash = "sha256:820d6cc77cfcbbe56f0920a58f7e2bacf119b9e80f6de1bf92a422799ee4680f"},
+    {file = "anthropic-0.34.1-py3-none-any.whl", hash = "sha256:2fa26710809d0960d970f26cd0be3686437250a481edb95c33d837aa5fa24158"},
+    {file = "anthropic-0.34.1.tar.gz", hash = "sha256:69e822bd7a31ec11c2edb85f2147e8f0ee0cfd3288fea70b0ca8808b2f9bf91d"},
 ]
 
 [package.dependencies]
@@ -360,17 +360,6 @@ doq = ["aioquic (>=0.9.25)"]
 idna = ["idna (>=3.6)"]
 trio = ["trio (>=0.23)"]
 wmi = ["wmi (>=1.5.1)"]
-
-[[package]]
-name = "docstring-parser"
-version = "0.16"
-description = "Parse Python docstrings in reST, Google and Numpydoc format"
-optional = false
-python-versions = ">=3.6,<4.0"
-files = [
-    {file = "docstring_parser-0.16-py3-none-any.whl", hash = "sha256:bf0a1387354d3691d102edef7ec124f219ef639982d096e26e3b60aeffa90637"},
-    {file = "docstring_parser-0.16.tar.gz", hash = "sha256:538beabd0af1e2db0146b6bd3caa526c35a34d61af9fd2887f3a8a27a739aa6e"},
-]
 
 [[package]]
 name = "email-validator"
@@ -868,66 +857,6 @@ files = [
 ]
 
 [[package]]
-name = "mirascope"
-version = "0.18.3"
-description = "An intuitive approach to building with LLMs"
-optional = false
-python-versions = "<4.0,>=3.9"
-files = [
-    {file = "mirascope-0.18.3-py3-none-any.whl", hash = "sha256:2abc00f55feec29295ffd09a54a6403768a1c78085612e8caee0379cba26ea19"},
-    {file = "mirascope-0.18.3.tar.gz", hash = "sha256:a9cfb099ed58cc41247f734fdc1bc8c8993c074b6b8297e5912195885b43315e"},
-]
-
-[package.dependencies]
-anthropic = {version = ">=0.27.0,<1.0.0", optional = true, markers = "extra == \"anthropic\" or extra == \"all\""}
-docstring-parser = ">=0.15,<1.0"
-openai = ">=1.6.0,<2.0.0"
-pydantic = ">=2.0.2,<3.0.0"
-tenacity = ">=8.2.3,<9.0.0"
-
-[package.extras]
-all = ["anthropic (>=0.27.0,<1.0.0)", "chromadb (>=0.4.24,<1.0.0)", "cohere (>=5.5.7,<6.0.0)", "google-generativeai (>=0.4.0,<1.0.0)", "groq (>=0.7.0,<1.0.0)", "hyperdx-opentelemetry (>=0.1.0,<0.2.0)", "langfuse (>=2.30.0,<3.0.0)", "logfire (>=0.41.0,<1.0.0)", "mirascope-cli (>=0.1.3,<1.0.0)", "mistralai (>=0.1.6,<1.0.0)", "opentelemetry-api (>=1.22.0,<2.0.0)", "opentelemetry-sdk (>=1.22.0,<2.0.0)", "pinecone-client (>=4.1.2,<5.0.0)", "wandb (>=0.16.4,<1.0.0)", "weave (>=0.50.2,<1.0.0)", "weaviate-client (>=4.6.3,<5.0.0)"]
-anthropic = ["anthropic (>=0.27.0,<1.0.0)"]
-chromadb = ["chromadb (>=0.4.24,<1.0.0)"]
-cli = ["mirascope-cli (>=0.1.3,<1.0.0)"]
-cohere = ["cohere (>=5.5.7,<6.0.0)"]
-gemini = ["google-generativeai (>=0.4.0,<1.0.0)"]
-groq = ["groq (>=0.7.0,<1.0.0)"]
-hyperdx = ["hyperdx-opentelemetry (>=0.1.0,<0.2.0)"]
-langfuse = ["langfuse (>=2.30.0,<3.0.0)"]
-logfire = ["logfire (>=0.41.0,<1.0.0)"]
-mistral = ["mistralai (>=0.1.6,<1.0.0)"]
-opentelemetry = ["opentelemetry-api (>=1.22.0,<2.0.0)", "opentelemetry-sdk (>=1.22.0,<2.0.0)"]
-pinecone = ["pinecone-client (>=4.1.2,<5.0.0)"]
-wandb = ["wandb (>=0.16.4,<1.0.0)"]
-weave = ["weave (>=0.50.2,<1.0.0)"]
-weaviate = ["weaviate-client (>=4.6.3,<5.0.0)"]
-
-[[package]]
-name = "openai"
-version = "1.40.6"
-description = "The official Python library for the openai API"
-optional = false
-python-versions = ">=3.7.1"
-files = [
-    {file = "openai-1.40.6-py3-none-any.whl", hash = "sha256:b36372124a779381a420a34dd96f762baa748b6bdfaf83a6b9f2745f72ccc1c5"},
-    {file = "openai-1.40.6.tar.gz", hash = "sha256:2239232bcb7f4bd4ce8e02544b5769618582411cf399816d96686d1b6c1e5c8d"},
-]
-
-[package.dependencies]
-anyio = ">=3.5.0,<5"
-distro = ">=1.7.0,<2"
-httpx = ">=0.23.0,<1"
-jiter = ">=0.4.0,<1"
-pydantic = ">=1.9.0,<3"
-sniffio = "*"
-tqdm = ">4"
-typing-extensions = ">=4.11,<5"
-
-[package.extras]
-datalib = ["numpy (>=1)", "pandas (>=1.2.3)", "pandas-stubs (>=1.1.0.11)"]
-
-[[package]]
 name = "packaging"
 version = "24.1"
 description = "Core utilities for Python packages"
@@ -1363,21 +1292,6 @@ anyio = ">=3.4.0,<5"
 full = ["httpx (>=0.22.0)", "itsdangerous", "jinja2", "python-multipart (>=0.0.7)", "pyyaml"]
 
 [[package]]
-name = "tenacity"
-version = "8.5.0"
-description = "Retry code until it succeeds"
-optional = false
-python-versions = ">=3.8"
-files = [
-    {file = "tenacity-8.5.0-py3-none-any.whl", hash = "sha256:b594c2a5945830c267ce6b79a166228323ed52718f30302c1359836112346687"},
-    {file = "tenacity-8.5.0.tar.gz", hash = "sha256:8bc6c0c8a09b31e6cad13c47afbed1a567518250a9a171418582ed8d9c20ca78"},
-]
-
-[package.extras]
-doc = ["reno", "sphinx"]
-test = ["pytest", "tornado (>=4.5)", "typeguard"]
-
-[[package]]
 name = "tokenizers"
 version = "0.20.0"
 description = ""
@@ -1811,4 +1725,4 @@ files = [
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.11"
-content-hash = "b87d0f8538a3de92eb5f9a5642d3b630eded6b11159b9259357e3e68173ccec8"
+content-hash = "3a0bed5b61f9238b3d08852870fefc876c9f958f5c48bc1d9f087e78e5e89a4a"
