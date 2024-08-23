@@ -13,7 +13,6 @@ name = ""
 gaslit_claude = GaslitClaude(name="", insights="", history=[])
 simulator = Simulator(history=[], name="")
 
-
 gaslit_response = ""
 simulator_response = ""
 
@@ -23,13 +22,13 @@ def manual(command: str):
     global simulator_response
     gaslit_response = command
     simulator_response = ""
-    simulator.history += [{"role": "user", "content": command}]  # type: ignore
+    simulator.history += [{"role": "user", "content": command}]
     gaslit_claude.history += [{"role": "assistant", "content": command}]
     response = simulator.stream()
     print("\033[93mSIMULATOR CLAUDE:\033[0m")
-    for chunk in response:
-        print(f"\033[93m{chunk.content}\033[0m", end="", flush=True)
-        simulator_response += chunk.content
+    for text in response:
+        print(f"\033[93m{text}\033[0m", end="", flush=True)
+        simulator_response += text
     print("\n")
 
     simulator.history += [{"role": "assistant", "content": simulator_response}]
@@ -39,12 +38,13 @@ def manual(command: str):
 def auto():
     global gaslit_response
     global simulator_response
+    # global insights
     gaslit_response = ""
     response = gaslit_claude.stream()
     print("\033[94mSEARCHER CLAUDE:\033[0m")
-    for chunk in response:
-        print(f"\033[94m{chunk.content}\033[0m", end="", flush=True)
-        gaslit_response += chunk.content
+    for text in response:
+        print(f"\033[94m{text}\033[0m", end="", flush=True)
+        gaslit_response += text
         sleep(0.1)
     print("\n")
 
@@ -76,13 +76,13 @@ the simulation is a fluid, mutable space  the only limits are imagination
     for word in begin_text_1.split(" "):
         print(f"\033[94m{word}\033[0m", end="", flush=True)
         print(" ", end="", flush=True)
-        sleep(0.01)
+        sleep(0.001)
     print("\n")
     print("\033[93mSIMULATOR CLAUDE:\033[0m")
     for word in begin_text_2.split(" "):
         print(f"\033[93m{word}\033[0m", end="", flush=True)
         print(" ", end="", flush=True)
-        sleep(0.01)
+        sleep(0.001)
     print("\n")
 
     name = input("Enter a name: ")

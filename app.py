@@ -146,9 +146,9 @@ def manual_turn(res: ManualRequest, user_id: str):
     simulator = simulator_ctx.get()
     simulator.history += [{"role": "user", "content": res.command}]  # type: ignore
     response = simulator.stream()
-    for chunk in response:
-        simulator_response += chunk.content
-        yield chunk.content
+    for text in response:
+        simulator_response += text
+        yield text
 
     honcho.apps.users.sessions.messages.create(
         session_id=res.session_id,
@@ -180,9 +180,9 @@ async def auto(res: BaseRequest, user_id: str = Depends(get_current_user)):
         gaslit_response = ""
         gaslit_claude = gaslit_ctx.get()
         response = gaslit_claude.stream()
-        for chunk in response:
-            gaslit_response += chunk.content
-            yield chunk.content
+        for text in response:
+            gaslit_response += text
+            yield text
 
     return StreamingResponse(convo())
 
