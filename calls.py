@@ -9,7 +9,9 @@ from functools import cache
 
 load_dotenv()
 
-anthropic = Anthropic()
+anthropic = Anthropic(
+    api_key=getenv("ANTHROPIC_API_KEY", "placeholder"),
+)
 openai = OpenAI(
     base_url="https://openrouter.ai/api/v1",
     api_key=getenv("OPENAI_API_KEY", "placeholder"),
