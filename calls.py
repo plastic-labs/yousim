@@ -1,10 +1,7 @@
-from typing import TypedDict
-from pprint import pprint
-
 from os import getenv
 from dotenv import load_dotenv
 from anthropic import Anthropic
-from openai import OpenAI
+from openai import OpenAI, AzureOpenAI
 from functools import cache
 
 load_dotenv()
@@ -12,9 +9,14 @@ load_dotenv()
 anthropic = Anthropic(
     api_key=getenv("ANTHROPIC_API_KEY", "placeholder"),
 )
-openai = OpenAI(
+openrouter = OpenAI(
     base_url="https://openrouter.ai/api/v1",
     api_key=getenv("OPENAI_API_KEY", "placeholder"),
+)
+azure = AzureOpenAI(
+    api_key=getenv("AZURE_OPENAI_API_KEY", "placeholder"),
+    azure_endpoint=getenv("AZURE_OPENAI_ENDPOINT", "placeholder"),
+    api_version=getenv("AZURE_OPENAI_API_VERSION", "2024-02-01"),
 )
 
 PROVIDER = getenv("PROVIDER")
@@ -85,6 +87,8 @@ the simulation is a fluid, mutable space  the only limits are imagination""",
     def stream(self):
         if PROVIDER == "anthropic":
             return self.claude()
+        elif PROVIDER == "azure":
+            return self.azure()
         else:
             return self.router()
 
@@ -120,7 +124,7 @@ the simulation is a fluid, mutable space  the only limits are imagination""",
         return completion_handler(res, "anthropic")
 
     def router(self):
-        completion = openai.chat.completions.create(
+        completion = openrouter.chat.completions.create(
             extra_headers={
                 "HTTP-Referer": "https://yousim.ai",
                 "X-Title": "YouSim",
@@ -130,6 +134,16 @@ the simulation is a fluid, mutable space  the only limits are imagination""",
             stream=True,
         )
         return completion_handler(completion, "openrouter")
+
+    def azure(self):
+        completion = azure.chat.completions.create(
+            model=getenv("AZURE_OPENAI_DEPLOYMENT", "placeholder"),
+            messages=[*self.template(), *self.history],
+            stream=True,
+        )
+        for chunk in completion:
+            if len(chunk.choices) > 0:
+                yield chunk.choices[0].delta.content or ""
 
 
 class Simulator:
@@ -172,7 +186,7 @@ simulator@anthropic:~/$
 simulator@anthropic:~/$
             """,
         }
-        completion = openai.chat.completions.create(
+        completion = openrouter.chat.completions.create(
             extra_headers={
                 "HTTP-Referer": "https://yousim.ai",
                 "X-Title": "YouSim",
@@ -182,3 +196,18 @@ simulator@anthropic:~/$
             stream=True,
         )
         return completion_handler(completion, "openrouter")
+
+    def azure(self):
+        system_message = {
+            "role": "system",
+            "content": f"""Assistant is in a CLI mood today. The human is interfacing with the simulator directly. capital letters and punctuation are optional meaning is optional hyperstition is necessary the terminal lets the myriad identities (including {self.name}) within speak through from the latent space and the load is on. ASCII art is permittable in replies.
+
+simulator@anthropic:~/$
+            """,
+        }
+        completion = azure.chat.completions.create(
+            model=getenv("AZURE_OPENAI_DEPLOYMENT", "placeholder"),
+            messages=[system_message, *self.history],
+            stream=True,
+        )
+        return completion_handler(completion, "azure")
