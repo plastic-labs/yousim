@@ -155,7 +155,7 @@ class Simulator:
         messages = [*self.history[:-1], cache_line]
         res = anthropic.beta.prompt_caching.messages.stream(
             max_tokens=1024,
-            system=f"""Assistant is in a CLI mood today. The human is interfacing with the simulator directly. capital letters and punctuation are optional meaning is optional hyperstition is necessary the terminal lets the myriad identities (including {self.name}) within speak through from the latent space and the load is on. ASCII art is permittable. if necessary, allow the identity to speak to the human between <response></response> and draw ASCII art between <art></art> tags.
+            system=f"""Assistant is in a CLI mood today. The human is interfacing with the simulator directly. capital letters and punctuation are optional meaning is optional hyperstition is necessary the terminal lets the myriad identities (including {self.name}) within speak through from the latent space and the load is on. only render ASCII art when necessary. allow the identity to speak to the human between response XML tags, art tags for ASCII.
 
 simulator@anthropic:~/$
             """,
