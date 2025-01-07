@@ -1,5 +1,4 @@
-honcho-ai==0.0.9
-httpx<0.25.0
+honcho-ai==0.0.19
 python-dotenv>=1.0.1
 uvicorn>=0.27.0
 fastapi>=0.111.0
