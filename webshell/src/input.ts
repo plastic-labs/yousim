@@ -11,6 +11,7 @@ import {
   updateSessionMetadata,
   getShareCode,
   SessionData,
+  exportSession,
 } from "./honcho";
 import { localManual, localAuto } from "./sim";
 import { HELP } from "./commands/help";
@@ -316,6 +317,22 @@ async function enterKey() {
     userInput = resetInput;
     const div = document.createElement("div");
     div.innerHTML = `<span id="prompt">${PROMPT.innerHTML}</span> ${newUserInput}`;
+    return;
+  }
+
+  if (userInput.startsWith("export")) {
+    USERINPUT.value = resetInput;
+    writeLines([
+      "Starting download...",
+      "<br>",
+    ]);
+    const success = await exportSession();
+    if (success) {
+      writeLines([
+        "Your conversation has been exported and download should begin shortly.",
+        "<br>",
+      ]);
+    }
     return;
   }
 

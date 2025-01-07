@@ -61,13 +61,9 @@ const initEventListeners = () => {
   }
 
   const setupPromise = getJWT().then(async () => {
-    // const sessions = await getSessions();
     const existingSessionId = getStorage("session_id");
-    // console.trace(existingSessionId);
     if (existingSessionId) {
       const sessionMessages = await getSessionMessages(existingSessionId);
-
-      // const sessionMessages = await getSessionMessages(sessions[0].id);
       if (sessionMessages) {
         if (sessionMessages.messages.length > 0)
           setName(sessionMessages.messages[0].content.slice(8));

@@ -1,13 +1,15 @@
 import os
 from contextvars import ContextVar
-from typing import Annotated, Any, Dict
+from typing import Annotated, Any, Dict, List, Literal
 from functools import cache
 from fastapi.security import OAuth2PasswordBearer
+from fastapi.responses import HTMLResponse, FileResponse
+from fastapi.staticfiles import StaticFiles
 
 import sentry_sdk
 from fastapi import Depends, FastAPI, HTTPException, status
 from starlette.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, FileResponse
 from honcho import Honcho
 from pydantic import BaseModel
 
@@ -15,11 +17,13 @@ from cryptography.fernet import Fernet
 import base64
 
 from calls import GaslitClaude, Simulator
-
 import jwt
 
-
 from dotenv import load_dotenv
+
+import tempfile
+import json
+from datetime import datetime
 
 load_dotenv(override=True)
 
@@ -35,13 +39,23 @@ HONCHO_ENV = get_env("HONCHO_ENV")
 CLIENT_REGEX = get_env("CLIENT_REGEX")
 print(CLIENT_REGEX)
 JWT_SECRET = get_env("JWT_SECRET")
-SECRET_KEY = base64.b64decode(get_env("SECRET_KEY"))
+SECRET_KEY = get_env("SECRET_KEY").encode()
 HONCHO_APP_NAME = get_env("HONCHO_APP_NAME")
 
 fernet = Fernet(SECRET_KEY)
 
-honcho = Honcho(base_url=HONCHO_ENV)
-honcho_app = honcho.apps.get_or_create(HONCHO_APP_NAME)
+print(f"Initializing Honcho with base_url: {HONCHO_ENV}")
+honcho = Honcho(
+    base_url=HONCHO_ENV,
+)
+
+try:
+    print(f"Attempting to get/create app: {HONCHO_APP_NAME}")
+    honcho_app = honcho.apps.get_or_create(HONCHO_APP_NAME)
+    print(f"Successfully initialized app with id: {honcho_app.id}")
+except Exception as e:
+    print(f"Error initializing Honcho app: {str(e)}")
+    raise
 
 
 gaslit_ctx = ContextVar(
@@ -71,7 +85,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
 
 class BaseRequest(BaseModel):
     session_id: str
@@ -212,10 +225,24 @@ async def reset(
         honcho.apps.users.sessions.delete(
             app_id=honcho_app.id, session_id=session_id, user_id=user_id
         )
-    session = honcho.apps.users.sessions.create(app_id=honcho_app.id, user_id=user_id)
     # TODO reset the session
     # gaslit_claude.history = []
     # simulator.history = []
+    try:
+        session = honcho.apps.users.sessions.create(
+            app_id=honcho_app.id, 
+            user_id=user_id,
+        )
+    except TypeError as e:
+        if "location_id" in str(e):
+            # If location_id is truly optional, try without it
+            session = honcho.apps.users.sessions.create(
+                app_id=honcho_app.id,
+                user_id=user_id
+            )
+        else:
+            raise e
+            
     return {
         "user_id": user_id,
         "session_id": session.id,
@@ -299,3 +326,44 @@ async def share_messages(code: str):
         return await get_session_messages(session_id=session_id, user_id=user_id)
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid encrypted data")
+
+class MessageFormat(BaseModel):
+    role: Literal["user", "assistant"]
+    content: str
+
+@app.get("/export/{session_id}")
+async def export_session(session_id: str, user_id: str = Depends(get_current_user)):
+    try:
+        messages = honcho.apps.users.sessions.messages.list(
+            app_id=honcho_app.id,
+            user_id=user_id, 
+            session_id=session_id
+        )
+        
+        formatted_messages = [
+            {
+                "role": "user" if msg.is_user else "assistant",
+                "content": msg.content
+            } for msg in messages
+        ]
+        
+        # Create a temporary file
+        with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.json') as tmp:
+            json.dump(formatted_messages, tmp, indent=2)
+            tmp_path = tmp.name
+            
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"yousim_conversation_{timestamp}.json"
+        
+        return FileResponse(
+            path=tmp_path,
+            filename=filename,
+            media_type='application/json',
+            background=None  # Ensures file is sent before deletion
+        )
+            
+    except Exception as e:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Failed to export session: {str(e)}"
+        )

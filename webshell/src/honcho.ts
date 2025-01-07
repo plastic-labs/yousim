@@ -279,3 +279,60 @@ export async function getSharedMessages(code: string) {
     alert("Failed to fetch session messages. Please try again.");
   }
 }
+
+interface ExportedMessage {
+  role: "user" | "assistant";
+  content: string;
+}
+
+export async function exportSession() {
+  const jwt = await getJWT();
+  const sessionId = getStorage("session_id");
+
+  if (!sessionId) {
+    console.error("No session ID found in local storage");
+    alert("No active session found. Please start a new session.");
+    return;
+  }
+
+  if (jwt) {
+    const url = new URL(`${API_URL}/export/${sessionId}`);
+    try {
+      const response = await fetch(url, {
+        headers: {
+          Authorization: `Bearer ${jwt}`,
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      // Get filename from Content-Disposition header or use default
+      const contentDisposition = response.headers.get('content-disposition');
+      const filename = contentDisposition
+        ? contentDisposition.split('filename=')[1].replace(/['"]/g, '')
+        : 'yousim_conversation.json';
+
+      // Create blob from response
+      const blob = await response.blob();
+      const downloadUrl = window.URL.createObjectURL(blob);
+      
+      // Create temporary link and trigger download
+      const link = document.createElement('a');
+      link.href = downloadUrl;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(downloadUrl);
+
+      return true; // Indicate successful download
+    } catch (err) {
+      Sentry.captureException(err);
+      console.error("Failed to export session:", err);
+      alert("Failed to export session. Please try again.");
+      return false;
+    }
+  }
+}
