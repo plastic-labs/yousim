@@ -1,4 +1,5 @@
 import sys
+import os
 from time import sleep
 
 from calls import GaslitClaude, Simulator
@@ -38,7 +39,10 @@ def write_list_to_csv(data_list, file_path):
 
 # Example usage
 file_path = "history.csv"
-conversation = load_messages_from_csv(file_path)
+if os.path.exists(file_path):
+    conversation = load_messages_from_csv(file_path)
+else:
+    conversation = []
 
 insights: list[str] = []
 
@@ -154,11 +158,11 @@ if __name__ == "__main__":
         if msg["role"] == "user":
             gaslit_claude.history += [{"role": "user", "content": msg["content"]}]
             print("\033[94mSEARCHER CLAUDE:\033[0m")
-            print(f"\033[94m{msg["content"]}\033[0m", end="", flush=True)
+            print(f"\033[94m{msg['content']}\033[0m", end="", flush=True)
             print(" ", end="", flush=True)
         else:
             print("\033[93mSIMULATOR CLAUDE:\033[0m")
-            print(f"\033[93m{msg["content"]}\033[0m", end="", flush=True)
+            print(f"\033[93m{msg['content']}\033[0m", end="", flush=True)
             print(" ", end="", flush=True)
         print("\n")
 
