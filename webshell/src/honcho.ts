@@ -280,11 +280,6 @@ export async function getSharedMessages(code: string) {
   }
 }
 
-interface ExportedMessage {
-  role: "user" | "assistant";
-  content: string;
-}
-
 export async function exportSession() {
   const jwt = await getJWT();
   const sessionId = getStorage("session_id");
@@ -296,9 +291,8 @@ export async function exportSession() {
   }
 
   if (jwt) {
-    const url = new URL(`${API_URL}/export/${sessionId}`);
     try {
-      const response = await fetch(url, {
+      const response = await fetch(new URL(`${API_URL}/export/${sessionId}`), {
         headers: {
           Authorization: `Bearer ${jwt}`,
         },
@@ -308,26 +302,17 @@ export async function exportSession() {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
 
-      // Get filename from Content-Disposition header or use default
-      const contentDisposition = response.headers.get('content-disposition');
-      const filename = contentDisposition
-        ? contentDisposition.split('filename=')[1].replace(/['"]/g, '')
-        : 'yousim_conversation.json';
-
-      // Create blob from response
-      const blob = await response.blob();
-      const downloadUrl = window.URL.createObjectURL(blob);
-      
-      // Create temporary link and trigger download
-      const link = document.createElement('a');
-      link.href = downloadUrl;
-      link.download = filename;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      window.URL.revokeObjectURL(downloadUrl);
-
-      return true; // Indicate successful download
+      const data = await response.json();
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+      const url = window.URL.createObjectURL(blob);
+      const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `yousim_conversation_${timestamp}.json`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
     } catch (err) {
       Sentry.captureException(err);
       console.error("Failed to export session:", err);
