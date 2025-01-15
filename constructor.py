@@ -9,7 +9,7 @@ def format_conversation(messages: list[tuple[str, str]]) -> str:
         formatted_messages += f"{message[0]}: {message[1]}\n"
     return formatted_messages
 
-model_name = 'meta-llama/llama-3.3-70b-instruct'
+model_name = 'nousresearch/hermes-3-llama-3.1-70b'
 base_url = 'https://openrouter.ai/api/v1'
 end_conversation_token = "<END_CONVERSATION>"
 
