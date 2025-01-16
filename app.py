@@ -16,7 +16,8 @@ from pydantic import BaseModel
 from cryptography.fernet import Fernet
 import base64
 
-from calls import GaslitClaude, Simulator
+from calls import GaslitClaude, Simulator, Constructor
+
 import jwt
 
 from dotenv import load_dotenv
@@ -63,6 +64,7 @@ gaslit_ctx = ContextVar(
     "gaslit_claude", default=GaslitClaude(name="", insights="", history=[])
 )
 simulator_ctx = ContextVar("simulator", default=Simulator(history=[], name=""))
+constructor_ctx = ContextVar("constructor", default=Constructor(history=[], name=""))
 
 
 sentry_sdk.init(
@@ -179,6 +181,74 @@ def manual_turn(res: ManualRequest, user_id: str):
         content=simulator_response,
         is_user=False,
     )
+
+
+# This is very similar to the manual turn. Maybe if we pass an argument
+# indicating the type of turn we can reuse the same function and get either
+# the constructor or the simulator from the context
+def constructor_messages(res: ManualRequest, user_id: str):
+    constructor = constructor_ctx.get()
+    history_iter = honcho.apps.users.sessions.messages.list(
+        app_id=honcho_app.id, session_id=res.session_id, user_id=user_id
+    )
+    constructor.history = []
+    for message in history_iter:
+        if message.is_user:
+            constructor.history += [{"role": "user", "content": message.content}]
+        else:
+            constructor.history += [{"role": "assistant", "content": message.content}]
+    print(f'in constructor_messages, constructor.history: {constructor.history}')
+    constructor_ctx.set(constructor)
+
+
+def constructor_turn(res: ManualRequest, user_id: str):
+    user_message = res.command
+    constructor_response = ""
+    constructor = constructor_ctx.get()
+    constructor.history += [{"role": "user", "content": user_message}]  # type: ignore
+    response = constructor.stream()
+    for text in response:
+        constructor_response += text
+        yield text
+
+    honcho.apps.users.sessions.messages.create(
+        session_id=res.session_id,
+        app_id=honcho_app.id,
+        user_id=user_id,
+        content=user_message,
+        is_user=True,
+    )
+    honcho.apps.users.sessions.messages.create(
+        session_id=res.session_id,
+        app_id=honcho_app.id,
+        user_id=user_id,
+        content=constructor_response,
+        is_user=False,
+    )
+    summary = constructor_summary_turn(res, user_id)
+    print(f'summary: {summary}')
+
+@app.post("/constructor")
+async def constructor(res: ManualRequest, user_id: str = Depends(get_current_user)):
+    constructor_messages(res, user_id)
+    return StreamingResponse(constructor_turn(res, user_id))
+
+
+def constructor_summary_turn(res: ManualRequest, user_id: str):
+    constructor = constructor_ctx.get()
+    constructor.history += [{"role": "user", "content": res.command}]  # type: ignore
+    response = constructor.stream_summary()
+    summary = ""
+    for text in response:
+        summary += text
+    return summary
+    # TODO: save the summary somewhere
+
+
+@app.post("/constructor/summary")
+async def constructor_summary(res: ManualRequest, user_id: str = Depends(get_current_user)):
+    constructor_messages(res, user_id)
+    return StreamingResponse(constructor_summary_turn(res, user_id))
 
 
 @app.post("/manual")

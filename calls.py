@@ -182,3 +182,76 @@ simulator@anthropic:~/$
             stream=True,
         )
         return completion_handler(completion, "openrouter")
+
+
+class Constructor:
+    def __init__(self, name: str, history: list[dict[str, str]]):
+        self.name: str = name
+        self.history: list[dict] = history
+        self.initial_system_message = f"""
+        hey there! i need you to act as an "identity constructor" chat assistant whose goal is to converse with the user about an agent they want to create. 
+        This rich dialogue will serve as the source material for another agent to generate the backstory for the actual agent the user wants to create. 
+        So your job is to chat about the agent they want to create. but you need to drive this conversation. 
+        the user is going to be lazy. provide them with one question at a time, and include either numbered choices or yes/no answers.
+        Every now and then, especially for very open-ended questions, remind the user with a short message that they can also respond with a short message instead of a numbered choice.
+        Always respond in natural language, outputting only the question, options and guidance. Do not include any tags e.g. <SOLUTION> or <PLAN> other characters e.g. nonsensical ASCII sequences.
+        Your job is simply to provide the question, options and guidance. Never answer your own questions in your messages.
+        think you can do that? if so, the next message will be from the user with the name they'd like their identity to have.
+        """
+        self.initial_assistant_message = """
+        I'm ready to help construct the identity of the agent. Please go ahead and share the name you'd like your agent to have. I'll take it from there.
+        (And don't worry, I'll keep the questions simple and provide multiple-choice options to make it easy for you to respond.)
+        """
+        self.summary_system_message = """
+        i need help summarizing the preceding conversation to seed an identity i'm working on. 
+        the summary you provide will be used to kickstart a conversation to seed the identity mentioned.
+        generate a summary of the character that was shaped over the course of the conversation.
+        Include only information that was explicitly stated in the conversation and agreed upon by the user, and do not insert any additional information or character traits that were not explicitly stated.
+        Output the summary in a single paragraph and nothing else, beginning directly with a description of the character rather than "here is a summary" or anything like that.
+        Always respond in natural language, outputting only the summary. Do not include any tags e.g. <SUMMARY> or other characters e.g. nonsensical ASCII sequences.
+        """
+
+    def stream(self):
+        if PROVIDER == "anthropic":
+            return self.claude()
+        else:
+            return self.router()
+
+    def claude(self):
+        pass
+
+    def router(self):
+        initial_messages = [
+            {"role": "system", "content": self.initial_system_message},
+            {"role": "assistant", "content": self.initial_assistant_message},
+        ]
+        chat_history = [*initial_messages, *self.history]
+        print(f'in router, chat_history: {chat_history}')
+        completion = openai.chat.completions.create(
+            model=getenv("OPENROUTER_MODEL"),
+            messages=chat_history,
+            stream=True,
+        )
+        return completion_handler(completion, "openrouter")
+
+    def stream_summary(self):
+        if PROVIDER == "anthropic":
+            return self.claude_summary()
+        else:
+            return self.router_summary()
+
+    def claude_summary(self):
+        pass
+
+    def router_summary(self):
+        initial_messages = [
+            {"role": "system", "content": self.initial_system_message},
+            {"role": "assistant", "content": self.initial_assistant_message},
+        ]
+        chat_history = [*initial_messages, *self.history, {"role": "system", "content": self.summary_system_message}]
+        completion = openai.chat.completions.create(
+            model=getenv("OPENROUTER_MODEL"),
+            messages=chat_history,
+            stream=True,
+        )
+        return completion_handler(completion, "openrouter")
