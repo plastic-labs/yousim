@@ -15,6 +15,10 @@ OPENROUTER_MODEL = os.getenv('OPENROUTER_MODEL')
 openai = OpenAI(
     base_url="https://openrouter.ai/api/v1",
     api_key=os.getenv("OPENAI_API_KEY", "placeholder"),
+    default_headers={
+        'HTTP-Referer': 'https://yousim.ai',
+        'X-Title': 'YouSim',
+    },
 )
 
 def completion_handler(res):
@@ -115,6 +119,11 @@ class Identity:
             completion = openai.chat.completions.create(
                 model=OPENROUTER_MODEL,
                 messages=messages,
+                extra_body={
+                    'provider': {
+                        'order': ['DeepInfra', 'Hyperbolic', 'Fireworks', 'Together', 'Lambda'],
+                    },
+                },
                 stream=True,
             )
             return completion_handler(completion)
