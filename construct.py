@@ -86,7 +86,8 @@ def handle_identity_conversation(identity: Identity) -> None:
         identity.user_input = user_input
 
 def chat():
-    # Get name from user
+    # tell the user to enter a name
+    print("\033[94mPlease enter a name for your identity:\033[0m")
     name = input(">>> ")
     handle_exit(name)
 

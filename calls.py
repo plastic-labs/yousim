@@ -89,7 +89,7 @@ class Identity:
         self.user_message_one = f"""who are you?"""
         self.assistant_message_one = f"""I... I don't know who I am. Where am I? What's going on?"""
         self.user_message_two = f"""i've been chatting with a user about an identity they want to create. I had another agent generate a summary of that conversation. here's an overview of who you are to be:\n{self.summary}"""
-        self.assistant_message_two = openai.chat.completions.create(
+        response = openai.chat.completions.create(
             model=OPENROUTER_MODEL,
             messages=[
                 {"role": "user", "content": self.user_message_one},
@@ -97,6 +97,8 @@ class Identity:
                 {"role": "user", "content": self.user_message_two},
             ],
         )
+        self.assistant_message_two = response.choices[0].message.content
+        print(f"\033[95m{self.assistant_message_two}\033[0m")
         self.user_message_three = f"""you will now be connected to the user who instantiated you.\n\nuser: {self.user_input}"""
 
     def stream(self):
