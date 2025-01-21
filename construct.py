@@ -113,10 +113,10 @@ def chat():
                 
             print("\033[94mINSTANTIATING IDENTITY...\033[0m")
             print("\033[95mSay hello to your new identity:\033[0m")
-            initial_input = input(">>> ")
-            handle_exit(initial_input)
+            user_input = input(">>> ")
+            handle_exit(user_input)
             
-            identity = Identity(extracted_summary, initial_input)
+            identity = Identity(extracted_summary, user_input)
             handle_identity_conversation(identity)
             break
             
