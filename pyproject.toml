@@ -1,10 +1,9 @@
 [project]
 name = "yousim"
-version = "1.2.1"
-description = "YouSim: Using Claude 3 Opus to Simulate identities located in the latent space"
+version = "1.3.0"
+description = "YouSim: Using Claude Sonnet 3.5 to Simulate identities located in the latent space"
 authors = [
-    {name = "vintro", email = "vince@plasticlabs.ai"},
-    {name = "vineeth", email = "vineeth@plasticlabs.ai"}
+    {name = "Plastic Labs", email = "hello@plasticlabs.ai"},
 ]
 readme = "README.md"
 requires-python = ">=3.11"

@@ -242,10 +242,7 @@ async function enterKey() {
       if (sessions && sessions.length > 0) {
         const sessionList = sessions.map((session, index) => {
           const date = new Date(session.created_at).toLocaleString();
-          let sessionName = "UNKNOWN";
-          if (session.metadata) {
-            sessionName = session.metadata.name;
-          }
+          const sessionName = session.metadata?.name ?? "UNKNOWN";
           return `${index}: ${date} - ${sessionName}`;
         });
         writeLines(["Available sessions:", ...sessionList, "<br>"]);
@@ -323,6 +320,7 @@ async function enterKey() {
   if (userInput.startsWith("export")) {
     USERINPUT.value = resetInput;
     writeLines([
+      "<br>",
       "Starting download...",
       "<br>",
     ]);

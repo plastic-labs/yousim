@@ -314,6 +314,7 @@ export async function exportSession() {
       a.click();
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
+      return true;
     } catch (err) {
       Sentry.captureException(err);
       console.error("Failed to export session:", err);
