@@ -7,6 +7,7 @@ export async function newSession() {
   const jwt = await getJWT();
   try {
     const response = await fetch(`${API_URL}/reset`, {
+      method: "POST",
       headers: {
         Authorization: `Bearer ${jwt}`,
       },
@@ -203,7 +204,7 @@ export async function updateSessionMetadata(metadata: Record<string, any>) {
           Authorization: `Bearer ${jwt}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ metadata }),
+        body: JSON.stringify(metadata),
       });
 
       if (!response.ok) {

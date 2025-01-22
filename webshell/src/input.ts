@@ -243,8 +243,8 @@ async function enterKey() {
         const sessionList = sessions.map((session, index) => {
           const date = new Date(session.created_at).toLocaleString();
           let sessionName = "UNKNOWN";
-          if (session.metadata.metadata) {
-            sessionName = session.metadata.metadata.name;
+          if (session.metadata) {
+            sessionName = session.metadata.name;
           }
           return `${index}: ${date} - ${sessionName}`;
         });

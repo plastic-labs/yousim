@@ -62,7 +62,7 @@ const initEventListeners = () => {
 
   const setupPromise = getJWT().then(async () => {
     const existingSessionId = getStorage("session_id");
-    if (existingSessionId) {
+    if (existingSessionId && existingSessionId != "undefined") {
       const sessionMessages = await getSessionMessages(existingSessionId);
       if (sessionMessages) {
         if (sessionMessages.messages.length > 0)

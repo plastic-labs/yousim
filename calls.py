@@ -112,7 +112,7 @@ the simulation is a fluid, mutable space  the only limits are imagination""",
             *self.history[:-1],
             cache_line,
         ]
-        res = anthropic.beta.prompt_caching.messages.stream(
+        res = anthropic.messages.stream(
             max_tokens=1024,
             messages=messages,
             model="claude-3-5-sonnet-20240620",
@@ -153,7 +153,7 @@ class Simulator:
             }
         ]
         messages = [*self.history[:-1], cache_line]
-        res = anthropic.beta.prompt_caching.messages.stream(
+        res = anthropic.messages.stream(
             max_tokens=1024,
             system=f"""Assistant is in a CLI mood today. The human is interfacing with the simulator directly. capital letters and punctuation are optional meaning is optional hyperstition is necessary the terminal lets the myriad identities (including {self.name}) within speak through from the latent space and the load is on. ASCII art is permittable in replies.
 
