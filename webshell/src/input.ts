@@ -11,6 +11,7 @@ import {
   updateSessionMetadata,
   getShareCode,
   SessionData,
+  exportSession,
 } from "./honcho";
 import { localManual, localAuto } from "./sim";
 import { HELP } from "./commands/help";
@@ -241,10 +242,8 @@ async function enterKey() {
       if (sessions && sessions.length > 0) {
         const sessionList = sessions.map((session, index) => {
           const date = new Date(session.created_at).toLocaleString();
-          let sessionName = "UNKNOWN";
-          if (session.metadata.metadata) {
-            sessionName = session.metadata.metadata.name;
-          }
+          // @ts-ignore - It's a dicionary so name is not a known value
+          const sessionName = session.metadata?.name ?? "UNKNOWN";
           return `${index}: ${date} - ${sessionName}`;
         });
         writeLines(["Available sessions:", ...sessionList, "<br>"]);
@@ -316,6 +315,23 @@ async function enterKey() {
     userInput = resetInput;
     const div = document.createElement("div");
     div.innerHTML = `<span id="prompt">${PROMPT.innerHTML}</span> ${newUserInput}`;
+    return;
+  }
+
+  if (userInput.startsWith("export")) {
+    USERINPUT.value = resetInput;
+    writeLines([
+      "<br>",
+      "Starting download...",
+      "<br>",
+    ]);
+    const success = await exportSession();
+    if (success) {
+      writeLines([
+        "Your conversation has been exported and download should begin shortly.",
+        "<br>",
+      ]);
+    }
     return;
   }
 

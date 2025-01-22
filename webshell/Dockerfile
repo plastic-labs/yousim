@@ -4,19 +4,16 @@ FROM node:18-alpine
 # Set the working directory in the container
 WORKDIR /app
 
-# Copy package.json and package-lock.json (if available)
-COPY package*.json ./
+# Install pnpm
+RUN npm install -g pnpm
 
-# Install project dependencies
-RUN npm install
+# Copy package.json and package-lock.json (if available)
+COPY package.json pnpm-lock.yaml ./
+RUN pnpm install
 
 # Copy project files and folders to the current working directory (i.e. 'app' folder)
 COPY . .
 
-RUN npm run build
-
-# Expose the port the app runs on
+# Use development server
 EXPOSE 3000
-
-# Run the development server
-CMD ["npm", "run", "prod"]
+CMD ["pnpm", "run", "dev", "--host"]

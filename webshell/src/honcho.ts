@@ -7,6 +7,7 @@ export async function newSession() {
   const jwt = await getJWT();
   try {
     const response = await fetch(`${API_URL}/reset`, {
+      method: "POST",
       headers: {
         Authorization: `Bearer ${jwt}`,
       },
@@ -203,7 +204,7 @@ export async function updateSessionMetadata(metadata: Record<string, any>) {
           Authorization: `Bearer ${jwt}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ metadata }),
+        body: JSON.stringify(metadata),
       });
 
       if (!response.ok) {
@@ -277,5 +278,48 @@ export async function getSharedMessages(code: string) {
     Sentry.captureException(err);
     console.error("Failed to fetch session messages:", err);
     alert("Failed to fetch session messages. Please try again.");
+  }
+}
+
+export async function exportSession() {
+  const jwt = await getJWT();
+  const sessionId = getStorage("session_id");
+
+  if (!sessionId) {
+    console.error("No session ID found in local storage");
+    alert("No active session found. Please start a new session.");
+    return;
+  }
+
+  if (jwt) {
+    try {
+      const response = await fetch(new URL(`${API_URL}/export/${sessionId}`), {
+        headers: {
+          Authorization: `Bearer ${jwt}`,
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+      const url = window.URL.createObjectURL(blob);
+      const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `yousim_conversation_${timestamp}.json`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      return true;
+    } catch (err) {
+      Sentry.captureException(err);
+      console.error("Failed to export session:", err);
+      alert("Failed to export session. Please try again.");
+      return false;
+    }
   }
 }
