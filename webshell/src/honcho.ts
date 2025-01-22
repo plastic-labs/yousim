@@ -29,11 +29,11 @@ export function checkSession() {
   console.log(session_id)
 }
 
-export async function manual(command: string) {
+async function sendCommand(command: string, endpoint: string) {
   const jwt = await getJWT();
   const session_id = getStorage("session_id");
   if (jwt && session_id) {
-    return fetch(`${API_URL}/manual`, {
+    return fetch(`${API_URL}/${endpoint}`, {
       method: "POST",
       body: JSON.stringify({
         command,
@@ -59,8 +59,15 @@ export async function manual(command: string) {
   {
     Sentry.captureException({ jwt, session_id });
     alert("possible error try refreshing the page");
-    // await setup()
   }
+}
+
+export async function manual(command: string) {
+  return sendCommand(command, "manual");
+}
+
+export async function constructor(command: string) {
+  return sendCommand(command, "constructor");
 }
 
 export async function auto() {

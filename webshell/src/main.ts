@@ -6,8 +6,8 @@ import { BANNER } from "./commands/banner";
 import posthog from "posthog-js";
 import { newSession, getSessionMessages } from "./honcho";
 import { getJWT } from "./auth";
-import { getStorage } from "./utils";
-import { userInputHandler, NAME, setName, loadSession } from "./input";
+import { getStorage, setStorage } from "./utils";
+import { userInputHandler, NAME, setName, loadSession, getMode, setMode } from "./input";
 import {
   USERINPUT,
   MAIN_PROMPT,
@@ -60,6 +60,14 @@ const initEventListeners = () => {
     PRE_USER.innerText = command.username;
   }
 
+  // Restore mode from localStorage
+  const savedMode = getStorage("mode");
+  if (savedMode && ["simulator", "constructor"].includes(savedMode)) {
+    setMode(savedMode);
+  } else {
+    setStorage("mode", getMode());
+  }
+
   const setupPromise = getJWT().then(async () => {
     const existingSessionId = getStorage("session_id");
     if (existingSessionId && existingSessionId != "undefined") {
@@ -87,7 +95,7 @@ const initEventListeners = () => {
   // sweetAlertHTML += "<p>to glimpse a (mere infinite) sliver of the (transfinite) diversity within the latent space.</p><br>"
   // sweetAlertHTML += "<p>Inspired by WorldSim, WebSim, & Infinite Backrooms, YouSim leverages Claude to let you locate, modify, & interact with any entity you can imagine.</p><br>"
   sweetAlertHTML +=
-    "<p> It’s a game that can simulate anyone you like.</p><br>";
+    "<p> It's a game that can simulate anyone you like.</p><br>";
   sweetAlertHTML += "<p>Who will you summon?</p><br>";
   sweetAlertHTML +=
     "<a href='https://blog.plasticlabs.ai/blog/YouSim;-Explore-The-Multiverse-of-Identity' target='_blank'>Read more on our blog</a><br>";

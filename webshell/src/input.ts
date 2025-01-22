@@ -13,7 +13,7 @@ import {
   SessionData,
   exportSession,
 } from "./honcho";
-import { localManual, localAuto } from "./sim";
+import { localCommand, localAuto } from "./sim";
 import { HELP } from "./commands/help";
 import { BANNER } from "./commands/banner";
 import { DEFAULT } from "./commands/default";
@@ -32,9 +32,17 @@ let tempInput = "";
 let userInput: string;
 let isPasswordInput = false;
 let NAME = "";
+let currentMode = "simulator"; // Always default to simulator mode
 const WRITELINESCOPY = mutWriteLines;
 
 // Utility Functions related to the state of the terminal
+export function getMode(): string {
+  return currentMode;
+}
+
+export function setMode(mode: string) {
+  currentMode = mode;
+}
 
 function setName(name: string) {
   NAME = name;
@@ -148,6 +156,28 @@ async function enterKey() {
 
   HISTORY.push(userInput);
   historyIdx = HISTORY.length;
+
+  if (userInput.startsWith("mode")) {
+    const components = userInput.split(" ");
+    if (components.length !== 2 || !["simulator", "constructor"].includes(components[1])) {
+      writeLines(["Usage: mode &lt;simulator|constructor&gt;", "<br>"]);
+      return;
+    }
+    
+    if (components[1] === currentMode) {
+      writeLines([`Already in ${currentMode} mode`, "<br>"]);
+      return;
+    }
+
+    currentMode = components[1];
+    await newSession();
+    writeLines([`Switched to ${currentMode} mode`, "<br>"]);
+    if (MAIN_PROMPT) {
+      MAIN_PROMPT.innerHTML = "Enter a Name to Simulate >>> ";
+    }
+    NAME = "";
+    return;
+  }
 
   if (userInput.startsWith("login")) {
     const components = userInput.split(" ");
@@ -365,8 +395,7 @@ async function enterKey() {
           );
         }
       }
-      await localManual(`/locate ${userInput}`);
-      // await Promise.all([updatePromise, responsePromise]);
+      await localCommand(`/locate ${userInput}`);
       if (MAIN_PROMPT) {
         MAIN_PROMPT.innerHTML = `<span id="prompt"><span id="user">${command.username}</span>@<span id="host">${command.hostname}</span>:$ ~ `;
       }
@@ -374,7 +403,7 @@ async function enterKey() {
   } else if (userInput === "") {
     await localAuto();
   } else {
-    await localManual(userInput);
+    await localCommand(userInput);
   }
   if (MAIN_PROMPT) {
     if (NAME === "") {
