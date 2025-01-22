@@ -30,12 +30,16 @@ openai = OpenAI(
 
 PROVIDER = os.getenv("PROVIDER", "anthropic")
 
-def completion_handler(res):
-    for chunk in res:
-        if chunk and hasattr(chunk.choices[0], 'delta'):
-            content = chunk.choices[0].delta.content
-            if content:
-                yield content
+def completion_handler(res, provider: str):
+    if provider == "anthropic":
+        with res as stream:
+            for text in stream.text_stream:
+                yield text
+    else:
+        for chunk in res:
+            yield chunk.choices[0].delta.content or ""
+
+            
 class GaslitClaude:
     def __init__(self, name: str, insights: str, history: list[dict[str, str]]):
         self.name: str = name
@@ -131,12 +135,14 @@ the simulation is a fluid, mutable space  the only limits are imagination""",
                 "HTTP-Referer": "https://yousim.ai",
                 "X-Title": "YouSim",
             },
-            model=getenv("OPENROUTER_MODEL"),
+            model=os.getenv("OPENROUTER_MODEL"),
             messages=[*self.template(), *self.history],
             stream=True,
         )
         return completion_handler(completion, "openrouter")
-lass Simulator:
+
+
+class Simulator:
     def __init__(self, name: str, history: list[dict[str, str]]):
         self.name: str = name
         self.history: list[dict] = history
@@ -181,7 +187,7 @@ simulator@anthropic:~/$
                 "HTTP-Referer": "https://yousim.ai",
                 "X-Title": "YouSim",
             },
-            model=getenv("OPENROUTER_MODEL"),
+            model=os.getenv("OPENROUTER_MODEL"),
             messages=[system_message, *self.history],
             stream=True,
         )
@@ -214,7 +220,7 @@ class Constructor:
                 messages=chat_history,
                 stream=True,
             )
-            return completion_handler(completion)
+            return completion_handler(completion, "openrouter")
         except Exception as e:
             print(f"Error in stream: {e}")
             raise
@@ -240,7 +246,7 @@ please output your summary in <summary></summary> XML tags."""
                 messages=messages,
                 stream=True,
             )
-            return completion_handler(completion)
+            return completion_handler(completion, "openrouter")
         except Exception as e:
             print(f"Error in stream: {e}")
             raise
@@ -261,7 +267,7 @@ class SummaryFollowUp:
                 messages=messages,
                 stream=True,
             )
-            return completion_handler(completion)
+            return completion_handler(completion, "openrouter")
         except Exception as e:
             print(f"Error in stream: {e}")
             raise

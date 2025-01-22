@@ -64,7 +64,7 @@ gaslit_ctx = ContextVar(
     "gaslit_claude", default=GaslitClaude(name="", insights="", history=[])
 )
 simulator_ctx = ContextVar("simulator", default=Simulator(history=[], name=""))
-constructor_ctx = ContextVar("constructor", default=Constructor(history=[], name=""))
+constructor_ctx = ContextVar("constructor", default=Constructor(history=[]))
 
 
 sentry_sdk.init(
