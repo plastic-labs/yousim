@@ -242,6 +242,7 @@ async function enterKey() {
       if (sessions && sessions.length > 0) {
         const sessionList = sessions.map((session, index) => {
           const date = new Date(session.created_at).toLocaleString();
+          // @ts-ignore - It's a dicionary so name is not a known value
           const sessionName = session.metadata?.name ?? "UNKNOWN";
           return `${index}: ${date} - ${sessionName}`;
         });
