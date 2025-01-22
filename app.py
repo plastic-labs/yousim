@@ -16,7 +16,7 @@ from pydantic import BaseModel
 from cryptography.fernet import Fernet
 import base64
 
-from calls import GaslitClaude, Simulator, Constructor
+from calls import GaslitClaude, Simulator, Constructor, Summary
 
 import jwt
 
@@ -65,6 +65,7 @@ gaslit_ctx = ContextVar(
 )
 simulator_ctx = ContextVar("simulator", default=Simulator(history=[], name=""))
 constructor_ctx = ContextVar("constructor", default=Constructor(history=[]))
+summary_ctx = ContextVar("summary", default=Summary(history=[]))
 
 
 sentry_sdk.init(
@@ -188,17 +189,22 @@ def manual_turn(res: ManualRequest, user_id: str):
 # the constructor or the simulator from the context
 def constructor_messages(res: ManualRequest, user_id: str):
     constructor = constructor_ctx.get()
+    summary = summary_ctx.get()
     history_iter = honcho.apps.users.sessions.messages.list(
         app_id=honcho_app.id, session_id=res.session_id, user_id=user_id
     )
     constructor.history = []
+    summary.history = []
     for message in history_iter:
         if message.is_user:
             constructor.history += [{"role": "user", "content": message.content}]
+            summary.history += [{"role": "user", "content": message.content}]
         else:
             constructor.history += [{"role": "assistant", "content": message.content}]
+            summary.history += [{"role": "assistant", "content": message.content}]
     print(f'in constructor_messages, constructor.history: {constructor.history}')
     constructor_ctx.set(constructor)
+
 
 
 def constructor_turn(res: ManualRequest, user_id: str):
@@ -225,7 +231,7 @@ def constructor_turn(res: ManualRequest, user_id: str):
         content=constructor_response,
         is_user=False,
     )
-    summary = constructor_summary_turn(res, user_id)
+    summary = summary_turn(res, user_id)
     print(f'summary: {summary}')
 
 @app.post("/constructor")
@@ -234,10 +240,10 @@ async def constructor(res: ManualRequest, user_id: str = Depends(get_current_use
     return StreamingResponse(constructor_turn(res, user_id))
 
 
-def constructor_summary_turn(res: ManualRequest, user_id: str):
-    constructor = constructor_ctx.get()
-    constructor.history += [{"role": "user", "content": res.command}]  # type: ignore
-    response = constructor.stream_summary()
+def summary_turn(res: ManualRequest, user_id: str):
+    summary = summary_ctx.get()
+    summary.history += [{"role": "user", "content": res.command}]  # type: ignore
+    response = summary.stream()
     summary = ""
     for text in response:
         summary += text
@@ -248,7 +254,7 @@ def constructor_summary_turn(res: ManualRequest, user_id: str):
 @app.post("/constructor/summary")
 async def constructor_summary(res: ManualRequest, user_id: str = Depends(get_current_user)):
     constructor_messages(res, user_id)
-    return StreamingResponse(constructor_summary_turn(res, user_id))
+    return StreamingResponse(summary_turn(res, user_id))
 
 
 @app.post("/manual")
