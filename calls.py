@@ -228,16 +228,17 @@ class Constructor:
 class Summary:
     def __init__(self, history: list[dict[str, str]]):
         self.history: list[dict] = history
-        self.initial_user_message = f"""
-i need help summarizing the following conversation to seed an identity i'm working on. the summary you provide will be used to seed the identity mentioned, so instructions or lore formatting would be great. here's the conversation:
-```
-{self.history}
-```
-please output your summary in <summary></summary> XML tags."""
+        self.initial_user_message = """
+i need help summarizing the following conversation to seed an identity i'm working on.
+the conversation is between a user, who is describing an identity they want to create, and an assistant, who is helping them construct the identity.
+the summary you provide will be used to seed the identity mentioned, so instructions or lore formatting would be great.
+please output your summary in <summary></summary> XML tags.
+"""
 
     def stream(self):
         messages = [
-            {"role": "user", "content": self.initial_user_message}
+            {"role": "user", "content": self.initial_user_message},
+            *self.history,
         ]
         
         try:
