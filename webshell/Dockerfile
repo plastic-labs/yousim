@@ -15,5 +15,5 @@ RUN pnpm install
 COPY . .
 
 # Use development server
-EXPOSE 3000
+EXPOSE 5173
 CMD ["pnpm", "run", "dev", "--host"]
