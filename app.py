@@ -43,6 +43,7 @@ JWT_SECRET = get_env("JWT_SECRET")
 # SECRET_KEY = get_env("SECRET_KEY").encode()
 SECRET_KEY = base64.b64decode(get_env("SECRET_KEY"))
 HONCHO_APP_NAME = get_env("HONCHO_APP_NAME")
+HONCHO_SUMMARY_METAMESSAGE_TYPE = 'constructor_summary'
 
 fernet = Fernet(SECRET_KEY)
 
@@ -203,8 +204,9 @@ def constructor_messages(res: ManualRequest, user_id: str):
             constructor.history += [{"role": "assistant", "content": message.content}]
             summary.history += [{"role": "assistant", "content": message.content}]
     print(f'in constructor_messages, constructor.history: {constructor.history}')
+    print(f'in constructor_messages, summary.history: {summary.history}')
     constructor_ctx.set(constructor)
-
+    summary_ctx.set(summary)
 
 
 def constructor_turn(res: ManualRequest, user_id: str):
@@ -217,7 +219,7 @@ def constructor_turn(res: ManualRequest, user_id: str):
         constructor_response += text
         yield text
 
-    honcho.apps.users.sessions.messages.create(
+    user_honcho_message = honcho.apps.users.sessions.messages.create(
         session_id=res.session_id,
         app_id=honcho_app.id,
         user_id=user_id,
@@ -232,7 +234,16 @@ def constructor_turn(res: ManualRequest, user_id: str):
         is_user=False,
     )
     summary = summary_turn(res, user_id)
-    print(f'summary: {summary}')
+    metamessage = honcho.apps.users.sessions.metamessages.create(
+        session_id=res.session_id,
+        app_id=honcho_app.id,
+        user_id=user_id,
+        content=summary,
+        message_id=user_honcho_message.id,
+        metamessage_type=HONCHO_SUMMARY_METAMESSAGE_TYPE
+    )
+    print(f'metamessage: {metamessage}')
+
 
 @app.post("/constructor")
 async def constructor(res: ManualRequest, user_id: str = Depends(get_current_user)):
@@ -248,7 +259,7 @@ def summary_turn(res: ManualRequest, user_id: str):
     for text in response:
         summary += text
     return summary
-    # TODO: save the summary somewhere
+
 
 
 @app.post("/constructor/summary")
