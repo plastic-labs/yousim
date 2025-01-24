@@ -295,7 +295,9 @@ async def constructor_summary(
 
 @app.post("/reset")
 async def reset(
-    session_id: str | None = None, user_id: str = Depends(get_current_user)
+    session_id: str | None = None,
+    mode: str | None = "simulator",
+    user_id: str = Depends(get_current_user),
 ):
     if session_id:
         honcho.apps.users.sessions.delete(
@@ -304,10 +306,14 @@ async def reset(
     # TODO reset the session
     # gaslit_claude.history = []
     # simulator.history = []
+    metadata = {}
+    if mode == "constructor":
+        metadata["mode"] = "constructor"
     try:
         session = honcho.apps.users.sessions.create(
             app_id=honcho_app.id,
             user_id=user_id,
+            metadata=metadata,
         )
     except TypeError as e:
         if "location_id" in str(e):
@@ -364,12 +370,18 @@ async def get_session_messages(
 
 
 @app.get("/sessions")
-async def get_sessions(user_id: str = Depends(get_current_user)):
+async def get_sessions(
+    mode: str = "simulator", user_id: str = Depends(get_current_user)
+):
     try:
+        filter = {"mode": mode}
+        # if mode == "constructor":
+        # filter["mode"] = "constructor"
         sessions = honcho.apps.users.sessions.list(
             app_id=honcho_app.id,
             user_id=user_id,
             reverse=True,  # Get the most recent sessions first
+            filter=filter,
         )
         return [session for session in sessions]
     except Exception as e:

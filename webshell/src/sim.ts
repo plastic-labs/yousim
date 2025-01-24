@@ -1,12 +1,14 @@
 import {
   manual,
   auto,
+  constructor
 } from './honcho'
 import { scrollToBottom, mutWriteLines } from './input';
-import { sanitize } from "./utils";
+import { getStorage, sanitize } from "./utils";
 
 async function localManual(command: string) {
-  let acc = "SEARCHER CLAUDE:\n";
+  const currentMode = getStorage("mode");
+  let acc = currentMode === "simulator" ? "SIMULATOR CLAUDE:\n" : "CONSTRUCTOR CLAUDE:\n";
   // acc += command.replace(/\n/g, "<br>").replace(/ /g, "&nbsp;");
   acc += command
   if (!mutWriteLines) return;
@@ -30,9 +32,9 @@ async function localManual(command: string) {
   mutWriteLines.parentNode!.insertBefore(p, mutWriteLines);
   scrollToBottom();
 
-  const reader: ReadableStreamDefaultReader<string> | void = await manual(
-    command
-  );
+  console.log(currentMode)
+
+  const reader: ReadableStreamDefaultReader<string> | void = currentMode === "simulator" ? await manual(command) : await constructor(command);
   let more = true;
   if (reader) {
     while (more) {
@@ -56,7 +58,9 @@ async function localManual(command: string) {
 }
 
 async function localAuto() {
-  let preamble = "SEARCHER CLAUDE:\n";
+  const currentMode = getStorage("mode");
+  let preamble = currentMode === "simulator" ? "SIMULATOR CLAUDE:\n" : "CONSTRUCTOR CLAUDE:\n";
+  // let preamble = "SEARCHER CLAUDE:\n";
   let acc = "";
   if (!mutWriteLines) return;
   let p = document.createElement("p");

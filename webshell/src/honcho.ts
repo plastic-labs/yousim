@@ -5,8 +5,9 @@ import { getJWT } from "./auth";
 
 export async function newSession() {
   const jwt = await getJWT();
+  const mode = getStorage("mode");
   try {
-    const response = await fetch(`${API_URL}/reset`, {
+    const response = await fetch(`${API_URL}/reset?mode=${mode}`, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${jwt}`,
@@ -29,11 +30,11 @@ export function checkSession() {
   console.log(session_id)
 }
 
-export async function manual(command: string) {
+export async function sendCommand(command: string, endpoint: string) {
   const jwt = await getJWT();
   const session_id = getStorage("session_id");
   if (jwt && session_id) {
-    return fetch(`${API_URL}/manual`, {
+    return fetch(`${API_URL}/${endpoint}`, {
       method: "POST",
       body: JSON.stringify({
         command,
@@ -55,17 +56,25 @@ export async function manual(command: string) {
         console.error(err);
         alert("Something went wrong - we recommend refreshing the page");
       });
-  }
-  {
+  } else {
     Sentry.captureException({ jwt, session_id });
     alert("possible error try refreshing the page");
-    // await setup()
   }
 }
+
+export async function manual(command: string) {
+  return sendCommand(command, "manual");
+}
+
+export async function constructor(command: string) {
+  return sendCommand(command, "constructor");
+}
+
 
 export async function auto() {
   const jwt = await getJWT();
   const session_id = getStorage("session_id");
+  // TODO implement auto for constructor
   if (jwt && session_id) {
     return fetch(`${API_URL}/auto`, {
       method: "POST",
@@ -156,8 +165,10 @@ interface Metadata {
 export async function getSessions() {
   const jwt = await getJWT();
 
+  const mode = getStorage("mode");
+
   if (jwt) {
-    const url = new URL(`${API_URL}/sessions`);
+    const url = new URL(`${API_URL}/sessions?mode=${mode}`);
 
     try {
       const response = await fetch(url, {
@@ -187,12 +198,18 @@ export async function getSessions() {
 export async function updateSessionMetadata(metadata: Record<string, any>) {
   const jwt = await getJWT();
   const sessionId = getStorage("session_id");
+  const currentMode = getStorage("mode");
 
   if (!sessionId) {
     console.error("No session ID found in local storage");
     alert("No active session found. Please start a new session.");
     return;
   }
+
+  const updatedMetadata = {
+    ...metadata,
+    mode: currentMode,
+  };
 
   if (jwt) {
     const url = new URL(`${API_URL}/sessions/${sessionId}/metadata`);
@@ -204,7 +221,7 @@ export async function updateSessionMetadata(metadata: Record<string, any>) {
           Authorization: `Bearer ${jwt}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(metadata),
+        body: JSON.stringify(updatedMetadata),
       });
 
       if (!response.ok) {

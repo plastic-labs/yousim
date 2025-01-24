@@ -6,7 +6,7 @@ import { BANNER } from "./commands/banner";
 import posthog from "posthog-js";
 import { newSession, getSessionMessages } from "./honcho";
 import { getJWT } from "./auth";
-import { getStorage } from "./utils";
+import { getStorage, setStorage } from "./utils";
 import { userInputHandler, NAME, setName, loadSession } from "./input";
 import {
   USERINPUT,
@@ -62,11 +62,17 @@ const initEventListeners = () => {
 
   const setupPromise = getJWT().then(async () => {
     const existingSessionId = getStorage("session_id");
+    const currentMode = getStorage("mode");
+    if (!["simulator", "constructor"].includes(currentMode)) {
+      setStorage("mode", "simulator");
+    }
     if (existingSessionId && existingSessionId != "undefined") {
       const sessionMessages = await getSessionMessages(existingSessionId);
       if (sessionMessages) {
-        if (sessionMessages.messages.length > 0)
-          setName(sessionMessages.messages[0].content.slice(8));
+        if (sessionMessages.messages.length > 0) {
+          const name = currentMode === "simulator" ? sessionMessages.messages[0].content.slice(8) : sessionMessages.messages[0].content;
+          setName(name);
+        }
 
         return () => loadSession(sessionMessages);
       }
@@ -116,6 +122,7 @@ const initEventListeners = () => {
       heightAuto: false,
     });
     await Promise.all([welcomePromises, swalPromise]);
+    console.log(NAME)
     if (NAME === "") {
       if (MAIN_PROMPT) {
         MAIN_PROMPT.innerHTML = "Enter a Name to Simulate >>> ";

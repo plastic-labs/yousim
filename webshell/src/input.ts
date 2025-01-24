@@ -3,7 +3,7 @@ import posthog from "posthog-js";
 import { writeLines } from "./display";
 import auth, { getJWT } from "./auth";
 import { login, verifyOTP } from "./commands/login";
-import { setStorage, sanitize } from "./utils";
+import { getStorage, setStorage, sanitize } from "./utils";
 import {
   newSession,
   getSessionMessages,
@@ -130,6 +130,7 @@ function arrowKeys(e: string) {
 }
 
 async function enterKey() {
+  const currentMode = getStorage("mode");
   // console.table({
   //   NAME,
   //   username: command.username,
@@ -192,6 +193,36 @@ async function enterKey() {
     writeLines(["You have been logged out.", "<br>"]);
     setStorage("session_id", "");
     window.location.reload();
+    return;
+  }
+
+  if (userInput.startsWith("mode")) {
+    const components = userInput.split(" ");
+    if (components.length !== 2 || !["simulator", "constructor"].includes(components[1])) {
+      writeLines([`Current Mode: ${currentMode}`, "<br>"]);
+    } else if (components[1] === currentMode) {
+      writeLines([`Already in ${currentMode} mode`, "<br>"]);
+
+    } else {
+      setStorage("mode", components[1]);
+      const sessions = await getSessions();
+      if (sessions && sessions.length > 0) {
+        setStorage("session_id", sessions[0].id);
+      }
+
+      window.location.reload()
+    }
+    // currentMode = components[1];
+    // await newSession();
+    // writeLines([`Switched to ${currentMode} mode`, "<br>"]);
+    // if (MAIN_PROMPT) {
+    //   MAIN_PROMPT.innerHTML = "Enter a Name to Simulate >>> ";
+    // }
+    // NAME = "";
+    USERINPUT.value = resetInput;
+    userInput = resetInput;
+    const div = document.createElement("div");
+    div.innerHTML = `<span id="prompt">${PROMPT.innerHTML}</span> ${newUserInput}`;
     return;
   }
 
@@ -274,7 +305,8 @@ async function enterKey() {
       if (sessionData) {
         setStorage("session_id", session.id);
         if (sessionData.messages.length > 0) {
-          setName(sessionData.messages[0].content.slice(8));
+          const name = currentMode === "constructor" ? sessionData.messages[0].content : sessionData.messages[0].content.slice(8);
+          setName(name);
         } else {
           setName("");
         }
@@ -365,7 +397,8 @@ async function enterKey() {
           );
         }
       }
-      await localManual(`/locate ${userInput}`);
+      const command = currentMode === "simulator" ? `/locate ${userInput}` : userInput;
+      await localManual(command);
       // await Promise.all([updatePromise, responsePromise]);
       if (MAIN_PROMPT) {
         MAIN_PROMPT.innerHTML = `<span id="prompt"><span id="user">${command.username}</span>@<span id="host">${command.hostname}</span>:$ ~ `;
