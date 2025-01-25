@@ -5,8 +5,9 @@ import { getJWT } from "./auth";
 
 export async function newSession() {
   const jwt = await getJWT();
+  const mode = getStorage("mode");
   try {
-    const response = await fetch(`${API_URL}/reset`, {
+    const response = await fetch(`${API_URL}/reset?mode=${mode}`, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${jwt}`,
@@ -29,11 +30,11 @@ export function checkSession() {
   console.log(session_id)
 }
 
-export async function manual(command: string) {
+export async function sendCommand(command: string, endpoint: string) {
   const jwt = await getJWT();
   const session_id = getStorage("session_id");
   if (jwt && session_id) {
-    return fetch(`${API_URL}/manual`, {
+    return fetch(`${API_URL}/${endpoint}`, {
       method: "POST",
       body: JSON.stringify({
         command,
@@ -55,17 +56,24 @@ export async function manual(command: string) {
         console.error(err);
         alert("Something went wrong - we recommend refreshing the page");
       });
-  }
-  {
+  } else {
     Sentry.captureException({ jwt, session_id });
     alert("possible error try refreshing the page");
-    // await setup()
   }
+}
+
+export async function manual(command: string) {
+  return sendCommand(command, "manual");
+}
+
+export async function constructor(command: string) {
+  return sendCommand(command, "constructor");
 }
 
 export async function auto() {
   const jwt = await getJWT();
   const session_id = getStorage("session_id");
+  // TODO implement auto for constructor
   if (jwt && session_id) {
     return fetch(`${API_URL}/auto`, {
       method: "POST",
@@ -156,8 +164,10 @@ interface Metadata {
 export async function getSessions() {
   const jwt = await getJWT();
 
+  const mode = getStorage("mode");
+
   if (jwt) {
-    const url = new URL(`${API_URL}/sessions`);
+    const url = new URL(`${API_URL}/sessions?mode=${mode}`);
 
     try {
       const response = await fetch(url, {
@@ -187,12 +197,18 @@ export async function getSessions() {
 export async function updateSessionMetadata(metadata: Record<string, any>) {
   const jwt = await getJWT();
   const sessionId = getStorage("session_id");
+  const currentMode = getStorage("mode");
 
   if (!sessionId) {
     console.error("No session ID found in local storage");
     alert("No active session found. Please start a new session.");
     return;
   }
+
+  const updatedMetadata = {
+    ...metadata,
+    mode: currentMode,
+  };
 
   if (jwt) {
     const url = new URL(`${API_URL}/sessions/${sessionId}/metadata`);
@@ -204,7 +220,7 @@ export async function updateSessionMetadata(metadata: Record<string, any>) {
           Authorization: `Bearer ${jwt}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(metadata),
+        body: JSON.stringify(updatedMetadata),
       });
 
       if (!response.ok) {
@@ -281,6 +297,59 @@ export async function getSharedMessages(code: string) {
   }
 }
 
+export async function getSummary() {
+  const jwt = await getJWT();
+  const url = new URL(`${API_URL}/summary`);
+  const sessionId = getStorage("session_id");
+  if (!sessionId) {
+    console.error("No session ID found in local storage");
+    alert("No active session found. Please start a new session.");
+    return;
+  } else {
+    url.searchParams.append("session_id", sessionId);
+  }
+  if (jwt) {
+    // const url = new URL(`${API_URL}/summary`);
+
+    try {
+      const response = await fetch(url, {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${jwt}`,
+          "Content-Type": "application/json",
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+
+      return data;
+    } catch (err) {
+      Sentry.captureException(err);
+      console.error("Failed to fetch summaries:", err);
+      alert("Failed to fetch summaries. Please try again.");
+    }
+  }
+}
+
+export async function getIdentity(messageId: string, metamessageId: string) {
+  const jwt = await getJWT();
+  const sessionId = getStorage("session_id");
+  const url = new URL(`${API_URL}/identity?session_id=${sessionId}&message_id=${messageId}&metamessage_id=${metamessageId}`);
+  const response = await fetch(url, {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${jwt}`,
+      "Content-Type": "application/json",
+    },
+  });
+  const data = await response.json();
+  return data;
+}
+
 export async function exportSession() {
   const jwt = await getJWT();
   const sessionId = getStorage("session_id");
@@ -321,5 +390,80 @@ export async function exportSession() {
       alert("Failed to export session. Please try again.");
       return false;
     }
+  }
+}
+
+export async function chat(sessionId: string, userInput: string) {
+  const jwt = await getJWT();
+  const originalSessionId = getStorage("chat_original_session_id");
+  const summaryId = getStorage("chat_summary_id");
+  const summaryMessageId = getStorage("chat_summary_message_id");
+  const identityStr = getStorage("identity");
+  const prompt = identityStr ? JSON.parse(identityStr) : null;
+  console.log("Chat request parameters:", {
+    sessionId,
+    originalSessionId,
+    summaryId,
+    summaryMessageId,
+    userInput,
+    prompt
+  });
+
+  if (!originalSessionId || !summaryId || !summaryMessageId) {
+    console.error("Missing required chat parameters:", {
+      originalSessionId,
+      summaryId,
+      summaryMessageId
+    });
+    throw new Error("Missing required chat parameters");
+  }
+
+  if (jwt && sessionId) {
+    try {
+      const response = await fetch(`${API_URL}/chat`, {
+        method: "POST",
+        body: JSON.stringify({
+          session_id: sessionId,
+          command: userInput,
+          original_session_id: originalSessionId,
+          summary_id: summaryId,
+          summary_message_id: summaryMessageId,
+          prompt: prompt
+        }),
+        headers: {
+
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${jwt}`,
+        },
+      });
+
+      console.log("Chat API response status:", response.status);
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error("Chat API error:", {
+          status: response.status,
+          statusText: response.statusText,
+          body: errorText
+        });
+        throw new Error(`HTTP error! status: ${response.status} - ${errorText}`);
+      }
+
+      if (!response.body) {
+        throw new Error("No response body received from chat API");
+      }
+
+      const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
+      return reader;
+    } catch (err) {
+      console.error("Chat API call failed:", err);
+      Sentry.captureException(err);
+      throw err;
+    }
+  } else {
+    const error = new Error("Missing JWT or session ID");
+    console.error("Chat prerequisites missing:", { jwt: !!jwt, sessionId });
+    Sentry.captureException({ jwt, sessionId });
+    throw error;
   }
 }
