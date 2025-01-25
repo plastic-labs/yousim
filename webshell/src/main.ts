@@ -62,16 +62,20 @@ const initEventListeners = () => {
 
   const setupPromise = getJWT().then(async () => {
     const existingSessionId = getStorage("session_id");
-    const currentMode = getStorage("mode");
-    if (!["simulator", "constructor"].includes(currentMode)) {
+    const currentMode = getStorage("mode") || "simulator";
+    if (!["simulator", "constructor", "chat"].includes(currentMode)) {
       setStorage("mode", "simulator");
     }
     if (existingSessionId && existingSessionId != "undefined") {
       const sessionMessages = await getSessionMessages(existingSessionId);
       if (sessionMessages) {
         if (sessionMessages.messages.length > 0) {
-          const name = currentMode === "simulator" ? sessionMessages.messages[0].content.slice(8) : sessionMessages.messages[0].content;
-          setName(name);
+          if (currentMode === "chat") {
+            setName("Chat Mode");
+          } else {
+            const name = currentMode === "simulator" ? sessionMessages.messages[0].content.slice(8) : sessionMessages.messages[0].content;
+            setName(name);
+          }
         }
 
         return () => loadSession(sessionMessages);
@@ -93,7 +97,7 @@ const initEventListeners = () => {
   // sweetAlertHTML += "<p>to glimpse a (mere infinite) sliver of the (transfinite) diversity within the latent space.</p><br>"
   // sweetAlertHTML += "<p>Inspired by WorldSim, WebSim, & Infinite Backrooms, YouSim leverages Claude to let you locate, modify, & interact with any entity you can imagine.</p><br>"
   sweetAlertHTML +=
-    "<p> It’s a game that can simulate anyone you like.</p><br>";
+    "<p> It's a game that can simulate anyone you like.</p><br>";
   sweetAlertHTML += "<p>Who will you summon?</p><br>";
   sweetAlertHTML +=
     "<a href='https://blog.plasticlabs.ai/blog/YouSim;-Explore-The-Multiverse-of-Identity' target='_blank'>Read more on our blog</a><br>";
@@ -123,7 +127,12 @@ const initEventListeners = () => {
     });
     await Promise.all([welcomePromises, swalPromise]);
     console.log(NAME)
-    if (NAME === "") {
+    const currentMode = getStorage("mode") || "simulator";
+    if (currentMode === "chat") {
+      if (MAIN_PROMPT) {
+        MAIN_PROMPT.innerHTML = `<span id="prompt"><span id="user">${command.username}</span>@<span id="host">${command.hostname}</span>:$ ~ `;
+      }
+    } else if (NAME === "") {
       if (MAIN_PROMPT) {
         MAIN_PROMPT.innerHTML = "Enter a Name to Simulate >>> ";
       }

@@ -70,7 +70,6 @@ export async function constructor(command: string) {
   return sendCommand(command, "constructor");
 }
 
-
 export async function auto() {
   const jwt = await getJWT();
   const session_id = getStorage("session_id");
@@ -336,6 +335,21 @@ export async function getSummary() {
   }
 }
 
+export async function getIdentity(messageId: string, metamessageId: string) {
+  const jwt = await getJWT();
+  const sessionId = getStorage("session_id");
+  const url = new URL(`${API_URL}/identity?session_id=${sessionId}&message_id=${messageId}&metamessage_id=${metamessageId}`);
+  const response = await fetch(url, {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${jwt}`,
+      "Content-Type": "application/json",
+    },
+  });
+  const data = await response.json();
+  return data;
+}
+
 export async function exportSession() {
   const jwt = await getJWT();
   const sessionId = getStorage("session_id");
@@ -376,5 +390,80 @@ export async function exportSession() {
       alert("Failed to export session. Please try again.");
       return false;
     }
+  }
+}
+
+export async function chat(sessionId: string, userInput: string) {
+  const jwt = await getJWT();
+  const originalSessionId = getStorage("chat_original_session_id");
+  const summaryId = getStorage("chat_summary_id");
+  const summaryMessageId = getStorage("chat_summary_message_id");
+  const identityStr = getStorage("identity");
+  const prompt = identityStr ? JSON.parse(identityStr) : null;
+  console.log("Chat request parameters:", {
+    sessionId,
+    originalSessionId,
+    summaryId,
+    summaryMessageId,
+    userInput,
+    prompt
+  });
+
+  if (!originalSessionId || !summaryId || !summaryMessageId) {
+    console.error("Missing required chat parameters:", {
+      originalSessionId,
+      summaryId,
+      summaryMessageId
+    });
+    throw new Error("Missing required chat parameters");
+  }
+
+  if (jwt && sessionId) {
+    try {
+      const response = await fetch(`${API_URL}/chat`, {
+        method: "POST",
+        body: JSON.stringify({
+          session_id: sessionId,
+          command: userInput,
+          original_session_id: originalSessionId,
+          summary_id: summaryId,
+          summary_message_id: summaryMessageId,
+          prompt: prompt
+        }),
+        headers: {
+
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${jwt}`,
+        },
+      });
+
+      console.log("Chat API response status:", response.status);
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error("Chat API error:", {
+          status: response.status,
+          statusText: response.statusText,
+          body: errorText
+        });
+        throw new Error(`HTTP error! status: ${response.status} - ${errorText}`);
+      }
+
+      if (!response.body) {
+        throw new Error("No response body received from chat API");
+      }
+
+      const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
+      return reader;
+    } catch (err) {
+      console.error("Chat API call failed:", err);
+      Sentry.captureException(err);
+      throw err;
+    }
+  } else {
+    const error = new Error("Missing JWT or session ID");
+    console.error("Chat prerequisites missing:", { jwt: !!jwt, sessionId });
+    Sentry.captureException({ jwt, sessionId });
+    throw error;
   }
 }

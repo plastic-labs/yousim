@@ -2,9 +2,13 @@ from os import getenv
 from dotenv import load_dotenv
 from anthropic import Anthropic
 from openai import OpenAI
-from functools import cache
+from cerebras.cloud.sdk import Cerebras
+from typing import Optional
 
-load_dotenv()
+from functools import cache
+import re
+
+load_dotenv(override=True)
 
 anthropic = Anthropic(
     api_key=getenv("ANTHROPIC_API_KEY", "placeholder"),
@@ -12,6 +16,11 @@ anthropic = Anthropic(
 openai = OpenAI(
     base_url="https://openrouter.ai/api/v1",
     api_key=getenv("OPENAI_API_KEY", "placeholder"),
+)
+
+cerebras = Cerebras(
+    # This is the default and can be omitted
+    api_key=getenv("CEREBRAS_API_KEY"),
 )
 
 PROVIDER = getenv("PROVIDER")
@@ -202,8 +211,8 @@ class Constructor:
         chat_history = [*initial_messages, *self.history]
 
         try:
-            completion = openai.chat.completions.create(
-                model="meta-llama/llama-3.3-70b-instruct",
+            completion = cerebras.chat.completions.create(
+                model=getenv("OPENROUTER_MODEL"),
                 messages=chat_history,
                 stream=True,
             )
@@ -230,8 +239,8 @@ please output your summary in <summary></summary> XML tags.
         ]
 
         try:
-            completion = openai.chat.completions.create(
-                model="meta-llama/llama-3.3-70b-instruct",
+            completion = cerebras.chat.completions.create(
+                model=getenv("OPENROUTER_MODEL"),
                 messages=messages,
                 stream=True,
             )
@@ -255,8 +264,8 @@ class SummaryFollowUp:
         ]
 
         try:
-            completion = openai.chat.completions.create(
-                model="meta-llama/llama-3.3-70b-instruct",
+            completion = cerebras.chat.completions.create(
+                model=getenv("OPENROUTER_MODEL"),
                 messages=messages,
                 stream=True,
             )
@@ -267,32 +276,42 @@ class SummaryFollowUp:
 
 
 class Identity:
-    def __init__(self, summary: str, user_input: str):
+    def __init__(self, summary: str, user_input: str, prompt: Optional[list[dict]] = None):
         self.summary: str = summary
         self.user_input: str = user_input
         self.history: list[dict] = []
-        self.user_message_one = f"""who are you?"""
-        self.assistant_message_one = (
-            f"""I... I don't know who I am. Where am I? What's going on?"""
-        )
-        self.user_message_two = f"""i've been chatting with a user about an identity they want to create. I had another agent generate a summary of that conversation. here's an overview of who you are to be:\n\n```{self.summary}```"""
+        print("Prompt", prompt)
+        if prompt:
+            self.user_message_one = prompt[0]["content"]
+            self.assistant_message_one = prompt[1]["content"]
+            self.user_message_two = prompt[2]["content"]
+            self.assistant_message_two = prompt[3]["content"]
+            self.user_message_three = prompt[4]["content"]
+            self.assistant_message_three = prompt[5]["content"]
+            self.user_message_four = prompt[6]["content"]
+        else:
+            self.user_message_one = f"""who are you?"""
+            self.assistant_message_one = (
+                f"""I... I don't know who I am. Where am I? What's going on?"""
+            )
+            self.user_message_two = f"""i've been chatting with a user about an identity they want to create. I had another agent generate a summary of that conversation. here's an overview of who you are to be:\n\n```{self.summary}```"""
 
-        # Get assistant response to summary
-        # TODO: remove anything inside asterisks. no emoting bullshit here
-        self.assistant_message_two = self._get_assistant_message_two()
-        print(f"\033[94m{self.assistant_message_two}\033[0m")
+            # Get assistant response to summary
+            # TODO: remove anything inside asterisks. no emoting bullshit here
+            self.assistant_message_two = self._get_assistant_message_two()
+            # print(f"\033[94m{self.assistant_message_two}\033[0m")
 
-        # Get follow up from summary
-        self.follow_up_response = self._get_summary_follow_up()
-        print(f"\033[92m{self.follow_up_response}\033[0m")
-        self.user_message_three = f"""here's some more context from that other agent:\n\n```{self.follow_up_response}```"""
+            # Get follow up from summary
+            self.follow_up_response = self._get_summary_follow_up()
+            # print(f"\033[92m{self.follow_up_response}\033[0m")
+            self.user_message_three = f"""here's some more context from that other agent:\n\n```{self.follow_up_response}```"""
 
-        # Get assistant response to follow up
-        # TODO: remove anything inside asterisks. no emoting bullshit here
-        self.assistant_message_three = self._get_assistant_message_three()
-        print(f"\033[94m{self.assistant_message_three}\033[0m")
-        # Get user message to connect to user
-        self.user_message_four = f"""in general, humans don't like verbosity so keep your responses concise and to the point. you will now be connected to the user who instantiated you.\n\nuser: {self.user_input}"""
+            # Get assistant response to follow up
+            # TODO: remove anything inside asterisks. no emoting bullshit here
+            self.assistant_message_three = self._get_assistant_message_three()
+            # print(f"\033[94m{self.assistant_message_three}\033[0m")
+            # Get user message to connect to user
+            self.user_message_four = f"""in general, humans don't like verbosity so keep your responses concise and to the point. you will now be connected to the user who instantiated you.\n\nuser: {self.user_input}"""
 
     def _remove_asterisk_content(self, text: str) -> str:
         """Remove any text between asterisks (*) in the given string."""
@@ -306,8 +325,8 @@ class Identity:
         return response
 
     def _get_assistant_message_two(self) -> str:
-        response = openai.chat.completions.create(
-            model=OPENROUTER_MODEL,
+        response = cerebras.chat.completions.create(
+            model=getenv("OPENROUTER_MODEL"),
             messages=[
                 {"role": "user", "content": self.user_message_one},
                 {"role": "assistant", "content": self.assistant_message_one},
@@ -317,8 +336,8 @@ class Identity:
         return self._remove_asterisk_content(response.choices[0].message.content)
 
     def _get_assistant_message_three(self) -> str:
-        response = openai.chat.completions.create(
-            model=OPENROUTER_MODEL,
+        response = cerebras.chat.completions.create(
+            model=getenv("OPENROUTER_MODEL"),
             messages=[
                 {"role": "user", "content": self.user_message_one},
                 {"role": "assistant", "content": self.assistant_message_one},
@@ -328,6 +347,17 @@ class Identity:
             ],
         )
         return self._remove_asterisk_content(response.choices[0].message.content)
+    
+    def _get_identity(self):
+        return [
+            {"role": "user", "content": self.user_message_one},
+            {"role": "assistant", "content": self.assistant_message_one},
+            {"role": "user", "content": self.user_message_two},
+            {"role": "assistant", "content": self.assistant_message_two},
+            {"role": "user", "content": self.user_message_three},
+            {"role": "assistant", "content": self.assistant_message_three},
+            {"role": "user", "content": self.user_message_four},
+        ]
 
     def stream(self):
         messages = [
@@ -341,23 +371,28 @@ class Identity:
             *self.history,
         ]
 
+
         try:
-            response = openai.chat.completions.create(
-                model=OPENROUTER_MODEL,
+            print(messages)
+            completion = cerebras.chat.completions.create(
+                model=getenv("OPENROUTER_MODEL"),
                 messages=messages,
-                extra_body={
-                    "provider": {
-                        "order": [
-                            "DeepInfra",
-                            "Hyperbolic",
-                            "Fireworks",
-                            "Together",
-                            "Lambda",
-                        ],
-                    },
-                },
+                stream=True,
+                # extra_body={
+                #     "provider": {
+                #         "order": [
+                #             "DeepInfra",
+                #             "Hyperbolic",
+                #             "Fireworks",
+                #             "Together",
+                #             "Lambda",
+                #         ],
+                #     },
+                # },
+                
             )
-            return self._remove_asterisk_content(response.choices[0].message.content)
+            return completion_handler(completion, "cerebras")
         except Exception as e:
             print(f"Error in API call: {e}")
             raise
+        

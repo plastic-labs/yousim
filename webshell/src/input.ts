@@ -12,7 +12,9 @@ import {
   getShareCode,
   SessionData,
   exportSession,
-  getSummary
+  getSummary,
+  chat,
+  getIdentity
 } from "./honcho";
 import { localManual, localAuto } from "./sim";
 import { HELP } from "./commands/help";
@@ -26,6 +28,19 @@ import {
   PROMPT,
   MAIN_PROMPT,
 } from "./constants";
+
+interface Summary {
+  id: string;
+  content: string;
+  created_at: string;
+}
+
+interface CommandConfig {
+  username: string;
+  hostname: string;
+}
+
+const commandConfig = command as CommandConfig;
 
 let mutWriteLines = document.getElementById("write-lines");
 let historyIdx = 0;
@@ -320,7 +335,7 @@ async function enterKey() {
       if (NAME === "") {
         MAIN_PROMPT.innerHTML = "Enter a Name to Simulate >>> ";
       } else {
-        MAIN_PROMPT.innerHTML = `<span id="prompt"><span id="user">${command.username}</span>@<span id="host">${command.hostname}</span>:$ ~ `;
+        MAIN_PROMPT.innerHTML = `<span id="prompt"><span id="user">${commandConfig.username}</span>@<span id="host">${commandConfig.hostname}</span>:$ ~ `;
       }
     }
 
@@ -358,9 +373,8 @@ async function enterKey() {
       if (components.length === 1) {
         const summaries = await getSummary()
         if (summaries && summaries.length > 0) {
-          const summaryList = summaries.map((session, index) => {
+          const summaryList = summaries.map((session: Summary, index: number) => {
             const date = new Date(session.created_at).toLocaleString();
-            // @ts-ignore - It's a dicionary so name is not a known value
             const summaryName = `v${index}`;
             return `${index}: ${date} - ${summaryName}`;
           });
@@ -378,7 +392,14 @@ async function enterKey() {
         }
 
         const summary = summaries[summaryIdx];
-        writeLines(["<br>", sanitize(summary["content"]), "<br>"]);
+        const identity = await getIdentity(summary.message_id, summary.id);
+        let acc = ""
+        setStorage("identity", JSON.stringify(identity))
+        identity.forEach((message) => {
+          acc += `${message.role}: ${message.content}\n`
+        })
+        console.log(identity)
+        writeLines(["<br>", sanitize(acc), "<br>"]);
       }
 
       // console.trace(data);
@@ -402,49 +423,148 @@ async function enterKey() {
       if (components.length === 1) {
         const summaries = await getSummary()
         if (summaries && summaries.length > 0) {
-          const summaryList = summaries.map((session, index) => {
+          const summaryList = summaries.map((session: Summary, index: number) => {
             const date = new Date(session.created_at).toLocaleString();
-            // @ts-ignore - It's a dicionary so name is not a known value
             const summaryName = `v${index}`;
             return `${index}: ${date} - ${summaryName}`;
           });
-          writeLines(["Available sessions:", ...summaryList, "<br>"]);
+          writeLines([
+            "Available summaries to chat with:",
+            ...summaryList,
+            "<br>",
+            "Use 'chat <index>' to start a new chat session with a summary",
+            "Use 'sessions' to view existing chat sessions",
+            "<br>"
+          ]);
         } else {
-          writeLines(["No sessions found.", "<br>"]);
+          writeLines(["No summaries found.", "<br>"]);
         }
         USERINPUT.value = resetInput;
         return
       } else if (components.length === 2) {
-        USERINPUT.value = resetInput;
+        const summaryIdx = parseInt(components[1]);
+        const summaries = await getSummary();
+
+        if (!summaries || summaries.length === 0) {
+          writeLines(["No summaries found.", "<br>"]);
+          return;
+        }
+
+        const summary = summaries[summaryIdx];
+        if (!summary) {
+          writeLines(["Summary not found.", "<br>"]);
+          return;
+        }
+        const currentSessionId = getStorage("session_id");
+
+        if (!currentSessionId) {
+          writeLines(["No active session. Switching back to constructor mode.", "<br>"]);
+          setStorage("mode", "constructor");
+          USERINPUT.value = resetInput;
+            return;
+        }
+
+        setStorage("mode", "chat");
+        
+        // Create a new chat session
+        await newSession();
+        // Store the summary ID and set mode to chat
+        setStorage("chat_original_session_id", currentSessionId);
+        setStorage("chat_summary_id", summary.id);
+        setStorage("chat_summary_message_id", summary.message_id);
+        await updateSessionMetadata({ 
+          summary_id: summary.id,
+        });
+
         writeLines([
           "<br>",
-          "Chat not available for simulator mode",
+          "Started new chat session. Type your messages to chat.",
+          "Use 'mode constructor' to leave chat mode.",
+          "Use 'sessions' to switch between chat sessions.",
           "<br>",
         ]);
+        USERINPUT.value = resetInput;
         return;
-        // TODO implement the methodology for the chat
-        // const summaryIdx = parseInt(components[1]);
-        // const summaries = await getSummary();
-        //
-        // if (!summaries || summaries.length === 0) {
-        //   writeLines(["No sessions found.", "<br>"]);
-        //   return;
-        // }
-        //
-        // const summary = summaries[summaryIdx];
-        // writeLines(["<br>", sanitize(summary["content"]), "<br>"]);
       }
     } else {
       USERINPUT.value = resetInput;
       writeLines([
         "<br>",
-        "Chat not available for simulator mode",
+        "Chat command only available in constructor mode",
         "<br>",
       ]);
       return;
     }
   }
 
+  // Handle chat mode interactions
+  if (currentMode === "chat" && !userInput.startsWith("mode")) {
+    // Get the stored summary ID from session metadata
+    const sessionId = getStorage("session_id");
+    if (!sessionId) {
+      writeLines([
+        "<br>",
+        "Error: No active session. Switching back to constructor mode.",
+        "<br>",
+      ]);
+      setStorage("mode", "constructor");
+      USERINPUT.value = resetInput;
+      return;
+    }
+
+    // Create a new div for user message
+    const userDiv = document.createElement("div");
+    userDiv.innerHTML = `<span class="searcher">YOU: ${sanitize(userInput)}</span>`;
+    mutWriteLines?.parentNode!.insertBefore(userDiv, mutWriteLines);
+
+    // Create a new div for assistant response
+    const assistantDiv = document.createElement("div");
+    assistantDiv.innerHTML = `<span class="simulator">IDENTITY: </span>`;
+    mutWriteLines?.parentNode!.insertBefore(assistantDiv, mutWriteLines);
+
+    try {
+      // Use the chat function which uses sendCommand internally
+      console.log("Sending chat request with sessionId:", sessionId, "userInput:", userInput);
+      const reader = await chat(sessionId, userInput);
+      console.log("Got reader response:", reader);
+      
+      if (reader) {
+        let response = "";
+        let more = true;
+        while (more) {
+          try {
+            const { done, value } = await reader.read();
+            console.log("Stream read result:", { done, value });
+            
+            if (done) {
+              console.log("Stream complete");
+              more = false;
+              continue;
+            }
+            
+            if (value) {
+              console.log("Received value:", value);
+              response += value;
+              assistantDiv.innerHTML = `<span class="simulator">IDENTITY: ${sanitize(response)}</span>`;
+              scrollToBottom();
+            }
+          } catch (readError) {
+            console.error("Error reading from stream:", readError);
+            more = false;
+          }
+        }
+      } else {
+        console.error("No reader returned from chat function");
+        assistantDiv.innerHTML = `<span class="simulator">IDENTITY: Error: No response received</span>`;
+      }
+    } catch (error) {
+      console.error("Error in chat handling:", error);
+      assistantDiv.innerHTML = `<span class="simulator">IDENTITY: Error: ${error instanceof Error ? error.message : 'Unknown error occurred'}</span>`;
+    }
+
+    USERINPUT.value = resetInput;
+    return;
+  }
 
   if (userInput.startsWith("export")) {
     USERINPUT.value = resetInput;
@@ -497,7 +617,7 @@ async function enterKey() {
       await localManual(command);
       // await Promise.all([updatePromise, responsePromise]);
       if (MAIN_PROMPT) {
-        MAIN_PROMPT.innerHTML = `<span id="prompt"><span id="user">${command.username}</span>@<span id="host">${command.hostname}</span>:$ ~ `;
+        MAIN_PROMPT.innerHTML = `<span id="prompt"><span id="user">${commandConfig.username}</span>@<span id="host">${commandConfig.hostname}</span>:$ ~ `;
       }
     }
   } else if (userInput === "") {
@@ -509,7 +629,7 @@ async function enterKey() {
     if (NAME === "") {
       MAIN_PROMPT.innerHTML = "Enter a Name to Simulate >>> ";
     } else {
-      MAIN_PROMPT.innerHTML = `<span id="prompt"><span id="user">${command.username}</span>@<span id="host">${command.hostname}</span>:$ ~ `;
+      MAIN_PROMPT.innerHTML = `<span id="prompt"><span id="user">${commandConfig.username}</span>@<span id="host">${commandConfig.hostname}</span>:$ ~ `;
     }
   }
   USERINPUT.disabled = false;

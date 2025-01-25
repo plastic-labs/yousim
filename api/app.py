@@ -1,6 +1,6 @@
 import os
 from contextvars import ContextVar
-from typing import Annotated, Any, Dict
+from typing import Annotated, Any, Dict, Optional
 from functools import cache
 from fastapi.security import OAuth2PasswordBearer
 from fastapi.responses import FileResponse
@@ -9,12 +9,12 @@ import sentry_sdk
 from fastapi import Depends, FastAPI, HTTPException, status
 from starlette.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
-from honcho import Honcho
+from honcho import Honcho, NotGiven
 
 from cryptography.fernet import Fernet
 import base64
 
-from calls import GaslitClaude, Simulator, Constructor, Summary
+from calls import GaslitClaude, Simulator, Constructor, Summary, Identity
 import models
 import jwt
 
@@ -65,6 +65,7 @@ gaslit_ctx = ContextVar(
 simulator_ctx = ContextVar("simulator", default=Simulator(history=[], name=""))
 constructor_ctx = ContextVar("constructor", default=Constructor(history=[]))
 summary_ctx = ContextVar("summary", default=Summary(history=[]))
+identity_ctx = ContextVar[Optional[Identity]]("identity", default=None)
 
 
 sentry_sdk.init(
@@ -304,6 +305,23 @@ async def summary(session_id: str, user_id: str = Depends(get_current_user)):
     return [metamessage for metamessage in metamessage_iter]
 
 
+@app.get("/identity")
+async def identity( message_id: str, metamessage_id: str, session_id: str, user_id: str = Depends(get_current_user),):
+    print("session_id", session_id)
+    print("user_id", user_id)
+    print("message_id", message_id)
+    print("metamessage_id", metamessage_id)
+    metamessage = honcho.apps.users.sessions.metamessages.get(
+        session_id=session_id,
+        app_id=honcho_app.id,
+        user_id=user_id,
+        message_id=message_id,
+        metamessage_id=metamessage_id,
+    )
+    identity = Identity(metamessage.content, "")
+    messages = identity._get_identity()
+    return messages
+
 @app.post("/reset")
 async def reset(
     session_id: str | None = None,
@@ -385,14 +403,12 @@ async def get_sessions(
     mode: str = "simulator", user_id: str = Depends(get_current_user)
 ):
     try:
-        filter = {"mode": mode}
-        # if mode == "constructor":
-        # filter["mode"] = "constructor"
+        filter_dict: Dict[str, Any] = {"mode": mode}
         sessions = honcho.apps.users.sessions.list(
             app_id=honcho_app.id,
             user_id=user_id,
             reverse=True,  # Get the most recent sessions first
-            filter=filter,
+            filter=filter_dict,
         )
         return [session for session in sessions]
     except Exception as e:
@@ -555,3 +571,96 @@ async def export_session(session_id: str, user_id: str = Depends(get_current_use
         raise HTTPException(
             status_code=400, detail=f"Failed to export session: {str(e)}"
         )
+
+
+class ChatRequest(models.BaseRequest):
+    command: str
+    original_session_id: str
+    summary_id: str
+    summary_message_id: str
+    session_id: str
+    prompt: Optional[list[dict]] = None
+
+async def chat_turn(res: ChatRequest, user_id: str):
+    try:
+        metamessage = honcho.apps.users.sessions.metamessages.get(
+            session_id=res.original_session_id,
+            app_id=honcho_app.id,
+            user_id=user_id,
+            metamessage_id=res.summary_id,
+            message_id=res.summary_message_id,
+        )
+
+        print("Summary Message", metamessage)
+
+        if not metamessage:
+            raise HTTPException(status_code=404, detail="Summary not found")
+        
+        # Get session metadata to find the summary_id
+        session = honcho.apps.users.sessions.get(
+            session_id=res.session_id,
+            app_id=honcho_app.id,
+            user_id=user_id,
+        )
+        print("Session", session)
+
+        if not session:
+            raise HTTPException(status_code=400, detail="Invalid chat session")    
+        
+        # Get chat history
+        history = []
+        messages = honcho.apps.users.sessions.messages.list(
+            app_id=honcho_app.id,
+            user_id=user_id,
+            session_id=res.session_id,
+        )
+        for message in messages:
+            history.append({
+                "role": "user" if message.is_user else "assistant",
+                "content": message.content
+            })
+
+        # print("History", history)
+        print("Prompt", res.prompt)
+
+
+        # Create and store Identity instance in context with history
+        identity = Identity(metamessage.content, res.command, res.prompt)
+        identity.history = history
+        identity_ctx.set(identity)
+        
+        # Get response from Identity
+        response = identity.stream()
+        print("Response", response)
+
+        response_text = ""
+        for text in response:
+            print(text)
+            response_text += text
+            yield text
+
+        # Store messages in session
+        honcho.apps.users.sessions.messages.create(
+            session_id=res.session_id,
+            app_id=honcho_app.id,
+            user_id=user_id,
+            content=res.command,
+            is_user=True,
+        )
+        honcho.apps.users.sessions.messages.create(
+            session_id=res.session_id,
+            app_id=honcho_app.id,
+            user_id=user_id,
+            content=response_text,
+            is_user=False,
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to process chat request: {str(e)}"
+        )
+
+@app.post("/chat")
+async def chat(res: ChatRequest, user_id: str = Depends(get_current_user)):
+    print("Get Chat")
+    return StreamingResponse(chat_turn(res, user_id))
