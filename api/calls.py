@@ -369,6 +369,7 @@ class Identity:
             {"role": "assistant", "content": self.assistant_message_three},
             {"role": "user", "content": self.user_message_four},
             *self.history,
+            {"role": "user", "content": self.user_input},
         ]
 
 
