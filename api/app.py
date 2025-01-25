@@ -293,6 +293,17 @@ async def constructor_summary(
     return StreamingResponse(summary_turn(res, user_id))
 
 
+@app.get("/summary")
+async def summary(session_id: str, user_id: str = Depends(get_current_user)):
+    metamessage_iter = honcho.apps.users.sessions.metamessages.list(
+        session_id=session_id,
+        app_id=honcho_app.id,
+        user_id=user_id,
+        metamessage_type=HONCHO_SUMMARY_METAMESSAGE_TYPE,
+    )
+    return [metamessage for metamessage in metamessage_iter]
+
+
 @app.post("/reset")
 async def reset(
     session_id: str | None = None,

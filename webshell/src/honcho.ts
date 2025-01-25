@@ -298,6 +298,44 @@ export async function getSharedMessages(code: string) {
   }
 }
 
+export async function getSummary() {
+  const jwt = await getJWT();
+  const url = new URL(`${API_URL}/summary`);
+  const sessionId = getStorage("session_id");
+  if (!sessionId) {
+    console.error("No session ID found in local storage");
+    alert("No active session found. Please start a new session.");
+    return;
+  } else {
+    url.searchParams.append("session_id", sessionId);
+  }
+  if (jwt) {
+    // const url = new URL(`${API_URL}/summary`);
+
+    try {
+      const response = await fetch(url, {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${jwt}`,
+          "Content-Type": "application/json",
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+
+      return data;
+    } catch (err) {
+      Sentry.captureException(err);
+      console.error("Failed to fetch summaries:", err);
+      alert("Failed to fetch summaries. Please try again.");
+    }
+  }
+}
+
 export async function exportSession() {
   const jwt = await getJWT();
   const sessionId = getStorage("session_id");

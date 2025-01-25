@@ -12,6 +12,7 @@ import {
   getShareCode,
   SessionData,
   exportSession,
+  getSummary
 } from "./honcho";
 import { localManual, localAuto } from "./sim";
 import { HELP } from "./commands/help";
@@ -349,6 +350,101 @@ async function enterKey() {
     div.innerHTML = `<span id="prompt">${PROMPT.innerHTML}</span> ${newUserInput}`;
     return;
   }
+
+  if (userInput.startsWith("summary")) {
+    if (currentMode == "constructor") {
+
+      const components = userInput.split(" ");
+      if (components.length === 1) {
+        const summaries = await getSummary()
+        if (summaries && summaries.length > 0) {
+          const summaryList = summaries.map((session, index) => {
+            const date = new Date(session.created_at).toLocaleString();
+            // @ts-ignore - It's a dicionary so name is not a known value
+            const summaryName = `v${index}`;
+            return `${index}: ${date} - ${summaryName}`;
+          });
+          writeLines(["Available sessions:", ...summaryList, "<br>"]);
+        } else {
+          writeLines(["No sessions found.", "<br>"]);
+        }
+      } else if (components.length === 2) {
+        const summaryIdx = parseInt(components[1]);
+        const summaries = await getSummary();
+
+        if (!summaries || summaries.length === 0) {
+          writeLines(["No sessions found.", "<br>"]);
+          return;
+        }
+
+        const summary = summaries[summaryIdx];
+        writeLines(["<br>", sanitize(summary["content"]), "<br>"]);
+      }
+
+      // console.trace(data);
+      USERINPUT.value = resetInput;
+      return;
+    } else {
+      USERINPUT.value = resetInput;
+      writeLines([
+        "<br>",
+        "Summary not available for simulator mode",
+        "<br>",
+      ]);
+      return;
+    }
+
+  }
+
+  if (userInput.startsWith("chat")) {
+    if (currentMode == "constructor") {
+      const components = userInput.split(" ");
+      if (components.length === 1) {
+        const summaries = await getSummary()
+        if (summaries && summaries.length > 0) {
+          const summaryList = summaries.map((session, index) => {
+            const date = new Date(session.created_at).toLocaleString();
+            // @ts-ignore - It's a dicionary so name is not a known value
+            const summaryName = `v${index}`;
+            return `${index}: ${date} - ${summaryName}`;
+          });
+          writeLines(["Available sessions:", ...summaryList, "<br>"]);
+        } else {
+          writeLines(["No sessions found.", "<br>"]);
+        }
+        USERINPUT.value = resetInput;
+        return
+      } else if (components.length === 2) {
+        USERINPUT.value = resetInput;
+        writeLines([
+          "<br>",
+          "Chat not available for simulator mode",
+          "<br>",
+        ]);
+        return;
+        // TODO implement the methodology for the chat
+        // const summaryIdx = parseInt(components[1]);
+        // const summaries = await getSummary();
+        //
+        // if (!summaries || summaries.length === 0) {
+        //   writeLines(["No sessions found.", "<br>"]);
+        //   return;
+        // }
+        //
+        // const summary = summaries[summaryIdx];
+        // writeLines(["<br>", sanitize(summary["content"]), "<br>"]);
+      }
+    } else {
+      USERINPUT.value = resetInput;
+      writeLines([
+        "<br>",
+        "Chat not available for simulator mode",
+        "<br>",
+      ]);
+      return;
+    }
+  }
+
 
   if (userInput.startsWith("export")) {
     USERINPUT.value = resetInput;
