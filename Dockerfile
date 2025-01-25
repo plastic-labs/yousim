@@ -25,8 +25,6 @@ RUN addgroup --system app && adduser --system --group app
 RUN chown -R app:app /app
 USER app
 
-COPY --chown=app:app app.py /app/app.py
-COPY --chown=app:app calls.py /app/calls.py
+COPY --chown=app:app api/ api/
 
-EXPOSE ${PORT}
-CMD uvicorn app:app --host 0.0.0.0 --port ${PORT}
+CMD fastapi run api/app --host 0.0.0.0

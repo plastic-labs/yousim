@@ -395,7 +395,8 @@ async function enterKey() {
         const identity = await getIdentity(summary.message_id, summary.id);
         let acc = ""
         setStorage("identity", JSON.stringify(identity))
-        identity.forEach((message) => {
+
+        identity.forEach((message: any) => {
           acc += `${message.role}: ${message.content}\n`
         })
         console.log(identity)
