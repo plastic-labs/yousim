@@ -62,8 +62,8 @@ const initEventListeners = () => {
 
   const setupPromise = getJWT().then(async () => {
     const existingSessionId = getStorage("session_id");
-    const currentMode = getStorage("mode") || "simulator";
-    if (!["simulator", "constructor", "chat"].includes(currentMode)) {
+    const currentMode = getStorage("mode");
+    if (!currentMode || !["simulator", "constructor", "chat"].includes(currentMode)) {
       setStorage("mode", "simulator");
     }
     if (existingSessionId && existingSessionId != "undefined") {

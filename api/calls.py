@@ -2,7 +2,7 @@ from os import getenv
 from dotenv import load_dotenv
 from anthropic import Anthropic
 from openai import OpenAI
-from cerebras.cloud.sdk import Cerebras
+from groq import Groq
 from typing import Optional
 
 from functools import cache
@@ -18,9 +18,8 @@ openai = OpenAI(
     api_key=getenv("OPENAI_API_KEY", "placeholder"),
 )
 
-cerebras = Cerebras(
-    # This is the default and can be omitted
-    api_key=getenv("CEREBRAS_API_KEY"),
+groq = Groq(
+    api_key=getenv("GROQ_API_KEY"),
 )
 
 PROVIDER = getenv("PROVIDER")
@@ -211,7 +210,7 @@ class Constructor:
         chat_history = [*initial_messages, *self.history]
 
         try:
-            completion = cerebras.chat.completions.create(
+            completion = groq.chat.completions.create(
                 model=getenv("OPENROUTER_MODEL"),
                 messages=chat_history,
                 stream=True,
@@ -239,7 +238,7 @@ please output your summary in <summary></summary> XML tags.
         ]
 
         try:
-            completion = cerebras.chat.completions.create(
+            completion = groq.chat.completions.create(
                 model=getenv("OPENROUTER_MODEL"),
                 messages=messages,
                 stream=True,
@@ -264,7 +263,7 @@ class SummaryFollowUp:
         ]
 
         try:
-            completion = cerebras.chat.completions.create(
+            completion = groq.chat.completions.create(
                 model=getenv("OPENROUTER_MODEL"),
                 messages=messages,
                 stream=True,
@@ -276,7 +275,9 @@ class SummaryFollowUp:
 
 
 class Identity:
-    def __init__(self, summary: str, user_input: str, prompt: Optional[list[dict]] = None):
+    def __init__(
+        self, summary: str, user_input: str, prompt: Optional[list[dict]] = None
+    ):
         self.summary: str = summary
         self.user_input: str = user_input
         self.history: list[dict] = []
@@ -325,7 +326,7 @@ class Identity:
         return response
 
     def _get_assistant_message_two(self) -> str:
-        response = cerebras.chat.completions.create(
+        response = groq.chat.completions.create(
             model=getenv("OPENROUTER_MODEL"),
             messages=[
                 {"role": "user", "content": self.user_message_one},
@@ -336,7 +337,7 @@ class Identity:
         return self._remove_asterisk_content(response.choices[0].message.content)
 
     def _get_assistant_message_three(self) -> str:
-        response = cerebras.chat.completions.create(
+        response = groq.chat.completions.create(
             model=getenv("OPENROUTER_MODEL"),
             messages=[
                 {"role": "user", "content": self.user_message_one},
@@ -347,7 +348,7 @@ class Identity:
             ],
         )
         return self._remove_asterisk_content(response.choices[0].message.content)
-    
+
     def _get_identity(self):
         return [
             {"role": "user", "content": self.user_message_one},
@@ -372,10 +373,9 @@ class Identity:
             {"role": "user", "content": self.user_input},
         ]
 
-
         try:
             print(messages)
-            completion = cerebras.chat.completions.create(
+            completion = groq.chat.completions.create(
                 model=getenv("OPENROUTER_MODEL"),
                 messages=messages,
                 stream=True,
@@ -390,10 +390,8 @@ class Identity:
                 #         ],
                 #     },
                 # },
-                
             )
-            return completion_handler(completion, "cerebras")
+            return completion_handler(completion, "groq")
         except Exception as e:
             print(f"Error in API call: {e}")
             raise
-        

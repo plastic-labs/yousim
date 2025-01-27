@@ -4,27 +4,38 @@ FROM python:3.11-slim-bullseye
 
 RUN apt-get update && apt-get install -y build-essential curl
 
+COPY --from=ghcr.io/astral-sh/uv:0.4.9 /uv /bin/uv
+
 WORKDIR /app
-
-# Set Python environment variables and default port
-ENV PYTHONFAULTHANDLER=1 \
-    PYTHONUNBUFFERED=1 \
-    PYTHONHASHSEED=random \
-    PORT=8000
-
-# Install uv and add to PATH
-RUN curl -LsSf https://astral.sh/uv/install.sh | sh && \
-    mv /root/.local/bin/uv /usr/local/bin/ && \
-    mv /root/.local/bin/uvx /usr/local/bin/
-
-# Copy requirements and install dependencies
-COPY requirements.txt .
-RUN uv pip install --system -r requirements.txt
 
 RUN addgroup --system app && adduser --system --group app
 RUN chown -R app:app /app
 USER app
 
-COPY --chown=app:app api/ api/
+# Enable bytecode compilation
+ENV UV_COMPILE_BYTECODE=1
 
-CMD fastapi run api/app --host 0.0.0.0
+# Copy from the cache instead of linking since it's a mounted volume
+ENV UV_LINK_MODE=copy
+
+# Install the project's dependencies using the lockfile and settings
+RUN --mount=type=cache,target=/root/.cache/uv \
+    --mount=type=bind,source=uv.lock,target=uv.lock \
+    --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
+    uv sync --frozen --no-install-project --no-dev
+
+# Copy only requirements to cache them in docker layer
+COPY uv.lock pyproject.toml /app/
+
+# Sync the project
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --frozen --no-dev
+
+# Place executables in the environment at the front of the path
+ENV PATH="/app/.venv/bin:$PATH"
+
+COPY --chown=app:app api/ /app/api/
+
+EXPOSE 8000
+
+CMD fastapi run /app/api/app.py --host 0.0.0.0
