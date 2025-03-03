@@ -120,7 +120,7 @@ the simulation is a fluid, mutable space  the only limits are imagination""",
         res = anthropic.messages.stream(
             max_tokens=1024,
             messages=messages,
-            model="claude-3-5-sonnet-20240620",
+            model="claude-3-7-sonnet-20250219",
         )
         return completion_handler(res, "anthropic")
 
@@ -165,7 +165,7 @@ class Simulator:
 simulator@anthropic:~/$
             """,
             messages=messages,
-            model="claude-3-5-sonnet-20240620",
+            model="claude-3-7-sonnet-20250219",
         )
         return completion_handler(res, "anthropic")
 
