@@ -18,7 +18,7 @@ services:
       context: ./webshell
       dockerfile: Dockerfile
     ports:
-      - "3000:3000"
+      - "3000:5173"
     depends_on:
       - backend
     env_file:

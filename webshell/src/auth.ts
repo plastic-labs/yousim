@@ -15,7 +15,7 @@ export default auth;
 export async function getJWT() {
   const { data: sessionData, error: sessionError } = await auth.getSession();
   if (sessionError) {
-    console.log(sessionError);
+    console.log("error getting session: ", sessionError);
     alert("possible error try refreshing the page");
     return;
   }
@@ -26,7 +26,7 @@ export async function getJWT() {
     const { data: userData, error } = await auth.signInAnonymously();
 
     if (error) {
-      console.log(error);
+      console.log("error signing in anonymously: ", error);
       alert("possible error try refreshing the page");
       return;
     }
