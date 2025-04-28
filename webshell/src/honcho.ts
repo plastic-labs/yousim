@@ -17,7 +17,7 @@ export async function newSession() {
     setStorage("session_id", data.session_id);
     return data;
   } catch (err) {
-    console.log(err);
+    console.log("error creating new session: ", err);
     alert("possible error try refreshing the page");
   }
 }
@@ -58,6 +58,7 @@ export async function sendCommand(command: string, endpoint: string) {
       });
   } else {
     Sentry.captureException({ jwt, session_id });
+    console.log("missing jwt or session_id");
     alert("possible error try refreshing the page");
   }
 }
@@ -98,6 +99,7 @@ export async function auto() {
       });
   } else {
     Sentry.captureException({ jwt, session_id });
+    console.log("missing jwt or session_id");
     alert("possible error try refreshing the page");
   }
 }
@@ -438,7 +440,7 @@ export async function chat(sessionId: string, userInput: string) {
       });
 
       console.log("Chat API response status:", response.status);
-      
+
       if (!response.ok) {
         const errorText = await response.text();
         console.error("Chat API error:", {
