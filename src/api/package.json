@@ -11,11 +11,11 @@
   },
   "dependencies": {
     "@elysiajs/cors": "^1.4.0",
-    "@elysiajs/jwt": "^1.4.0",
     "@elysiajs/static": "^1.4.4",
     "@supabase/supabase-js": "^2.78.0",
     "@yousim/core": "workspace:*",
-    "elysia": "^1.4.13"
+    "elysia": "^1.4.13",
+    "jose": "^5.9.3"
   },
   "devDependencies": {
     "bun-types": "latest"

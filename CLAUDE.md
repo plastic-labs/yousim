@@ -108,7 +108,8 @@ Environment variables are managed through a root `.env` file. Each package direc
 
 - `SUPABASE_URL`: Supabase project URL
 - `SUPABASE_KEY`: Supabase public key
-- `JWT_SECRET`: From Supabase project for JWT verification
+- `SUPABASE_JWKS_URL`: Optional override for the JWKS endpoint
+- `SUPABASE_JWT_ISSUER`: Optional override for the JWT issuer
 - `PORT`: API server port (default: 3000)
 
 **Legacy deployment variables (for Python/webshell):**

@@ -14,6 +14,21 @@ async function getAuthToken(): Promise<string | null> {
   return data.session?.access_token || null;
 }
 
+async function streamRequest(url: string, options: RequestInit): Promise<ReadableStreamDefaultReader<string>> {
+  const res = await fetch(url, options);
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(text || `Request failed with status ${res.status}`);
+  }
+
+  const reader = res.body?.pipeThrough(new TextDecoderStream()).getReader();
+  if (!reader) {
+    throw new Error('Response body is not readable');
+  }
+
+  return reader;
+}
+
 // API client functions
 export const api = {
   // Create a new session
@@ -53,6 +68,20 @@ export const api = {
     return res.text();
   },
 
+  async streamManual(sessionId: string, command: string): Promise<ReadableStreamDefaultReader<string>> {
+    const token = await getAuthToken();
+    if (!token) throw new Error('Not authenticated');
+
+    return streamRequest(`${API_BASE}/manual`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ session_id: sessionId, command })
+    });
+  },
+
   async sendAuto(sessionId: string): Promise<string> {
     const token = await getAuthToken();
     if (!token) throw new Error('Not authenticated');
@@ -68,6 +97,20 @@ export const api = {
 
     if (!res.ok) throw new Error('Failed to send auto command');
     return res.text();
+  },
+
+  async streamAuto(sessionId: string): Promise<ReadableStreamDefaultReader<string>> {
+    const token = await getAuthToken();
+    if (!token) throw new Error('Not authenticated');
+
+    return streamRequest(`${API_BASE}/auto`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ session_id: sessionId })
+    });
   },
 
   // Get session messages

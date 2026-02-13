@@ -1,17 +1,18 @@
 import { Elysia, t } from "elysia";
 import { cors } from "@elysiajs/cors";
-import { jwt } from "@elysiajs/jwt";
 import { staticPlugin } from "@elysiajs/static";
 import { createClient } from '@supabase/supabase-js';
 import path from "path";
+import { createRemoteJWKSet, jwtVerify } from "jose";
 import {
   Message,
-  simulate,
   GaslitClaude,
   Simulator,
   Constructor,
   Summary,
-  Identity
+  Identity,
+  INITIAL_PROMPT,
+  INITIAL_RESPONSE,
 } from "@yousim/core";
 
 const supabaseUrl = process.env.SUPABASE_URL;
@@ -21,11 +22,13 @@ if (!supabaseUrl || !supabaseKey) {
   throw new Error("Missing SUPABASE_URL or SUPABASE_KEY");
 }
 
-const jwtSecret = process.env.JWT_SECRET;
-
-if (!jwtSecret) {
-  throw new Error("Missing JWT_SECRET");
-}
+const issuer =
+  process.env.SUPABASE_JWT_ISSUER ||
+  `${supabaseUrl.replace(/\/+$/, "")}/auth/v1`;
+const jwksUrl =
+  process.env.SUPABASE_JWKS_URL ||
+  `${supabaseUrl.replace(/\/+$/, "")}/auth/v1/.well-known/jwks.json`;
+const jwks = createRemoteJWKSet(new URL(jwksUrl));
 
 const createSupabaseClient = (accessToken?: string) =>
   createClient(supabaseUrl, supabaseKey, {
@@ -67,11 +70,7 @@ interface ChatRequest extends ManualRequest {
 
 const app = new Elysia()
   .use(cors())
-  .use(jwt({
-    name: 'jwt',
-    secret: jwtSecret
-  }))
-  .derive(async ({ jwt, headers }) => {
+  .derive(async ({ headers }) => {
     const authHeader = headers.authorization;
     const token =
       authHeader && authHeader.startsWith("Bearer ")
@@ -84,11 +83,11 @@ const app = new Elysia()
       }
 
       try {
-        const payload: any = await jwt.verify(token);
-        if (!payload) {
+        const { payload } = await jwtVerify(token, jwks, { issuer });
+        if (!payload?.sub) {
           return null;
         }
-        return payload.sub; // Return user ID
+        return payload.sub as string; // Return user ID
       } catch (error) {
         console.error('JWT verification error:', error);
         return null;
@@ -167,37 +166,64 @@ const app = new Elysia()
       return { error: insertError.message };
     }
     
-    // Convert messages to core format
-    const formattedMessages: Message[] = messages.map((msg: any) => ({
+    // Resolve session metadata (name)
+    const { data: session } = await supabase
+      .from('sessions')
+      .select('metadata')
+      .eq('id', session_id)
+      .eq('user_id', user_id)
+      .single();
+
+    const name = session?.metadata?.name || "";
+
+    // Convert messages to simulator history
+    const simulatorHistory: Message[] = messages.map((msg: any) => ({
       role: msg.is_user ? "user" : "assistant",
       content: msg.content
     }));
-    
-    // Add the new user message
-    formattedMessages.push({ role: "user", content: command });
-    
+
+    if (simulatorHistory.length === 0) {
+      simulatorHistory.push(
+        { role: "user", content: INITIAL_PROMPT },
+        { role: "assistant", content: INITIAL_RESPONSE }
+      );
+    }
+
     try {
-      // Get response from simulation
-      const stream = await simulate(formattedMessages);
+      const simulator = new Simulator({
+        name,
+        history: [...simulatorHistory, { role: "user", content: command }]
+      });
+
       let responseText = "";
-      for await (const chunk of stream.textStream) {
-        responseText += chunk;
-      }
-      
-      // Store assistant message
-      await supabase
-        .from('messages')
-        .insert({
-          session_id,
-          user_id,
-          content: responseText,
-          is_user: false
-        });
-      
-      return new Response(responseText, {
+      const stream = new ReadableStream({
+        async start(controller) {
+          try {
+            for await (const chunk of simulator.stream()) {
+              responseText += chunk;
+              controller.enqueue(chunk);
+            }
+
+            await supabase
+              .from('messages')
+              .insert({
+                session_id,
+                user_id,
+                content: responseText,
+                is_user: false
+              });
+
+            controller.close();
+          } catch (streamError: any) {
+            console.error("Error in simulation stream:", streamError);
+            controller.error(streamError);
+          }
+        }
+      });
+
+      return new Response(stream, {
         headers: {
-          'Content-Type': 'text/plain',
-          'Transfer-Encoding': 'chunked'
+          'Content-Type': 'text/plain'
         }
       });
     } catch (error) {
@@ -234,17 +260,14 @@ const app = new Elysia()
         return { error: messagesError.message };
       }
 
-      // Convert to agent histories (roles are swapped)
+      // Convert to gaslit history (roles are swapped)
       const gaslitHistory: Message[] = [];
-      const simulatorHistory: Message[] = [];
 
       for (const msg of messages) {
         if (msg.is_user) {
           gaslitHistory.push({ role: "assistant", content: msg.content });
-          simulatorHistory.push({ role: "user", content: msg.content });
         } else {
           gaslitHistory.push({ role: "user", content: msg.content });
-          simulatorHistory.push({ role: "assistant", content: msg.content });
         }
       }
 
@@ -267,46 +290,25 @@ const app = new Elysia()
       });
 
       let gaslitResponse = "";
-      for await (const chunk of gaslitClaude.stream()) {
-        gaslitResponse += chunk;
-      }
-
-      // Store gaslit message as user message
-      await supabase
-        .from('messages')
-        .insert({
-          session_id,
-          user_id,
-          content: gaslitResponse,
-          is_user: true
-        });
-
-      // Now run simulator with the gaslit response
-      const simulator = new Simulator({
-        name,
-        history: [...simulatorHistory, { role: "user", content: gaslitResponse }]
+      const stream = new ReadableStream({
+        async start(controller) {
+          try {
+            for await (const chunk of gaslitClaude.stream()) {
+              gaslitResponse += chunk;
+              controller.enqueue(chunk);
+            }
+            controller.close();
+          } catch (streamError: any) {
+            console.error("Error in auto stream:", streamError);
+            controller.error(streamError);
+          }
+        }
       });
 
-      let simulatorResponse = "";
-      for await (const chunk of simulator.stream()) {
-        simulatorResponse += chunk;
-      }
-
-      // Store simulator response
-      await supabase
-        .from('messages')
-        .insert({
-          session_id,
-          user_id,
-          content: simulatorResponse,
-          is_user: false
-        });
-
       // Return the gaslit response (the "user" asking the simulator)
-      return new Response(gaslitResponse, {
+      return new Response(stream, {
         headers: {
-          'Content-Type': 'text/plain',
-          'Transfer-Encoding': 'chunked'
+          'Content-Type': 'text/plain'
         }
       });
     } catch (error: any) {
@@ -734,7 +736,7 @@ const app = new Elysia()
 
     // Filter by mode if specified
     if (mode) {
-      queryBuilder = queryBuilder.filter('metadata->mode', 'eq', mode);
+      queryBuilder = queryBuilder.filter('metadata->>mode', 'eq', mode);
     }
 
     const { data: sessions, error } = await queryBuilder;

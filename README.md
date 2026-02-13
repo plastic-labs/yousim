@@ -30,7 +30,7 @@ Fill in at least:
 
 - `PROVIDER`, `MODEL` (or `OPENROUTER_MODEL`)
 - `ANTHROPIC_API_KEY` or `OPENAI_API_KEY` / `OPENROUTER_API_KEY`
-- `SUPABASE_URL`, `SUPABASE_KEY`, `JWT_SECRET`
+- `SUPABASE_URL`, `SUPABASE_KEY`
 - `VITE_SUPABASE_URL`, `VITE_SUPABASE_KEY`
 
 3. (Optional) Start local Supabase:
@@ -86,7 +86,7 @@ Migrations live under `supabase/migrations` and set up:
 - `messages`
 - `summaries`
 
-Anonymous sign-in is supported. Ensure your Supabase project has anonymous sign-ins enabled and the `JWT_SECRET` from your project settings in `.env`.
+Anonymous sign-in is supported. Ensure your Supabase project has anonymous sign-ins enabled. For asymmetric JWT verification, the API uses Supabase JWKS and issuer derived from `SUPABASE_URL` (override via `SUPABASE_JWKS_URL` / `SUPABASE_JWT_ISSUER` if needed).
 
 ## Legacy Python/Webshell
 

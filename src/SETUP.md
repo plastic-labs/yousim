@@ -75,7 +75,6 @@ For the API package, you'll also need Supabase credentials:
 ```bash
 SUPABASE_URL=your_supabase_url
 SUPABASE_KEY=your_supabase_key
-JWT_SECRET=your_jwt_secret
 ```
 
 For the frontend build, you'll need:

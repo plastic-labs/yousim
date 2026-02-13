@@ -8,6 +8,7 @@ type SessionMessage = {
   content: string;
   created_at?: string;
   is_user: boolean;
+  kind?: 'auto';
 };
 
 const App: React.FC = () => {
@@ -26,6 +27,29 @@ const App: React.FC = () => {
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  const makeId = () => {
+    if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
+      return crypto.randomUUID();
+    }
+    return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  };
+
+  const streamReader = async (
+    reader: ReadableStreamDefaultReader<string>,
+    onChunk: (chunk: string) => void
+  ) => {
+    let acc = '';
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      if (value) {
+        acc += value;
+        onChunk(value);
+      }
+    }
+    return acc;
+  };
 
   useEffect(() => {
     const root = document.documentElement;
@@ -176,9 +200,56 @@ const App: React.FC = () => {
     }
 
     setSending(true);
+
+    const appendMessage = (message: SessionMessage) => {
+      setMessages((prev) => [...prev, message]);
+    };
+
+    const updateMessage = (id: string, chunk: string) => {
+      setMessages((prev) =>
+        prev.map((msg) =>
+          msg.id === id ? { ...msg, content: msg.content + chunk } : msg
+        )
+      );
+    };
+
+    const manualStream = async (commandText: string, showUserMessage = true) => {
+      const assistantId = makeId();
+      if (showUserMessage) {
+        appendMessage({
+          id: makeId(),
+          content: commandText,
+          is_user: true,
+        });
+      }
+      appendMessage({
+        id: assistantId,
+        content: '',
+        is_user: false,
+      });
+
+      const reader = await api.streamManual(sessionId, commandText);
+      await streamReader(reader, (chunk) => updateMessage(assistantId, chunk));
+    };
+
     try {
       if (!trimmed && name) {
-        await api.sendAuto(sessionId);
+        const autoId = makeId();
+        appendMessage({
+          id: autoId,
+          content: '',
+          is_user: true,
+          kind: 'auto',
+        });
+
+        const reader = await api.streamAuto(sessionId);
+        const gaslitCommand = await streamReader(reader, (chunk) =>
+          updateMessage(autoId, chunk)
+        );
+
+        if (gaslitCommand.trim()) {
+          await manualStream(gaslitCommand, false);
+        }
       } else if (!name) {
         const newName = trimmed;
         setName(newName);
@@ -187,13 +258,12 @@ const App: React.FC = () => {
         } catch (error) {
           console.error('Metadata update failed:', error);
         }
-        await api.sendManual(sessionId, `/locate ${newName}`);
+        await manualStream(`/locate ${newName}`);
       } else {
-        await api.sendManual(sessionId, trimmed);
+        await manualStream(trimmed);
       }
 
       setCommand('');
-      await loadMessages();
     } catch (error: any) {
       console.error('Send error:', error);
     } finally {
@@ -275,6 +345,15 @@ const App: React.FC = () => {
   const renderMessageBlocks = () => {
     const sliced = messages.slice(clearAt);
     return sliced.map((msg, index) => {
+      if (msg.kind === 'auto') {
+        return (
+          <div className="terminal-block" key={msg.id || `auto-${index}`}>
+            <p className="terminal-line searcher">SIMULATOR CLAUDE:</p>
+            <p className="terminal-line searcher">{msg.content}</p>
+          </div>
+        );
+      }
+
       const labelClass = msg.is_user ? 'searcher' : 'simulator';
       const label = 'SIMULATOR CLAUDE:';
       const promptContent =
