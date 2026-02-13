@@ -8,6 +8,7 @@ This monorepo contains the Bun-based implementations of YouSim with shared core 
 - `src/cli` - Command-line interface
 - `src/api` - Backend API using Bun and Elysia.js
 - `src/frontend` - React/Vite frontend
+- `src/launcher` - Single binary launcher (`yousim`, `yousim server`)
 
 ## Setup
 
@@ -24,6 +25,31 @@ Run the CLI directly from its package directory (stdin issues with Bun filters):
 ```bash
 cd src/cli
 bun run start
+```
+
+## Global Binary
+
+Install the launcher to get the `yousim` command:
+
+```bash
+npm i -g @yousim/launcher
+```
+
+```bash
+yousim
+yousim server
+```
+
+Requires Bun on the host machine.
+
+Configuration can be stored in `~/.yousim/.env` or `~/.yousim/config.json`:
+
+```bash
+# ~/.yousim/.env
+PROVIDER=anthropic
+ANTHROPIC_API_KEY=...
+SUPABASE_URL=...
+SUPABASE_KEY=...
 ```
 
 ## API Usage

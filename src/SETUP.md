@@ -26,6 +26,31 @@ cd src/cli
 bun run start
 ```
 
+## Global Binary
+
+Install the launcher to get `yousim` commands:
+
+```bash
+npm i -g @yousim/launcher
+```
+
+```bash
+yousim
+yousim server
+```
+
+Requires Bun on the host machine.
+
+Configuration can be stored in `~/.yousim/.env` or `~/.yousim/config.json`:
+
+```bash
+# ~/.yousim/.env
+PROVIDER=anthropic
+ANTHROPIC_API_KEY=...
+SUPABASE_URL=...
+SUPABASE_KEY=...
+```
+
 ## Running the API
 
 ```bash

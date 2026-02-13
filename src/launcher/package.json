@@ -1,0 +1,16 @@
+{
+  "name": "@yousim/launcher",
+  "version": "1.0.0",
+  "description": "YouSim CLI/Server launcher",
+  "type": "module",
+  "bin": {
+    "yousim": "./src/index.ts"
+  },
+  "dependencies": {
+    "@yousim/cli": "workspace:*",
+    "@yousim/api": "workspace:*"
+  },
+  "engines": {
+    "bun": ">=1.1.0"
+  }
+}

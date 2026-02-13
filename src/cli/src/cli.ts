@@ -20,7 +20,7 @@ const theme = {
 };
 
 // Main CLI function
-async function main() {
+export async function runCli() {
   console.log("Welcome to YouSim CLI!");
   
   // Get provider and model from environment or command line args
@@ -157,7 +157,9 @@ async function main() {
   }
 }
 
-main().catch((error) => {
-  console.error("Fatal error in CLI:", error.message);
-  process.exit(1);
-});
+if (import.meta.main) {
+  runCli().catch((error) => {
+    console.error("Fatal error in CLI:", error.message);
+    process.exit(1);
+  });
+}

@@ -68,37 +68,38 @@ interface ChatRequest extends ManualRequest {
   prompt?: Array<Record<string, any>>;
 }
 
-const app = new Elysia()
-  .use(cors())
-  .derive(async ({ headers }) => {
-    const authHeader = headers.authorization;
-    const token =
-      authHeader && authHeader.startsWith("Bearer ")
-        ? authHeader.substring(7)
-        : null;
+export const createApp = () => {
+  const app = new Elysia()
+    .use(cors())
+    .derive(async ({ headers }) => {
+      const authHeader = headers.authorization;
+      const token =
+        authHeader && authHeader.startsWith("Bearer ")
+          ? authHeader.substring(7)
+          : null;
 
-    const get_current_user = async () => {
-      if (!token) {
-        return null;
-      }
-
-      try {
-        const { payload } = await jwtVerify(token, jwks, { issuer });
-        if (!payload?.sub) {
+      const get_current_user = async () => {
+        if (!token) {
           return null;
         }
-        return payload.sub as string; // Return user ID
-      } catch (error) {
-        console.error('JWT verification error:', error);
-        return null;
-      }
-    };
 
-    return {
-      get_current_user,
-      supabase: createSupabaseClient(token || undefined)
-    };
-  })
+        try {
+          const { payload } = await jwtVerify(token, jwks, { issuer });
+          if (!payload?.sub) {
+            return null;
+          }
+          return payload.sub as string; // Return user ID
+        } catch (error) {
+          console.error('JWT verification error:', error);
+          return null;
+        }
+      };
+
+      return {
+        get_current_user,
+        supabase: createSupabaseClient(token || undefined)
+      };
+    })
   .get("/api/health", () => "YouSim API - Bun/Elysia version")
   .get("/user", async ({ query, set, get_current_user, supabase }) => {
     const user_id = await get_current_user();
@@ -819,8 +820,19 @@ const app = new Elysia()
   .get("/*", () => {
     return Bun.file(path.join(publicDir, "index.html"));
   })
-  .listen(process.env.PORT || 3000);
+  return app;
+};
 
-console.log(
-  `YouSim API is running at http://${app.server?.hostname}:${app.server?.port}`
-);
+export const startServer = () => {
+  const app = createApp();
+  const port = Number(process.env.PORT || 3000);
+  app.listen(port);
+  console.log(
+    `YouSim API is running at http://${app.server?.hostname}:${app.server?.port}`
+  );
+  return app;
+};
+
+if (import.meta.main) {
+  startServer();
+}

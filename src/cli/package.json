@@ -10,7 +10,7 @@
     "dev": "bun run src/cli.ts"
   },
   "bin": {
-    "yousim": "./src/cli.ts"
+    "yousim-cli": "./src/cli.ts"
   },
   "dependencies": {
     "@yousim/core": "workspace:*",

@@ -9,6 +9,7 @@ This folder contains high-level documentation for the YouSim monorepo architectu
 - [cli-module.md](cli-module.md) - Documentation for the command-line interface
 - [api-module.md](api-module.md) - Documentation for the web API service
 - [frontend-module.md](frontend-module.md) - Documentation for the React web frontend
+- [status.md](status.md) - Current migration status and next steps
 
 ## Purpose
 

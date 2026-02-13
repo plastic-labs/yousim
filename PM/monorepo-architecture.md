@@ -7,6 +7,7 @@ This document provides a high-level overview of the YouSim monorepo architecture
 1. `@yousim/core` - Shared simulation logic
 2. `@yousim/cli` - Command-line interface
 3. `@yousim/api` - Backend API service
+4. `@yousim/launcher` - Single binary launcher (`yousim`, `yousim server`)
 
 ## Package Structure
 
@@ -122,4 +123,3 @@ The monorepo uses Bun workspaces to manage dependencies efficiently:
 - Run all src in dev mode: `bun run dev`
 - Run tests across all src: `bun run test`
 - Build all src: `bun run build`
-

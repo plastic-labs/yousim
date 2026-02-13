@@ -14,6 +14,7 @@ The repository follows a monorepo structure with workspaces defined in `src/*`:
 - **`src/cli`** (`@yousim/cli`): Command-line interface for terminal-based simulations.
 - **`src/api`** (`@yousim/api`): Backend API service using Bun and Elysia.js for web-based access.
 - **`src/frontend`**: React/Vite frontend application.
+- **`src/launcher`** (`@yousim/launcher`): Single binary launcher (`yousim`, `yousim server`).
 - **`legacy-python/`**: Original Python implementation (not actively maintained).
 - **`PM/`**: Project management documentation with detailed architecture notes.
 - **`supabase/`**: Supabase configuration for database and authentication.

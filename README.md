@@ -8,6 +8,7 @@ YouSim is an identity simulator that lets you explore identities within the late
 - `src/api` (`@yousim/api`): Bun/Elysia API with Supabase persistence
 - `src/cli` (`@yousim/cli`): Terminal-based interface
 - `src/frontend` (`@yousim/frontend`): React/Vite frontend
+- `src/launcher` (`@yousim/launcher`): Single binary launcher (`yousim`, `yousim server`)
 - `supabase/`: Local Supabase config and migrations
 - `PM/`: Project management/architecture notes
 - `legacy-python/`: Archived Python + webshell implementation
@@ -53,6 +54,44 @@ bun run dev
 ```bash
 cd src/cli
 bun run start
+```
+
+## Global Binary (npm)
+
+Install a single launcher that provides `yousim` and `yousim server` commands:
+
+```bash
+npm i -g @yousim/launcher
+```
+
+```bash
+# CLI
+yousim
+
+# Server
+yousim server --port 3000
+```
+
+Requires Bun on the host machine.
+
+Configuration can be stored in `~/.yousim`:
+
+```bash
+# ~/.yousim/.env
+PROVIDER=anthropic
+ANTHROPIC_API_KEY=...
+SUPABASE_URL=...
+SUPABASE_KEY=...
+```
+
+```json
+// ~/.yousim/config.json
+{
+  "PROVIDER": "anthropic",
+  "ANTHROPIC_API_KEY": "...",
+  "SUPABASE_URL": "...",
+  "SUPABASE_KEY": "..."
+}
 ```
 
 ## Production / Deployment
