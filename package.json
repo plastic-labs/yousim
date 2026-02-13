@@ -10,8 +10,8 @@
     "dev": "bun run --filter '@yousim/api' dev & bun run --filter '@yousim/frontend' dev",
     "dev:api": "bun run --filter '@yousim/api' dev",
     "dev:frontend": "bun run --filter '@yousim/frontend' dev",
-    "build": "bun run --filter '*' build",
-    "test": "bun run --filter '*' test",
+    "build": "bun run --filter '@yousim/frontend' build",
+    "test": "bun run --filter '@yousim/core' test",
     "start:api": "bun run --filter '@yousim/api' start",
     "start:cli": "bun run --filter '@yousim/cli' start"
   }

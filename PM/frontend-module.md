@@ -2,7 +2,7 @@
 
 ## Overview
 
-The frontend module provides a web-based interface for interacting with the YouSim simulation. It's built with React, TypeScript, and Vite, using TanStack Query for state management and Supabase for backend communication.
+The frontend module provides a web-based interface for interacting with the YouSim simulation. It's built with React, TypeScript, and Vite, located at `src/frontend`, using Supabase for authentication and API calls.
 
 ## Key Features
 
@@ -16,8 +16,8 @@ The frontend module provides a web-based interface for interacting with the YouS
 - Client-side state management with React hooks
 
 ### Backend Integration
-- Supabase integration for user and session management
-- API communication layer (currently a placeholder)
+- Supabase integration for authentication
+- API communication layer that calls the Bun/Elysia backend with a bearer token
 
 ## Dependencies
 
@@ -55,12 +55,13 @@ bun install
 ```bash
 bun run dev
 ```
-The development server will start on port 3000.
+The development server will start on port 5173.
 
 ### Build for Production
 ```bash
 bun run build
 ```
+The build outputs to `src/api/public` so the API can serve the frontend in production.
 
 ### Preview Production Build
 ```bash
@@ -85,16 +86,8 @@ bun run preview
 - `vite.config.js` - Vite build configuration
 - `tsconfig.json` - TypeScript configuration
 
-## Current Limitations
-
-1. The API integration is currently a placeholder - it doesn't actually call the backend API yet
-2. User authentication is not fully implemented - uses placeholder user IDs
-3. Session management is basic and doesn't persist across browser sessions without Supabase setup
-
 ## Future Improvements
 
-1. Implement proper API integration with the backend service
-2. Add user authentication flows
-3. Enhance the UI/UX with better styling and components
-4. Add real-time updates using Supabase subscriptions
-5. Implement proper error handling and user feedback
+1. Enhance the UI/UX with better styling and components
+2. Add real-time updates using Supabase subscriptions
+3. Implement richer error handling and user feedback

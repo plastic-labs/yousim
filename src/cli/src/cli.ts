@@ -1,7 +1,23 @@
 #!/usr/bin/env bun
 
-import { INITIAL_PROMPT, INITIAL_RESPONSE, Message, simulate } from "@yousim/core";
+import {
+  GaslitClaude,
+  Simulator,
+  Message,
+  INITIAL_PROMPT,
+  INITIAL_RESPONSE
+} from "@yousim/core";
 import * as readline from "readline";
+import chalk from "chalk";
+
+const DEFAULT_MODEL = "claude-sonnet-4-5-20250929";
+
+const theme = {
+  prompt: chalk.hex("#6b6be8"),
+  searcher: chalk.hex("#4c78ff"),
+  command: chalk.hex("#c06a2a"),
+  simulator: chalk.hex("#6fb0a0"),
+};
 
 // Main CLI function
 async function main() {
@@ -9,9 +25,13 @@ async function main() {
   
   // Get provider and model from environment or command line args
   const provider = process.env.PROVIDER || "anthropic";
-  const model = process.env.MODEL || "claude-sonnet-4-5-20250929";
+  const model =
+    process.env.MODEL ||
+    process.env.OPENROUTER_MODEL ||
+    DEFAULT_MODEL;
   
   console.log(`Using provider: ${provider}, model: ${model}`);
+  const agentOptions = { provider, model };
   
   // Create readline interface
   const rl = readline.createInterface({
@@ -20,6 +40,8 @@ async function main() {
     terminal: true
   });
   
+  const commandPrompt = theme.prompt("simulator@anthropic:~$ ");
+
   // Utility function for reading input
   const readInput = (prompt: string): Promise<string> => {
     return new Promise((resolve) => {
@@ -38,73 +60,95 @@ async function main() {
   process.on('SIGINT', handleExit);
   process.on('SIGTERM', handleExit);
   
-  // Simple conversation loop
+  // Agent state
   let name = "";
-  const messages: Message[] = [];
-  
-  // Initial prompt
-  console.log("\n\033[94mSEARCHER CLAUDE:\033[0m");
-  console.log(INITIAL_PROMPT);
-  
-  // Add to messages history
-  messages.push({ role: "user", content: INITIAL_PROMPT });
-  
-  // Get response
-  console.log("\n\033[93mSIMULATOR CLAUDE:\033[0m");
-  console.log(INITIAL_RESPONSE);
-  
-  // Add to messages history
-  messages.push({ role: "assistant", content: INITIAL_RESPONSE });
-  
+  const gaslitClaude = new GaslitClaude({ name: "", insights: "", history: [] });
+  const simulator = new Simulator({ name: "", history: [] });
+
+  // Display initial exchange
+  console.log(`\n${theme.searcher("SEARCHER CLAUDE:")}`);
+  console.log(theme.searcher(INITIAL_PROMPT));
+
+  console.log(`\n${theme.simulator("SIMULATOR CLAUDE:")}`);
+  console.log(theme.simulator(INITIAL_RESPONSE));
+
   // Get name
   name = await readInput("Enter a name: ");
-  
+
   if (name === "exit") {
     rl.close();
     process.exit(0);
   }
-  
-  const initialLocate = `/locate ${name}`;
-  console.log("\n\033[94mSEARCHER CLAUDE:\033[0m");
-  console.log(initialLocate);
-  
-  messages.push({ role: "user", content: initialLocate });
-  
-  // Get response from model
-  console.log("\n\033[93mSIMULATOR CLAUDE:\033[0m");
-  
-  try {
-    const stream = await simulate(messages, { provider, model });
-    for await (const chunk of stream.textStream) {
-      process.stdout.write(chunk);
+
+  gaslitClaude.name = name;
+  simulator.name = name;
+
+  const manual = async (command: string) => {
+    let simulatorResponse = "";
+    simulator.history.push({ role: "user", content: command });
+    gaslitClaude.history.push({ role: "assistant", content: command });
+
+    console.log(`\n${theme.simulator("SIMULATOR CLAUDE:")}`);
+    try {
+      for await (const chunk of simulator.stream(agentOptions)) {
+        process.stdout.write(theme.simulator(chunk));
+        simulatorResponse += chunk;
+      }
+      process.stdout.write("\n");
+    } catch (error) {
+      console.error("Error in conversation:", error.message);
+      process.stdout.write("I'm sorry, but I encountered an error while processing your request.\n");
+      rl.close();
+      process.exit(1);
     }
-    process.stdout.write("\n");
-  } catch (error) {
-    console.error("Error in conversation:", error.message);
-    process.stdout.write("I'm sorry, but I encountered an error while processing your request.\n");
-    rl.close();
-    process.exit(1);
-  }
+
+    simulator.history.push({ role: "assistant", content: simulatorResponse });
+    gaslitClaude.history.push({ role: "user", content: simulatorResponse });
+  };
+
+  const auto = async () => {
+    let gaslitResponse = "";
+    console.log(`\n${theme.searcher("SEARCHER CLAUDE:")}`);
+
+    try {
+      for await (const chunk of gaslitClaude.stream(agentOptions)) {
+        process.stdout.write(theme.searcher(chunk));
+        gaslitResponse += chunk;
+      }
+      process.stdout.write("\n");
+    } catch (error) {
+      console.error("Error in auto conversation:", error.message);
+      rl.close();
+      process.exit(1);
+    }
+
+    await manual(gaslitResponse);
+  };
+
+  const initialLocate = `/locate ${name}`;
+  console.log(`\n${theme.command("SIMULATOR CLAUDE:")}`);
+  console.log(theme.command(initialLocate));
+
+  await manual(initialLocate);
   
   // Conversation loop
   while (true) {
     try {
-      const command = await readInput(">>> ");
+      const command = await readInput(commandPrompt);
       
       if (command === "exit") {
         rl.close();
         process.exit(0);
       }
       
-      messages.push({ role: "user", content: command });
-      
-      // Get response from model
-      console.log("\n\033[93mSIMULATOR CLAUDE:\033[0m");
-      const stream = await simulate(messages, { provider, model });
-      for await (const chunk of stream.textStream) {
-        process.stdout.write(chunk);
+      if (command === "") {
+        await auto();
+        continue;
       }
-      process.stdout.write("\n");
+
+      console.log(`\n${theme.command("SIMULATOR CLAUDE:")}`);
+      console.log(theme.command(command));
+      await manual(command);
     } catch (error) {
       console.error("Error in conversation loop:", error.message);
       rl.close();

@@ -1,41 +1,24 @@
-# https://pythonspeed.com/articles/base-image-python-docker-images/
-# https://testdriven.io/blog/docker-best-practices/
-FROM python:3.11-slim-bullseye
-
-RUN apt-get update && apt-get install -y build-essential curl
-
-COPY --from=ghcr.io/astral-sh/uv:0.4.9 /uv /bin/uv
+FROM oven/bun:1.1.38 AS builder
 
 WORKDIR /app
 
-RUN addgroup --system app && adduser --system --group app
-RUN chown -R app:app /app
-USER app
+COPY package.json bun.lock tsconfig.json ./
+COPY src ./src
 
-# Enable bytecode compilation
-ENV UV_COMPILE_BYTECODE=1
+RUN bun install --frozen-lockfile
+RUN bun run --filter @yousim/frontend build
 
-# Copy from the cache instead of linking since it's a mounted volume
-ENV UV_LINK_MODE=copy
+FROM oven/bun:1.1.38
 
-# Install the project's dependencies using the lockfile and settings
-RUN --mount=type=cache,target=/root/.cache/uv \
-    --mount=type=bind,source=uv.lock,target=uv.lock \
-    --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
-    uv sync --frozen --no-install-project --no-dev
+WORKDIR /app
+ENV NODE_ENV=production
 
-# Copy only requirements to cache them in docker layer
-COPY uv.lock pyproject.toml /app/
+COPY package.json bun.lock tsconfig.json ./
+COPY src ./src
+COPY --from=builder /app/src/frontend/dist ./src/frontend/dist
 
-# Sync the project
-RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --frozen --no-dev
+RUN bun install --frozen-lockfile --production
 
-# Place executables in the environment at the front of the path
-ENV PATH="/app/.venv/bin:$PATH"
+EXPOSE 3000
 
-COPY --chown=app:app api/ /app/api/
-
-EXPOSE 8000
-
-CMD fastapi run /app/api/app.py --host 0.0.0.0
+CMD ["bun", "run", "--filter", "@yousim/api", "start"]

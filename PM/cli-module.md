@@ -38,7 +38,7 @@ bun run start
 Or for development:
 
 ```bash
-cd packages/cli
+cd src/cli
 bun run dev
 ```
 
@@ -59,4 +59,3 @@ Type `exit` at any prompt to quit the application.
 
 - `@yousim/core` - Core simulation logic (workspace dependency)
 - `readline` - For interactive terminal input
-

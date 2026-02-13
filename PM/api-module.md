@@ -55,7 +55,7 @@ For development:
 bun run dev
 
 # Or directly
-cd packages/api
+cd src/api
 bun run dev
 ```
 
@@ -66,4 +66,3 @@ bun run dev
 - `@elysiajs/cors` - CORS middleware
 - `@elysiajs/jwt` - JWT authentication middleware
 - `@supabase/supabase-js` - Supabase client for data persistence
-

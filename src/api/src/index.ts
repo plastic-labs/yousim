@@ -3,6 +3,7 @@ import { cors } from "@elysiajs/cors";
 import { jwt } from "@elysiajs/jwt";
 import { staticPlugin } from "@elysiajs/static";
 import { createClient } from '@supabase/supabase-js';
+import path from "path";
 import {
   Message,
   simulate,
@@ -13,11 +14,35 @@ import {
   Identity
 } from "@yousim/core";
 
-// Supabase client
-const supabase = createClient(
-  process.env.SUPABASE_URL || '',
-  process.env.SUPABASE_KEY || ''
-);
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseKey = process.env.SUPABASE_KEY;
+
+if (!supabaseUrl || !supabaseKey) {
+  throw new Error("Missing SUPABASE_URL or SUPABASE_KEY");
+}
+
+const jwtSecret = process.env.JWT_SECRET;
+
+if (!jwtSecret) {
+  throw new Error("Missing JWT_SECRET");
+}
+
+const createSupabaseClient = (accessToken?: string) =>
+  createClient(supabaseUrl, supabaseKey, {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+    },
+    global: accessToken
+      ? {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+          },
+        }
+      : undefined,
+  });
+
+const publicDir = path.resolve(import.meta.dir, "../public");
 
 // Types for our data structures
 interface Session {
@@ -44,23 +69,20 @@ const app = new Elysia()
   .use(cors())
   .use(jwt({
     name: 'jwt',
-    secret: process.env.JWT_SECRET || 'default_secret'
+    secret: jwtSecret
   }))
-  .decorate({
-    supabase
-  })
   .derive(async ({ jwt, headers }) => {
+    const authHeader = headers.authorization;
+    const token =
+      authHeader && authHeader.startsWith("Bearer ")
+        ? authHeader.substring(7)
+        : null;
+
     const get_current_user = async () => {
-      const authHeader = headers.authorization;
-      if (!authHeader || !authHeader.startsWith('Bearer ')) {
-        return null;
-      }
-      
-      const token = authHeader.substring(7);
       if (!token) {
         return null;
       }
-      
+
       try {
         const payload: any = await jwt.verify(token);
         if (!payload) {
@@ -72,13 +94,20 @@ const app = new Elysia()
         return null;
       }
     };
-    
+
     return {
-      get_current_user
+      get_current_user,
+      supabase: createSupabaseClient(token || undefined)
     };
   })
   .get("/api/health", () => "YouSim API - Bun/Elysia version")
-  .get("/user", async ({ query, set }) => {
+  .get("/user", async ({ query, set, get_current_user, supabase }) => {
+    const user_id = await get_current_user();
+    if (!user_id) {
+      set.status = 401;
+      return { error: "Unauthorized" };
+    }
+
     const { name } = query as { name: string };
     if (!name) {
       set.status = 400;
@@ -88,7 +117,7 @@ const app = new Elysia()
     // Create or get user from Supabase
     const { data, error } = await supabase
       .from('users')
-      .upsert({ name: name })
+      .upsert({ id: user_id, name: name })
       .select('id')
       .single();
     
@@ -101,7 +130,7 @@ const app = new Elysia()
       user_id: data.id,
     };
   })
-  .post("/manual", async ({ body, get_current_user, set }) => {
+  .post("/manual", async ({ body, get_current_user, set, supabase }) => {
     const user_id = await get_current_user();
     if (!user_id) {
       set.status = 401;
@@ -115,6 +144,7 @@ const app = new Elysia()
       .from('messages')
       .select('*')
       .eq('session_id', session_id)
+      .eq('user_id', user_id)
       .order('created_at', { ascending: true });
     
     if (messagesError) {
@@ -181,7 +211,7 @@ const app = new Elysia()
       command: t.String()
     })
   })
-  .post("/auto", async ({ body, get_current_user, set }) => {
+  .post("/auto", async ({ body, get_current_user, set, supabase }) => {
     const user_id = await get_current_user();
     if (!user_id) {
       set.status = 401;
@@ -196,6 +226,7 @@ const app = new Elysia()
         .from('messages')
         .select('*')
         .eq('session_id', session_id)
+        .eq('user_id', user_id)
         .order('created_at', { ascending: true });
 
       if (messagesError) {
@@ -222,6 +253,7 @@ const app = new Elysia()
         .from('sessions')
         .select('metadata')
         .eq('id', session_id)
+        .eq('user_id', user_id)
         .single();
 
       const name = session?.metadata?.name || "";
@@ -287,7 +319,7 @@ const app = new Elysia()
       session_id: t.String()
     })
   })
-  .post("/constructor", async ({ body, get_current_user, set }) => {
+  .post("/constructor", async ({ body, get_current_user, set, supabase }) => {
     const user_id = await get_current_user();
     if (!user_id) {
       set.status = 401;
@@ -302,6 +334,7 @@ const app = new Elysia()
         .from('messages')
         .select('*')
         .eq('session_id', session_id)
+        .eq('user_id', user_id)
         .order('created_at', { ascending: true });
 
       if (messagesError) {
@@ -383,7 +416,7 @@ const app = new Elysia()
       command: t.String()
     })
   })
-  .get("/summary", async ({ query, get_current_user, set }) => {
+  .get("/summary", async ({ query, get_current_user, set, supabase }) => {
     const user_id = await get_current_user();
     if (!user_id) {
       set.status = 401;
@@ -406,7 +439,7 @@ const app = new Elysia()
 
     return data;
   })
-  .get("/identity", async ({ query, get_current_user, set }) => {
+  .get("/identity", async ({ query, get_current_user, set, supabase }) => {
     const user_id = await get_current_user();
     if (!user_id) {
       set.status = 401;
@@ -443,7 +476,7 @@ const app = new Elysia()
       return { error: error.message };
     }
   })
-  .post("/chat", async ({ body, get_current_user, set }) => {
+  .post("/chat", async ({ body, get_current_user, set, supabase }) => {
     const user_id = await get_current_user();
     if (!user_id) {
       set.status = 401;
@@ -499,6 +532,7 @@ const app = new Elysia()
         .from('messages')
         .select('*')
         .eq('session_id', session_id)
+        .eq('user_id', user_id)
         .order('created_at', { ascending: true });
 
       if (messagesError) {
@@ -561,7 +595,8 @@ const app = new Elysia()
               summary_id: summary_id
             }
           })
-          .eq('id', session_id);
+          .eq('id', session_id)
+          .eq('user_id', user_id);
       }
 
       return new Response(responseText, {
@@ -588,7 +623,7 @@ const app = new Elysia()
       })))
     })
   })
-  .post("/reset", async ({ query, get_current_user, set }) => {
+  .post("/reset", async ({ query, get_current_user, set, supabase }) => {
     const user_id = await get_current_user();
     if (!user_id) {
       set.status = 401;
@@ -632,7 +667,7 @@ const app = new Elysia()
       session_id: data.id,
     };
   })
-  .get("/session", async ({ query, get_current_user, set }) => {
+  .get("/session", async ({ query, get_current_user, set, supabase }) => {
     const user_id = await get_current_user();
     if (!user_id) {
       set.status = 401;
@@ -682,7 +717,7 @@ const app = new Elysia()
       }))
     };
   })
-  .get("/sessions", async ({ query, get_current_user, set }) => {
+  .get("/sessions", async ({ query, get_current_user, set, supabase }) => {
     const user_id = await get_current_user();
     if (!user_id) {
       set.status = 401;
@@ -711,7 +746,7 @@ const app = new Elysia()
 
     return sessions;
   })
-  .put("/sessions/:session_id/metadata", async ({ params, body, get_current_user, set }) => {
+  .put("/sessions/:session_id/metadata", async ({ params, body, get_current_user, set, supabase }) => {
     const user_id = await get_current_user();
     if (!user_id) {
       set.status = 401;
@@ -739,7 +774,7 @@ const app = new Elysia()
       metadata: data.metadata
     };
   })
-  .get("/export/:session_id", async ({ params, get_current_user, set }) => {
+  .get("/export/:session_id", async ({ params, get_current_user, set, supabase }) => {
     const user_id = await get_current_user();
     if (!user_id) {
       set.status = 401;
@@ -772,15 +807,15 @@ const app = new Elysia()
       }
     });
   })
-  // Serve static assets from frontend/dist
+  // Serve static assets from the built frontend
   .use(staticPlugin({
-    assets: "public/assets",
+    assets: path.join(publicDir, "assets"),
     prefix: "/assets",
     alwaysStatic: false,
   }))
   // SPA fallback - serve index.html for all unmatched routes
   .get("/*", () => {
-    return Bun.file("public/index.html");
+    return Bun.file(path.join(publicDir, "index.html"));
   })
   .listen(process.env.PORT || 3000);
 

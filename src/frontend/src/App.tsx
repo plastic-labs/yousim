@@ -1,21 +1,69 @@
-import React, { useState, useEffect } from 'react';
-import { supabase, api } from './api';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { api, supabase } from './api';
+import { terminalConfig, simCommands, metaCommands, keyHints } from './config';
 import './index.css';
 
+type SessionMessage = {
+  id?: string;
+  content: string;
+  created_at?: string;
+  is_user: boolean;
+};
+
 const App: React.FC = () => {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const [ready, setReady] = useState(false);
   const [sessionId, setSessionId] = useState<string | null>(null);
-  const [messages, setMessages] = useState<any[]>([]);
+  const [messages, setMessages] = useState<SessionMessage[]>([]);
   const [command, setCommand] = useState('');
   const [sending, setSending] = useState(false);
+  const [name, setName] = useState('');
+  const [history, setHistory] = useState<string[]>([]);
+  const [historyIndex, setHistoryIndex] = useState(0);
+  const [tempInput, setTempInput] = useState('');
+  const [showIntro, setShowIntro] = useState(true);
+  const [clearAt, setClearAt] = useState(0);
+  const [extraSections, setExtraSections] = useState<string[]>([]);
 
-  // Check authentication status
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
   useEffect(() => {
-    checkAuth();
+    const root = document.documentElement;
+    const colors = terminalConfig.colors;
+    root.style.setProperty('--bg', colors.background);
+    root.style.setProperty('--fg', colors.foreground);
+    root.style.setProperty('--banner', colors.banner);
+    root.style.setProperty('--border', colors.border.color);
+    root.style.setProperty('--prompt-default', colors.prompt.default);
+    root.style.setProperty('--prompt-host', colors.prompt.host);
+    root.style.setProperty('--prompt-user', colors.prompt.user);
+    root.style.setProperty('--prompt-input', colors.prompt.input);
+    root.style.setProperty('--link', colors.link.text);
+    root.style.setProperty('--link-highlight', colors.link.highlightColor);
+    root.style.setProperty('--link-highlight-text', colors.link.highlightText);
+    root.style.setProperty('--command', colors.commands.textColor);
+    root.style.setProperty('--simulator', colors.simulator);
+  }, []);
 
-    const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
-      setIsAuthenticated(!!session);
+  useEffect(() => {
+    const init = async () => {
+      const { data } = await supabase.auth.getSession();
+      if (!data.session) {
+        const { error } = await supabase.auth.signInAnonymously();
+        if (error) {
+          console.error('Auth error:', error);
+        } else {
+          await loadOrCreateSession();
+        }
+      } else {
+        await loadOrCreateSession();
+      }
+      setReady(true);
+    };
+
+    init();
+
+    const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
       if (session) {
         loadOrCreateSession();
       }
@@ -26,194 +74,325 @@ const App: React.FC = () => {
     };
   }, []);
 
-  async function checkAuth() {
-    const { data } = await supabase.auth.getSession();
-    setIsAuthenticated(!!data.session);
-    setLoading(false);
-
-    if (data.session) {
-      loadOrCreateSession();
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }
+  }, [messages, extraSections, showIntro, clearAt]);
 
-  async function signInAnonymously() {
-    setLoading(true);
-    const { error } = await supabase.auth.signInAnonymously();
-    if (error) {
-      console.error('Auth error:', error);
-      alert('Failed to sign in: ' + error.message);
+  useEffect(() => {
+    if (ready && !sending) {
+      inputRef.current?.focus();
     }
-    setLoading(false);
-  }
+  }, [ready, sending]);
 
-  async function loadOrCreateSession() {
+  const loadOrCreateSession = async () => {
     try {
-      // Try to get latest session
-      const sessions = await api.getSessions();
+      const sessions = await api.getSessions('simulator');
       if (sessions.length > 0) {
         const latestSession = sessions[0];
         setSessionId(latestSession.id);
-        loadMessages(latestSession.id);
+        await loadMessages(latestSession.id);
       } else {
-        // Create new session
-        const { session_id } = await api.resetSession();
+        const { session_id } = await api.resetSession('simulator');
         setSessionId(session_id);
+        setMessages([]);
+        setName('');
       }
     } catch (error: any) {
       console.error('Session error:', error);
     }
-  }
+  };
 
-  async function loadMessages(sid?: string) {
+  const loadMessages = async (sid?: string) => {
     try {
       const { messages: msgs } = await api.getSession(sid || sessionId || undefined);
       setMessages(msgs);
+      if (!name && msgs.length > 0) {
+        const first = msgs[0];
+        if (first?.content?.startsWith('/locate ')) {
+          setName(first.content.slice(8));
+        }
+      }
     } catch (error) {
       console.error('Load messages error:', error);
     }
-  }
+  };
 
-  async function handleSendMessage(e: React.FormEvent) {
-    e.preventDefault();
-    if (!command.trim() || !sessionId || sending) return;
-
-    setSending(true);
+  const handleReset = async () => {
+    if (!sessionId) return;
     try {
-      const response = await api.sendManual(sessionId, command);
-      setCommand('');
-
-      // Reload messages to see the new conversation
-      await loadMessages();
-    } catch (error: any) {
-      console.error('Send error:', error);
-      alert('Failed to send message: ' + error.message);
-    } finally {
-      setSending(false);
-    }
-  }
-
-  async function handleReset() {
-    try {
-      const { session_id } = await api.resetSession();
+      const { session_id } = await api.resetSession('simulator');
       setSessionId(session_id);
       setMessages([]);
+      setName('');
+      setHistory([]);
+      setHistoryIndex(0);
+      setTempInput('');
+      setShowIntro(true);
+      setExtraSections([]);
+      setClearAt(0);
     } catch (error) {
       console.error('Reset error:', error);
     }
-  }
+  };
 
-  if (loading) {
+  const handleCommand = async () => {
+    if (!sessionId || sending) return;
+
+    const trimmed = command.trim();
+    if (!trimmed && !name) return;
+
+    if (trimmed) {
+      const nextHistory = [...history, trimmed];
+      setHistory(nextHistory);
+      setHistoryIndex(nextHistory.length);
+    }
+
+    if (trimmed === 'clear') {
+      setShowIntro(false);
+      setExtraSections([]);
+      setClearAt(messages.length);
+      setCommand('');
+      return;
+    }
+
+    if (trimmed === 'help') {
+      setExtraSections((prev) => [...prev, `help-${Date.now()}`]);
+      setCommand('');
+      return;
+    }
+
+    if (trimmed === 'banner') {
+      setExtraSections((prev) => [...prev, `banner-${Date.now()}`]);
+      setCommand('');
+      return;
+    }
+
+    if (trimmed === 'reset') {
+      await handleReset();
+      setCommand('');
+      return;
+    }
+
+    setSending(true);
+    try {
+      if (!trimmed && name) {
+        await api.sendAuto(sessionId);
+      } else if (!name) {
+        const newName = trimmed;
+        setName(newName);
+        try {
+          await api.updateSessionMetadata(sessionId, { name: newName });
+        } catch (error) {
+          console.error('Metadata update failed:', error);
+        }
+        await api.sendManual(sessionId, `/locate ${newName}`);
+      } else {
+        await api.sendManual(sessionId, trimmed);
+      }
+
+      setCommand('');
+      await loadMessages();
+    } catch (error: any) {
+      console.error('Send error:', error);
+    } finally {
+      setSending(false);
+      inputRef.current?.focus();
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    switch (e.key) {
+      case 'Enter':
+        e.preventDefault();
+        handleCommand();
+        break;
+      case 'Escape':
+        setCommand('');
+        break;
+      case 'ArrowUp':
+        if (historyIndex === history.length) {
+          setTempInput(command);
+        }
+        if (historyIndex > 0) {
+          const nextIndex = historyIndex - 1;
+          setHistoryIndex(nextIndex);
+          setCommand(history[nextIndex]);
+        }
+        e.preventDefault();
+        break;
+      case 'ArrowDown':
+        if (historyIndex < history.length) {
+          const nextIndex = historyIndex + 1;
+          setHistoryIndex(nextIndex);
+          if (nextIndex === history.length) {
+            setCommand(tempInput);
+          } else {
+            setCommand(history[nextIndex]);
+          }
+        }
+        break;
+      case 'Tab':
+        e.preventDefault();
+        if (!command) return;
+        const candidates = [...simCommands.map(([cmd]) => cmd), ...metaCommands.map(([cmd]) => cmd)];
+        const match = candidates.find((cmd) => cmd.startsWith(command));
+        if (match) {
+          setCommand(match);
+        }
+        break;
+      default:
+        break;
+    }
+  };
+
+  const promptNode = useMemo(() => {
+    if (sending) {
+      return <span className="prompt">LOADING...</span>;
+    }
+    if (!name) {
+      return <span className="prompt">Enter a Name to Simulate &gt;&gt;&gt;</span>;
+    }
     return (
-      <div style={{ padding: '20px', textAlign: 'center' }}>
-        <h1>YouSim</h1>
-        <p>Loading...</p>
-      </div>
+      <span className="prompt">
+        <span className="prompt-user">{terminalConfig.username}</span>@
+        <span className="prompt-host">{terminalConfig.hostname}</span>:$ ~
+      </span>
     );
-  }
+  }, [name, sending]);
 
-  if (!isAuthenticated) {
+  const renderPromptLine = (content: string, key: string) => (
+    <p className="terminal-line" key={key}>
+      <span className="prompt">
+        <span className="prompt-user">{terminalConfig.username}</span>@
+        <span className="prompt-host">{terminalConfig.hostname}</span>:$ ~
+      </span>{' '}
+      <span className="output">{content}</span>
+    </p>
+  );
+
+  const renderMessageBlocks = () => {
+    const sliced = messages.slice(clearAt);
+    return sliced.map((msg, index) => {
+      const labelClass = msg.is_user ? 'searcher' : 'simulator';
+      const label = 'SIMULATOR CLAUDE:';
+      const promptContent =
+        msg.is_user && index === 0 && msg.content.startsWith('/locate ')
+          ? msg.content.slice(8)
+          : msg.content;
+
+      return (
+        <div className="terminal-block" key={msg.id || `${index}-${msg.content}`}> 
+          {msg.is_user && renderPromptLine(promptContent, `prompt-${index}`)}
+          <p className={`terminal-line ${labelClass}`}>{label}</p>
+          <p className={`terminal-line ${labelClass}`}>{msg.content}</p>
+        </div>
+      );
+    });
+  };
+
+  const renderHelp = (key?: string) => (
+    <div className="terminal-block" key={key || 'help-block'}>
+      {simCommands.map(([cmd, desc]) => (
+        <div className="command-row" key={cmd}>
+          <span className="command">{cmd}</span>
+          <span>{desc}</span>
+        </div>
+      ))}
+      <div className="terminal-line">&nbsp;</div>
+      {metaCommands.map(([cmd, desc]) => (
+        <div className="command-row" key={cmd}>
+          <span className="command">{cmd}</span>
+          <span>{desc}</span>
+        </div>
+      ))}
+      <div className="terminal-line">&nbsp;</div>
+      {keyHints.map(([keyLabel, desc]) => (
+        <p className="terminal-line" key={keyLabel}>
+          Press <span className="keys">{keyLabel}</span> {desc}
+        </p>
+      ))}
+    </div>
+  );
+
+  const renderBanner = (key?: string) => (
+    <div className="terminal-block banner" key={key || 'banner-block'}>
+      {terminalConfig.ascii.map((line, idx) => (
+        <pre key={idx}>{line}</pre>
+      ))}
+      <div className="terminal-line">&nbsp;</div>
+      <div className="terminal-line">Welcome to {terminalConfig.title} {terminalConfig.version}</div>
+    </div>
+  );
+
+  if (!ready) {
     return (
-      <div style={{ padding: '20px', textAlign: 'center' }}>
-        <h1>YouSim - Identity Simulator</h1>
-        <p>Simulate identities within the latent space of Claude</p>
-        <button
-          onClick={signInAnonymously}
-          style={{
-            padding: '10px 20px',
-            fontSize: '16px',
-            cursor: 'pointer',
-            marginTop: '20px'
-          }}
-        >
-          Start Simulation
-        </button>
-      </div>
+      <main>
+        <div id="bars">
+          <div id="bar-1">
+            <div>YouSim.x64_x86</div>
+          </div>
+          <div id="bar-2"></div>
+          <div id="bar-3"></div>
+          <div id="bar-4"></div>
+          <div id="bar-5"></div>
+        </div>
+        <div id="scroll-zone" ref={scrollRef}>
+          <div id="terminal">
+            <p className="terminal-line">Loading...</p>
+          </div>
+        </div>
+      </main>
     );
   }
 
   return (
-    <div style={{ padding: '20px', maxWidth: '800px', margin: '0 auto' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-        <h1>YouSim</h1>
-        <button onClick={handleReset} style={{ padding: '5px 15px' }}>
-          New Session
-        </button>
+    <main onClick={() => inputRef.current?.focus()}>
+      <div id="bars">
+        <div id="bar-1">
+          <div>YouSim.x64_x86</div>
+          <div id="social-buttons">
+            <a href="https://x.com/plastic_labs" target="_blank" rel="noreferrer">x</a>
+            <a href="https://github.com/plastic-labs" target="_blank" rel="noreferrer">gh</a>
+            <a href="https://discord.gg/plasticlabs" target="_blank" rel="noreferrer">dc</a>
+          </div>
+        </div>
+        <div id="bar-2"></div>
+        <div id="bar-3"></div>
+        <div id="bar-4"></div>
+        <div id="bar-5"></div>
       </div>
 
-      <div
-        style={{
-          border: '1px solid #ccc',
-          borderRadius: '8px',
-          padding: '20px',
-          minHeight: '400px',
-          maxHeight: '600px',
-          overflowY: 'auto',
-          marginBottom: '20px',
-          backgroundColor: '#f9f9f9'
-        }}
-      >
-        {messages.length === 0 ? (
-          <p style={{ color: '#666', textAlign: 'center' }}>
-            Start by sending a command like "/locate Einstein"
-          </p>
-        ) : (
-          messages.map((msg, idx) => (
-            <div
-              key={idx}
-              style={{
-                marginBottom: '15px',
-                padding: '10px',
-                borderRadius: '6px',
-                backgroundColor: msg.is_user ? '#e3f2fd' : '#fff3e0'
-              }}
-            >
-              <div style={{ fontWeight: 'bold', marginBottom: '5px', fontSize: '12px' }}>
-                {msg.is_user ? '🔵 You' : '🟡 Simulator'}
-              </div>
-              <div style={{ whiteSpace: 'pre-wrap' }}>{msg.content}</div>
-            </div>
-          ))
-        )}
+      <div id="scroll-zone" ref={scrollRef}>
+        <div id="terminal">
+          {showIntro && renderBanner()}
+          {showIntro && renderHelp()}
+          {extraSections.map((section) =>
+            section.startsWith('banner') ? renderBanner(section) : renderHelp(section)
+          )}
+          {renderMessageBlocks()}
+        </div>
+
+        <div id="input-line">
+          <div className="input-row">
+            {promptNode}
+            <input
+              ref={inputRef}
+              className="terminal-input"
+              type="text"
+              value={command}
+              onChange={(e) => setCommand(e.target.value)}
+              onKeyDown={handleKeyDown}
+              disabled={sending}
+              spellCheck={false}
+              autoCapitalize="none"
+              autoComplete="off"
+            />
+          </div>
+        </div>
       </div>
-
-      <form onSubmit={handleSendMessage} style={{ display: 'flex', gap: '10px' }}>
-        <input
-          type="text"
-          value={command}
-          onChange={(e) => setCommand(e.target.value)}
-          placeholder="Enter command (e.g., /locate Einstein)"
-          disabled={sending}
-          style={{
-            flex: 1,
-            padding: '10px',
-            fontSize: '16px',
-            borderRadius: '4px',
-            border: '1px solid #ccc'
-          }}
-        />
-        <button
-          type="submit"
-          disabled={sending || !command.trim()}
-          style={{
-            padding: '10px 20px',
-            fontSize: '16px',
-            cursor: sending ? 'not-allowed' : 'pointer',
-            borderRadius: '4px',
-            border: 'none',
-            backgroundColor: sending ? '#ccc' : '#007bff',
-            color: 'white'
-          }}
-        >
-          {sending ? 'Sending...' : 'Send'}
-        </button>
-      </form>
-
-      {sessionId && (
-        <p style={{ marginTop: '10px', fontSize: '12px', color: '#666' }}>
-          Session: {sessionId}
-        </p>
-      )}
-    </div>
+    </main>
   );
 };
 

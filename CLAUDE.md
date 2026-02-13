@@ -13,7 +13,7 @@ The repository follows a monorepo structure with workspaces defined in `src/*`:
 - **`src/core`** (`@yousim/core`): Shared simulation logic and LLM integration. Provider-agnostic core that can be used by any interface.
 - **`src/cli`** (`@yousim/cli`): Command-line interface for terminal-based simulations.
 - **`src/api`** (`@yousim/api`): Backend API service using Bun and Elysia.js for web-based access.
-- **`frontend/`**: React/Vite frontend application.
+- **`src/frontend`**: React/Vite frontend application.
 - **`legacy-python/`**: Original Python implementation (not actively maintained).
 - **`PM/`**: Project management documentation with detailed architecture notes.
 - **`supabase/`**: Supabase configuration for database and authentication.
@@ -76,7 +76,7 @@ bun run start
 **Frontend:**
 
 ```bash
-cd frontend
+cd src/frontend
 bun run dev
 ```
 
@@ -109,7 +109,7 @@ Environment variables are managed through a root `.env` file. Each package direc
 - `SUPABASE_URL`: Supabase project URL
 - `SUPABASE_KEY`: Supabase public key
 - `JWT_SECRET`: From Supabase project for JWT verification
-- `PORT`: API server port (default: 3001)
+- `PORT`: API server port (default: 3000)
 
 **Legacy deployment variables (for Python/webshell):**
 
@@ -153,11 +153,11 @@ Configuration is in `supabase/config.toml`. For local development, you can run S
 
 ## Docker Deployment
 
-Docker Compose configuration is available in the root. Important considerations:
+Docker Compose configuration is available in the root. The Bun/Elysia API builds the frontend and serves it from `src/api/public`:
 
-- Frontend `.env` variables are used at build time
-- Webshell runs on port 3000 in Docker (update `CLIENT_REGEX` accordingly)
-- Both frontend and backend can be started with `docker-compose up`
+```bash
+docker compose up --build
+```
 
 ## Workspace Dependencies
 

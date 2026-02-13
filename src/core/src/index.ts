@@ -26,10 +26,28 @@ export interface SimulationOptions {
   model?: string;
 }
 
+const DEFAULT_MODEL = "claude-sonnet-4-5-20250929";
+
+function resolveModel(provider: string, explicitModel?: string): string {
+  if (explicitModel) {
+    return explicitModel;
+  }
+
+  if (process.env.MODEL) {
+    return process.env.MODEL;
+  }
+
+  if (provider === "openrouter" && process.env.OPENROUTER_MODEL) {
+    return process.env.OPENROUTER_MODEL;
+  }
+
+  return DEFAULT_MODEL;
+}
+
 // Core simulation function
 export async function simulate(messages: Message[], options: SimulationOptions = {}) {
   const provider = options.provider || process.env.PROVIDER || "anthropic";
-  const model = options.model || process.env.MODEL || "claude-sonnet-4-5-20250929";
+  const model = resolveModel(provider, options.model);
   
   let modelInstance;
   

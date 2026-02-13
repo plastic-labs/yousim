@@ -34,7 +34,7 @@ You can find these values in your Supabase project dashboard under Project Setti
 bun run dev
 ```
 
-The development server will start on port 3000. Visit http://localhost:3000 to access the frontend.
+The development server will start on port 5173. Visit http://localhost:5173 to access the frontend.
 
 ### 4. Build for Production
 
@@ -42,7 +42,7 @@ The development server will start on port 3000. Visit http://localhost:3000 to a
 bun run build
 ```
 
-The build output will be in the `dist/` directory.
+The build output will be in `src/api/public` so the API can serve it.
 
 ### 5. Preview Production Build
 

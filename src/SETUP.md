@@ -3,75 +3,92 @@
 ## Initial Setup
 
 1. Install dependencies from the root directory:
+
 ```bash
 bun install
 ```
 
-This will install all dependencies for all packages thanks to the workspace configuration.
+2. Create symlinks to the root `.env` file in each package directory (optional, but convenient):
 
-2. Create symlinks to the root `.env` file in each package directory:
 ```bash
-cd packages/cli && ln -sf ../../.env .env
-cd packages/api && ln -sf ../../.env .env
-cd packages/core && ln -sf ../../.env .env
+cd src/cli && ln -sf ../../.env .env
+cd src/api && ln -sf ../../.env .env
+cd src/core && ln -sf ../../.env .env
+cd src/frontend && ln -sf ../../.env .env
 ```
-
-This allows Bun to automatically load environment variables from the root `.env` file.
 
 ## Running the CLI
 
-Due to limitations with Bun's workspace filter commands and interactive stdin, you need to run the CLI directly from the CLI package directory:
+Due to limitations with Bun's workspace filter commands and interactive stdin, run the CLI directly:
 
 ```bash
-cd packages/cli
+cd src/cli
 bun run start
 ```
-
-Note: The CLI will prompt you for a name and then continue the conversation loop. Type "exit" to quit.
 
 ## Running the API
 
-To run the API:
 ```bash
+# From root
 bun run start:api
+
+# Or directly
+cd src/api
+bun run start
 ```
 
-Or directly from the API package:
+## Running the Frontend
+
 ```bash
-cd packages/api
-bun run start
+cd src/frontend
+bun run dev
+```
+
+## Building for Deployment
+
+The frontend build is configured to output into `src/api/public` so the API can serve it.
+
+```bash
+bun run build
 ```
 
 ## Environment Variables
 
 Create a `.env` file in the root directory by copying the template:
+
 ```bash
 cp .env.template .env
 ```
 
 Then fill in your API keys in the `.env` file.
 
-Bun automatically loads environment variables from `.env` files in the current working directory. With the symlinks in place, each package will automatically load the environment variables from the root `.env` file.
-
 ```bash
 # LLM Provider options include anthropic or openrouter
 PROVIDER=anthropic
+MODEL=claude-sonnet-4-5-20250929
 # Anthropic API Key
 ANTHROPIC_API_KEY=your_api_key_here
 ```
 
 For the API package, you'll also need Supabase credentials:
+
 ```bash
 SUPABASE_URL=your_supabase_url
 SUPABASE_KEY=your_supabase_key
 JWT_SECRET=your_jwt_secret
 ```
 
+For the frontend build, you'll need:
+
+```bash
+VITE_SUPABASE_URL=your_supabase_url
+VITE_SUPABASE_KEY=your_supabase_anon_key
+```
+
 ## Development
 
-To run all packages in development mode:
+To run API and frontend together in development mode:
+
 ```bash
 bun run dev
 ```
-
-This will run the dev script in all packages simultaneously.
