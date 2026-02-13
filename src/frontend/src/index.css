@@ -1,0 +1,61 @@
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background-color: #000;
+  color: #00ff00;
+}
+
+.app {
+  padding: 20px;
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+form {
+  display: flex;
+  gap: 10px;
+  margin: 20px 0;
+}
+
+input {
+  flex: 1;
+  padding: 10px;
+  background-color: #000;
+  color: #00ff00;
+  border: 1px solid #00ff00;
+}
+
+button {
+  padding: 10px 20px;
+  background-color: #00ff00;
+  color: #000;
+  border: none;
+  cursor: pointer;
+}
+
+button:hover {
+  background-color: #00cc00;
+}
+
+.messages {
+  margin: 20px 0;
+  padding: 10px;
+  border: 1px solid #00ff00;
+  min-height: 300px;
+}
+
+.user-message {
+  margin: 10px 0;
+  padding: 5px;
+  background-color: #111;
+}
+
+.simulator-message {
+  margin: 10px 0;
+  padding: 5px;
+  background-color: #222;
+}

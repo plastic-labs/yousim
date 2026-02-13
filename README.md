@@ -3,14 +3,25 @@
 YouSim is a simulator that lets you simulate identities within the latent space
 of Claude 3.5 Sonnet. It's live at [https://yousim.ai](https://yousim.ai)!
 
+This repository contains both the original Python implementation and new Bun-based implementations organized in a monorepo structure:
+- `packages/core`: Shared simulation logic and LLM integration
+- `packages/api`: Backend API using Bun and Elysia.js
+- `packages/cli`: Command-line interface using Bun
+
 ## Environment Variables
 
 These are different values you set in a `.env` file that affect the behavior of
 YouSim. Some of them are related to the web deployment for things like user
 accounts and shareable links, while other's impact the core behavior of YouSim.
 
-There is an `.env.template` file that covers all of these. Some special callouts
-and notes.
+Create a `.env` file in the root directory by copying the template:
+```bash
+cp .env.template .env
+```
+
+Then fill in your API keys in the `.env` file.
+
+Bun automatically loads environment variables from `.env` files in the current working directory. In the monorepo packages, we create symlinks to the root `.env` file so that each package automatically loads the environment variables.
 
 There is a `PROVIDER` variable that controls which LLM provider is used by
 YouSim. Currently, this only supports
@@ -18,7 +29,7 @@ YouSim. Currently, this only supports
 - `anthropic`
 - `openrouter`
 
-If you specify `anthropic` It will use `claude-sonnet-3.5` as the model and make
+If you specify `anthropic` It will use `claude-sonnet-4-5-20250929` as the model and make
 use of the new [caching](https://docs.anthropic.com/en/docs/build-with-claude/prompt-caching) feature. This also means you needs to specify a
 `ANTHROPIC_API_KEY` in your `.env`.
 
@@ -110,9 +121,68 @@ Magic Link template. Below is an example of a template you can use:
 <p>{{ .Token }}</p>
 ```
 
+## Bun-based Components (Monorepo)
+
+This project now includes Bun-based implementations organized in a monorepo structure:
+
+### Monorepo Structure
+- `packages/core`: Shared simulation logic and LLM integration
+- `packages/api`: Backend API using Bun and Elysia.js
+- `packages/cli`: Command-line interface using Bun
+
+### Project Management Documentation
+
+Detailed documentation about the monorepo architecture and individual modules can be found in the [PM](PM/) folder:
+
+- [PM/monorepo-architecture.md](PM/monorepo-architecture.md) - High-level overview of the monorepo structure
+- [PM/core-module.md](PM/core-module.md) - Documentation for the shared core logic
+- [PM/cli-module.md](PM/cli-module.md) - Documentation for the CLI interface
+- [PM/api-module.md](PM/api-module.md) - Documentation for the API service
+- [PM/frontend-module.md](PM/frontend-module.md) - Documentation for the React frontend
+
+### Setup
+1. Install dependencies from the root:
+```bash
+bun install
+```
+
+### Running the Components
+
+#### Backend API (packages/api)
+The backend API is implemented using Bun and Elysia.js. To run it:
+```bash
+bun run --filter @yousim/api dev
+```
+
+Or directly from the API package:
+```bash
+cd packages/api
+bun run dev
+```
+
+#### CLI (packages/cli)
+The CLI is implemented using Bun. Due to limitations with Bun's workspace filter commands and interactive stdin, you must run it directly from the CLI package directory:
+
+```bash
+cd packages/cli
+bun run dev
+```
+
+The filter command (`bun run --filter @yousim/cli dev`) does not properly handle interactive input and will exit immediately.
+
+#### Frontend (frontend/)
+The frontend is implemented using React, TypeScript, and Vite. To run it:
+
+```bash
+cd frontend
+bun run dev
+```
+
+The frontend will start on port 3000. You'll need to configure the Supabase environment variables in a `.env` file in the frontend directory.
+
 ## Credits
 
-Thanks to [nasan16](https://github.com/nasan016) for their initial work on
+Thanks to [nasan016](https://github.com/nasan016) for their initial work on
 [webshell](https://github.com/nasan016/webshell) and [Andy
 Ayrey](https://x.com/AndyAyrey) for his work on [Infinite
 Backrooms](https://dreams-of-an-electric-mind.webflow.io/), whose prompts

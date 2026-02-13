@@ -1,0 +1,19 @@
+{
+  "name": "@yousim/cli",
+  "version": "1.0.0",
+  "description": "CLI version of YouSim",
+  "type": "module",
+  "main": "src/cli.ts",
+  "types": "src/cli.ts",
+  "scripts": {
+    "start": "bun run src/cli.ts",
+    "dev": "bun run src/cli.ts"
+  },
+  "bin": {
+    "yousim": "./src/cli.ts"
+  },
+  "dependencies": {
+    "@yousim/core": "workspace:*",
+    "readline": "^1.3.0"
+  }
+}
