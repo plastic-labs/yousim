@@ -12,6 +12,15 @@ const openrouter = createOpenAI({
   apiKey: process.env.OPENAI_API_KEY || process.env.OPENROUTER_API_KEY || "placeholder",
 });
 
+const openai = createOpenAI({
+  apiKey: process.env.OPENAI_API_KEY || "placeholder",
+});
+
+const groq = createOpenAI({
+  baseURL: "https://api.groq.com/openai/v1",
+  apiKey: process.env.GROQ_API_KEY || "placeholder",
+});
+
 export interface Message {
   role: "user" | "assistant";
   content: string;
@@ -23,6 +32,13 @@ interface AgentOptions {
 }
 
 const DEFAULT_MODEL = "claude-sonnet-4-5-20250929";
+
+const PROVIDER_DEFAULTS: Record<string, string> = {
+  anthropic: "claude-sonnet-4-5-20250929",
+  openrouter: "anthropic/claude-3.5-sonnet",
+  openai: "gpt-4o",
+  groq: "llama-3.3-70b-versatile",
+};
 
 function resolveModel(provider: string, explicitModel?: string): string {
   if (explicitModel) {
@@ -37,7 +53,7 @@ function resolveModel(provider: string, explicitModel?: string): string {
     return process.env.OPENROUTER_MODEL;
   }
 
-  return DEFAULT_MODEL;
+  return PROVIDER_DEFAULTS[provider] || DEFAULT_MODEL;
 }
 
 // Utility function to handle streaming from different providers
@@ -55,8 +71,12 @@ async function* streamFromModel(
     modelInstance = anthropic(model);
   } else if (provider === "openrouter") {
     modelInstance = openrouter(model);
+  } else if (provider === "openai") {
+    modelInstance = openai(model);
+  } else if (provider === "groq") {
+    modelInstance = groq(model);
   } else {
-    throw new Error(`Unsupported provider: ${provider}`);
+    throw new Error(`Unsupported provider: ${provider}. Supported: anthropic, openrouter, openai, groq`);
   }
 
   const streamConfig: any = {

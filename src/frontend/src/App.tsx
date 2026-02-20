@@ -71,15 +71,21 @@ const App: React.FC = () => {
 
   useEffect(() => {
     const init = async () => {
-      const { data } = await supabase.auth.getSession();
-      if (!data.session) {
-        const { error } = await supabase.auth.signInAnonymously();
-        if (error) {
-          console.error('Auth error:', error);
+      if (supabase) {
+        // Supabase auth mode
+        const { data } = await supabase.auth.getSession();
+        if (!data.session) {
+          const { error } = await supabase.auth.signInAnonymously();
+          if (error) {
+            console.error('Auth error:', error);
+          } else {
+            await loadOrCreateSession();
+          }
         } else {
           await loadOrCreateSession();
         }
       } else {
+        // Local mode — no auth needed
         await loadOrCreateSession();
       }
       setReady(true);
@@ -87,15 +93,17 @@ const App: React.FC = () => {
 
     init();
 
-    const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session) {
-        loadOrCreateSession();
-      }
-    });
+    if (supabase) {
+      const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
+        if (session) {
+          loadOrCreateSession();
+        }
+      });
 
-    return () => {
-      authListener?.subscription?.unsubscribe();
-    };
+      return () => {
+        authListener?.subscription?.unsubscribe();
+      };
+    }
   }, []);
 
   useEffect(() => {

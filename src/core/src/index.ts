@@ -5,6 +5,12 @@ import { streamText } from "ai";
 // Export agents
 export * from "./agents";
 
+// Export storage
+export type { Storage, StoredSession, StoredMessage, StoredSummary } from "./storage";
+export { MemoryStorage } from "./storage/memory";
+export { SqliteStorage } from "./storage/sqlite";
+export { createStorage } from "./storage/index";
+
 // Initialize clients for different providers
 const anthropic = createAnthropic({
   apiKey: process.env.ANTHROPIC_API_KEY || "placeholder",
@@ -13,6 +19,15 @@ const anthropic = createAnthropic({
 const openrouter = createOpenAI({
   baseURL: "https://openrouter.ai/api/v1",
   apiKey: process.env.OPENAI_API_KEY || process.env.OPENROUTER_API_KEY || "placeholder",
+});
+
+const openai = createOpenAI({
+  apiKey: process.env.OPENAI_API_KEY || "placeholder",
+});
+
+const groq = createOpenAI({
+  baseURL: "https://api.groq.com/openai/v1",
+  apiKey: process.env.GROQ_API_KEY || "placeholder",
 });
 
 // Core simulation interface
@@ -55,8 +70,12 @@ export async function simulate(messages: Message[], options: SimulationOptions =
     modelInstance = anthropic(model);
   } else if (provider === "openrouter") {
     modelInstance = openrouter(model);
+  } else if (provider === "openai") {
+    modelInstance = openai(model);
+  } else if (provider === "groq") {
+    modelInstance = groq(model);
   } else {
-    throw new Error(`Unsupported provider: ${provider}`);
+    throw new Error(`Unsupported provider: ${provider}. Supported: anthropic, openrouter, openai, groq`);
   }
 
   try {

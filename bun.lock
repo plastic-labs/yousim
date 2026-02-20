@@ -10,7 +10,7 @@
     },
     "src/api": {
       "name": "@yousim/api",
-      "version": "1.0.0",
+      "version": "0.1.0",
       "dependencies": {
         "@elysiajs/cors": "^1.4.0",
         "@elysiajs/static": "^1.4.4",
@@ -25,7 +25,7 @@
     },
     "src/cli": {
       "name": "@yousim/cli",
-      "version": "1.0.0",
+      "version": "0.1.0",
       "bin": {
         "yousim-cli": "./src/cli.ts",
       },
@@ -37,7 +37,7 @@
     },
     "src/core": {
       "name": "@yousim/core",
-      "version": "1.0.0",
+      "version": "0.1.0",
       "dependencies": {
         "@ai-sdk/anthropic": "^2.0.40",
         "@ai-sdk/openai": "^2.0.59",
@@ -65,8 +65,8 @@
       },
     },
     "src/launcher": {
-      "name": "@yousim/launcher",
-      "version": "1.0.0",
+      "name": "yousim",
+      "version": "0.1.0",
       "bin": {
         "yousim": "./src/index.ts",
       },
@@ -303,8 +303,6 @@
 
     "@yousim/frontend": ["@yousim/frontend@workspace:src/frontend"],
 
-    "@yousim/launcher": ["@yousim/launcher@workspace:src/launcher"],
-
     "abort-controller": ["abort-controller@3.0.0", "", { "dependencies": { "event-target-shim": "^5.0.0" } }, "sha512-h8lQ8tacZYnR3vNQTgibj+tODHI5/+l06Au2Pcriv/Gmet0eaj4TwWH41sO9wnHDiQsEj19q0drzdWdeAHtweg=="],
 
     "agentkeepalive": ["agentkeepalive@4.6.0", "", { "dependencies": { "humanize-ms": "^1.2.1" } }, "sha512-kja8j7PjmncONqaTsB8fQ+wE2mSU2DJ9D4XKoJ5PFWIdRMa6SLSN1ff4mOr4jCbfRSsxR4keIiySJU0N9T5hIQ=="],
@@ -490,6 +488,8 @@
     "ws": ["ws@8.18.3", "", { "peerDependencies": { "bufferutil": "^4.0.1", "utf-8-validate": ">=5.0.2" }, "optionalPeers": ["bufferutil", "utf-8-validate"] }, "sha512-PEIGCY5tSlUt50cqyMXfCzX+oOPqN0vuGqWzbcJ2xvnkzkq46oOpz7dQaTDBdfICb4N14+GARUDw2XV2N4tvzg=="],
 
     "yallist": ["yallist@3.1.1", "", {}, "sha512-a4UGQaWPH59mOXUYnAG2ewncQS4i4F43Tv3JoAM+s2VDAmS9NsK8GpDMLrCHPksFT7h3K6TOoUNn2pb7RoXx4g=="],
+
+    "yousim": ["yousim@workspace:src/launcher"],
 
     "zod": ["zod@4.1.12", "", {}, "sha512-JInaHOamG8pt5+Ey8kGmdcAcg3OL9reK8ltczgHTAwNhMys/6ThXHityHxVV2p3fkw/c+MAvBHFVYHFZDmjMCQ=="],
 

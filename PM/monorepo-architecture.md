@@ -2,124 +2,109 @@
 
 ## Overview
 
-This document provides a high-level overview of the YouSim monorepo architecture, which organizes the project into three distinct packages using Bun workspaces:
+YouSim is organized as a Bun workspaces monorepo with five packages plus an OpenClaw skill:
 
-1. `@yousim/core` - Shared simulation logic
-2. `@yousim/cli` - Command-line interface
-3. `@yousim/api` - Backend API service
-4. `@yousim/launcher` - Single binary launcher (`yousim`, `yousim server`)
+| Package | npm Name | Description |
+|---|---|---|
+| `src/core` | `@yousim/core` | Agents, LLM providers, storage abstraction |
+| `src/cli` | `@yousim/cli` | Terminal interface (Simulator, Constructor, Chat) |
+| `src/api` | `@yousim/api` | Elysia API + v1/construct endpoints |
+| `src/frontend` | `@yousim/frontend` | React/Vite web UI (private, not published) |
+| `src/launcher` | `yousim` | Single binary entry point for CLI and server |
+| `openclaw/` | — | OpenClaw skill (SKILL.md + craft-identity.sh) |
 
-## Package Structure
+## Dependency Graph
 
-### @yousim/core
+```
+yousim (launcher)
+├── @yousim/cli
+│   └── @yousim/core
+└── @yousim/api
+    └── @yousim/core
 
-**Location:** `src/core/`
-
-This is the foundational package that contains all shared logic for the YouSim simulation experience:
-
-- LLM provider integration (Anthropic, OpenRouter)
-- Core simulation functions
-- Message handling and formatting
-- Shared types and interfaces
-
-The core package is designed to be provider-agnostic and can be consumed by any interface that wants to offer the YouSim experience.
-
-**Key Features:**
-
-- Unified interface for multiple LLM providers
-- Stream-based text generation for real-time responses
-- Environment variable configuration handling
-- TypeScript type definitions for consistent usage
-
-### @yousim/cli
-
-**Location:** `src/cli/`
-
-The command-line interface package provides a terminal-based way to interact with the YouSim simulation:
-
-- Interactive conversation loop
-- Color-coded output for different roles
-- Readline-based input handling
-- Direct execution via `bun run start`
-
-**Important Note:** Due to limitations with Bun's workspace filter commands and interactive stdin, this package must be run directly from its directory:
-
-```bash
-cd src/cli
-bun run start
+@yousim/frontend (standalone, calls API via HTTP)
 ```
 
-**Key Features:**
+## Storage Architecture
 
-- Terminal-based user interface
-- Persistent conversation history
-- Role-based color coding (user vs simulator)
-- Exit handling with graceful cleanup
+```
+@yousim/core defines:
+  Storage interface ──→ MemoryStorage (in-memory, CLI)
+                   ──→ SqliteStorage  (bun:sqlite, local server)
 
-### @yousim/api
+@yousim/api adds:
+  SupabaseStorage (wraps @supabase/supabase-js)
 
-**Location:** `src/api/`
-
-The API package provides a web service interface for YouSim using Elysia.js:
-
-- RESTful API endpoints
-- Session management
-- Supabase integration for persistence
-- JWT authentication
-
-This package can be run either through Bun's workspace filter or directly:
-
-```bash
-# Via workspace filter
-bun run start:api
-
-# Or directly
-cd src/api
-bun run start
+Auto-detection:
+  SUPABASE_URL set? → SupabaseStorage
+  Otherwise         → SqliteStorage (~/.yousim/yousim.db)
 ```
 
-**Key Features:**
+## Auth Architecture
 
-- HTTP API with JSON responses
-- Session-based conversation management
-- User authentication and authorization
-- Supabase integration for data persistence
+Three modes, auto-detected in `src/api/src/auth.ts`:
+
+| Mode | Trigger | How It Works |
+|---|---|---|
+| Local | No SUPABASE_URL, no YOUSIM_API_KEY | All requests → user "local" |
+| API Key | YOUSIM_API_KEY set | Bearer token must match → user "api-user" |
+| Supabase | SUPABASE_URL set | JWT verified via JWKS → user from sub claim |
+
+## Provider Architecture
+
+Four LLM providers in `@yousim/core`, all using Vercel AI SDK:
+
+| Provider | SDK | Default Model |
+|---|---|---|
+| Anthropic | `@ai-sdk/anthropic` | claude-sonnet-4-5-20250929 |
+| OpenAI | `@ai-sdk/openai` | gpt-4o |
+| Groq | `@ai-sdk/openai` (custom baseURL) | llama-3.3-70b-versatile |
+| OpenRouter | `@ai-sdk/openai` (custom baseURL) | anthropic/claude-3.5-sonnet |
 
 ## Environment Variables
 
-Bun automatically loads environment variables from `.env` files. In this monorepo, we use symlinks to share environment variables across src:
+Bun auto-loads `.env` from the working directory. The launcher also reads `~/.yousim/.env` and `~/.yousim/config.json`.
 
-- Root `.env` file contains all necessary configuration
-- Each package has a symlink to the root `.env` file
-- This allows consistent configuration across all src
+Only `PROVIDER` + matching API key required. Everything else is optional.
 
-## Dependencies
+## Publishing
 
-The monorepo uses Bun workspaces to manage dependencies efficiently:
+| Package | Published As | Access |
+|---|---|---|
+| `src/launcher` | `yousim` | public |
+| `src/core` | `@yousim/core` | public |
+| `src/cli` | `@yousim/cli` | public |
+| `src/api` | `@yousim/api` | public |
+| `src/frontend` | — | private (not published) |
 
-- Shared dependencies are deduplicated
-- Internal src are linked as workspace dependencies
-- Each package maintains its own specific dependencies
+For publishing, replace `workspace:*` with actual version numbers.
 
-**Workspace Dependencies:**
+## Development Commands
 
-- `@yousim/cli` depends on `@yousim/core`
-- `@yousim/api` depends on `@yousim/core`
+```bash
+# Install all dependencies
+bun install
 
-## Development Workflow
+# CLI (must run from package dir)
+cd src/cli && bun run start
 
-### Initial Setup
+# API server
+bun run start:api
 
-1. Install all dependencies from root: `bun install`
-2. Create symlinks to `.env` file in each package directory
+# Frontend dev server
+cd src/frontend && bun run dev
 
-### Running Packages
+# API + frontend dev mode
+bun run dev
 
-- **API:** `bun run start:api` (from root)
-- **CLI:** `cd src/cli && bun run start` (must be run directly)
+# Build frontend into API public dir
+bun run build
 
-### Development Commands
+# Run tests
+bun run test
 
-- Run all src in dev mode: `bun run dev`
-- Run tests across all src: `bun run test`
-- Build all src: `bun run build`
+# Via launcher
+yousim            # CLI with mode selection
+yousim server     # API server + frontend
+yousim config     # Show config
+```

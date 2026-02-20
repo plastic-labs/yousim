@@ -2,26 +2,56 @@
 
 ## Overview
 
-The `@yousim/core` module contains the shared simulation logic that powers both the CLI and API interfaces. It provides a unified way to interact with different LLM providers while maintaining consistent behavior across all interfaces.
+The `@yousim/core` module contains the shared simulation logic that powers all YouSim interfaces (CLI, API, programmatic). It provides agents, LLM provider integration, and a pluggable storage abstraction.
 
 ## Key Components
 
+### Agents
+
+Six agent classes, all in `src/core/src/agents.ts`:
+
+| Agent | Purpose |
+|---|---|
+| `GaslitClaude` | "Searcher" Claude that explores simulated identities |
+| `Simulator` | The simulated identity responding to CLI commands |
+| `Constructor` | Guides users through identity construction via conversation |
+| `Summary` | Summarizes constructor conversations into identity seeds |
+| `SummaryFollowUp` | Affirms identity based on summary |
+| `Identity` | Multi-stage initialization and chat with a constructed identity |
+
 ### Simulation Engine
-The core simulation function that handles communication with LLM providers:
+
+Core simulation function for direct LLM streaming:
 
 ```typescript
 export async function simulate(messages: Message[], options: SimulationOptions = {})
 ```
 
-**Parameters:**
-- `messages`: Array of message objects with role and content
-- `options`: Configuration options for provider and model selection
+### Storage Abstraction
 
-**Returns:**
-- Stream of text responses from the LLM
+Pluggable persistence layer (`src/core/src/storage.ts`):
+
+```typescript
+interface Storage {
+  // Sessions: createSession, getSession, getSessions, updateSessionMetadata, deleteSession
+  // Messages: getMessages, insertMessage
+  // Summaries: getSummaries, getLatestSummary, insertSummary
+  // Users: upsertUser
+}
+```
+
+Three implementations:
+- **`MemoryStorage`** — In-memory Maps, zero deps. Used by CLI.
+- **`SqliteStorage`** — `bun:sqlite`, stores at `~/.yousim/yousim.db`. Used by local server.
+- **`SupabaseStorage`** — Lives in `@yousim/api` (keeps core dependency-free).
+
+Factory function:
+```typescript
+import { createStorage } from "@yousim/core/storage";
+const storage = createStorage(); // Auto-detects: SUPABASE_URL → supabase, else → sqlite
+```
 
 ### Message Interface
-Standardized message format for all interactions:
 
 ```typescript
 export interface Message {
@@ -31,37 +61,42 @@ export interface Message {
 ```
 
 ### Provider Support
-Currently supports two LLM providers:
-1. **Anthropic** - Uses Claude Sonnet 4 model with prompt caching
-2. **OpenRouter** - Supports various models through the OpenRouter API
+
+Four LLM providers:
+
+| Provider | Key Env Var | Default Model |
+|---|---|---|
+| Anthropic | `ANTHROPIC_API_KEY` | `claude-sonnet-4-5-20250929` |
+| OpenAI | `OPENAI_API_KEY` | `gpt-4o` |
+| Groq | `GROQ_API_KEY` | `llama-3.3-70b-versatile` |
+| OpenRouter | `OPENROUTER_API_KEY` | `anthropic/claude-3.5-sonnet` |
+
+Selection via `PROVIDER` env var or `options.provider` parameter.
 
 ## Environment Configuration
 
-The core module reads configuration from environment variables:
-- `PROVIDER` - Specifies which LLM provider to use ("anthropic" or "openrouter")
-- `MODEL` - Specifies which model to use (defaults to "claude-sonnet-4-5-20250929")
-- Provider-specific API keys:
-  - `ANTHROPIC_API_KEY` for Anthropic
-  - `OPENAI_API_KEY` or `OPENROUTER_API_KEY` for OpenRouter
+- `PROVIDER` — LLM provider (`anthropic`, `openai`, `groq`, `openrouter`)
+- `MODEL` — Override default model for any provider
+- `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GROQ_API_KEY`, `OPENROUTER_API_KEY`
+- `OPENROUTER_MODEL` — OpenRouter-specific model override
 
-## Usage
-
-The core module is designed to be consumed by other packages in the monorepo:
+## Exports
 
 ```typescript
-import { simulate, Message } from "@yousim/core";
+// Main entry: "@yousim/core"
+export { simulate, Message, SimulationOptions, INITIAL_PROMPT, INITIAL_RESPONSE }
+export { GaslitClaude, Simulator, Constructor, Summary, SummaryFollowUp, Identity }
+export type { Storage, StoredSession, StoredMessage, StoredSummary }
+export { MemoryStorage, SqliteStorage, createStorage }
 
-const messages: Message[] = [
-  { role: "user", content: "Hello simulator!" }
-];
-
-const stream = await simulate(messages);
+// Storage entry: "@yousim/core/storage"
+export { MemoryStorage, SqliteStorage, createStorage }
+export type { Storage, StoredSession, StoredMessage, StoredSummary }
 ```
 
 ## Dependencies
 
-- `@ai-sdk/anthropic` - For Anthropic provider integration
-- `@ai-sdk/openai` - For OpenRouter provider integration
-- `@anthropic-ai/sdk` - Official Anthropic SDK
-- `ai` - Vercel AI SDK for streaming responses
-- `openai` - OpenAI SDK for OpenRouter integration
+- `@ai-sdk/anthropic` — Anthropic provider
+- `@ai-sdk/openai` — OpenAI/OpenRouter/Groq provider (via custom baseURL)
+- `ai` — Vercel AI SDK for streaming
+- `@anthropic-ai/sdk`, `openai` — Provider SDKs

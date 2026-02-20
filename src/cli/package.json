@@ -1,7 +1,7 @@
 {
   "name": "@yousim/cli",
-  "version": "1.0.0",
-  "description": "CLI version of YouSim",
+  "version": "0.1.0",
+  "description": "CLI version of YouSim - Simulator, Constructor, and Chat modes",
   "type": "module",
   "main": "src/cli.ts",
   "types": "src/cli.ts",
@@ -11,6 +11,10 @@
   },
   "bin": {
     "yousim-cli": "./src/cli.ts"
+  },
+  "files": ["src/", "README.md"],
+  "publishConfig": {
+    "access": "public"
   },
   "dependencies": {
     "@yousim/core": "workspace:*",

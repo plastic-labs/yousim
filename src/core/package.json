@@ -1,10 +1,18 @@
 {
   "name": "@yousim/core",
-  "version": "1.0.0",
-  "description": "Core simulation logic for YouSim",
+  "version": "0.1.0",
+  "description": "Core simulation logic for YouSim - provider-agnostic identity simulator",
   "type": "module",
   "main": "src/index.ts",
   "types": "src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./storage": "./src/storage/index.ts"
+  },
+  "files": ["src/", "README.md"],
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "test": "bun test"
   },

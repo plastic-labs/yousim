@@ -4,94 +4,60 @@ This monorepo contains the Bun-based implementations of YouSim with shared core 
 
 ## Structure
 
-- `src/core` - Shared simulation logic and LLM integration
-- `src/cli` - Command-line interface
-- `src/api` - Backend API using Bun and Elysia.js
-- `src/frontend` - React/Vite frontend
-- `src/launcher` - Single binary launcher (`yousim`, `yousim server`)
+- `src/core` — Shared simulation logic, agents, storage abstraction, LLM providers
+- `src/cli` — Terminal interface (Simulator, Constructor, Chat modes)
+- `src/api` — Backend API using Bun/Elysia (pluggable storage, multi-mode auth)
+- `src/frontend` — React/Vite frontend (works with or without Supabase)
+- `src/launcher` — Single binary launcher (`yousim`, `yousim server`, `yousim config`)
 
 ## Setup
 
-Install dependencies from the root:
-
 ```bash
 bun install
+cp .env.template .env
+# Set PROVIDER + API key (e.g., ANTHROPIC_API_KEY)
 ```
 
-## CLI Usage
-
-Run the CLI directly from its package directory (stdin issues with Bun filters):
+## CLI
 
 ```bash
 cd src/cli
 bun run start
+# Select mode: 1) Simulator  2) Constructor  3) Chat
+```
+
+## Server (API + Frontend)
+
+```bash
+bun run start:api
+# Runs at http://localhost:3000
+# No Supabase needed — uses SQLite by default
 ```
 
 ## Global Binary
 
-Install the launcher to get the `yousim` command:
-
 ```bash
-npm i -g @yousim/launcher
-```
-
-```bash
-yousim
-yousim server
-```
-
-Requires Bun on the host machine.
-
-Configuration can be stored in `~/.yousim/.env` or `~/.yousim/config.json`:
-
-```bash
-# ~/.yousim/.env
-PROVIDER=anthropic
-ANTHROPIC_API_KEY=...
-SUPABASE_URL=...
-SUPABASE_KEY=...
-```
-
-## API Usage
-
-```bash
-# From root
-bun run start:api
-
-# Or directly
-cd src/api
-bun run start
-```
-
-## Frontend Usage
-
-```bash
-cd src/frontend
-bun run dev
+bunx yousim          # CLI with mode selection
+bunx yousim server   # API server + frontend
+bunx yousim config   # Show config and settings
 ```
 
 ## Environment Variables
 
-Create a `.env` file in the root directory with your API keys:
+Only `PROVIDER` + matching API key are required:
 
 ```bash
-# LLM Provider options include anthropic or openrouter
-PROVIDER=anthropic
-MODEL=claude-sonnet-4-5-20250929
-# Anthropic API Key
-ANTHROPIC_API_KEY=your_api_key_here
+PROVIDER=anthropic          # or openai, groq, openrouter
+ANTHROPIC_API_KEY=sk-...    # for anthropic
 ```
 
-For the API package, you'll also need Supabase credentials:
-
+Optional:
 ```bash
-SUPABASE_URL=your_supabase_url
-SUPABASE_KEY=your_supabase_key
+YOUSIM_API_KEY=...          # Enable API key auth for server
+SUPABASE_URL=...            # Enable Supabase storage + JWT auth
+SUPABASE_KEY=...
+VITE_SUPABASE_URL=...       # Enable Supabase auth in frontend
+VITE_SUPABASE_KEY=...
 ```
 
-For the frontend build, you'll need:
-
-```bash
-VITE_SUPABASE_URL=your_supabase_url
-VITE_SUPABASE_KEY=your_supabase_anon_key
-```
+See `.env.template` for the full list.

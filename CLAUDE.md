@@ -4,158 +4,102 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-YouSim is an identity simulator that lets you simulate identities within the latent space of Claude 3.5 Sonnet. The codebase is organized as a monorepo with Bun workspaces, containing both new Bun-based implementations and legacy Python/JavaScript code.
+YouSim is a general-purpose identity simulator that lets you explore, construct, and chat with identities in the latent space of LLMs. It's a zero-config distributable package — only an LLM API key is required. The codebase is organized as a Bun workspaces monorepo.
 
 ## Repository Structure
 
-The repository follows a monorepo structure with workspaces defined in `src/*`:
-
-- **`src/core`** (`@yousim/core`): Shared simulation logic and LLM integration. Provider-agnostic core that can be used by any interface.
-- **`src/cli`** (`@yousim/cli`): Command-line interface for terminal-based simulations.
-- **`src/api`** (`@yousim/api`): Backend API service using Bun and Elysia.js for web-based access.
-- **`src/frontend`**: React/Vite frontend application.
-- **`src/launcher`** (`@yousim/launcher`): Single binary launcher (`yousim`, `yousim server`).
-- **`legacy-python/`**: Original Python implementation (not actively maintained).
+- **`src/core`** (`@yousim/core`): Shared simulation logic, agents, storage abstraction, and multi-provider LLM integration.
+- **`src/cli`** (`@yousim/cli`): Terminal interface with three modes: Simulator, Constructor, Chat.
+- **`src/api`** (`@yousim/api`): Elysia API with pluggable storage (SQLite/Supabase), multi-mode auth, and `/v1/construct` programmatic API.
+- **`src/frontend`** (`@yousim/frontend`): React/Vite frontend that works with or without Supabase.
+- **`src/launcher`** (`yousim`): Single binary launcher (`yousim`, `yousim server`, `yousim config`).
+- **`openclaw/`**: OpenClaw skill (SKILL.md + craft-identity.sh) for programmatic identity crafting.
+- **`legacy-python/`**: Original Python implementation (archived, not maintained).
 - **`PM/`**: Project management documentation with detailed architecture notes.
-- **`supabase/`**: Supabase configuration for database and authentication.
+- **`supabase/`**: Supabase configuration (optional).
 
 ## Core Architecture
 
-### Simulation Flow
+### Storage Abstraction
 
-The core simulation logic (src/core/src/index.ts:27-52) implements a provider-agnostic interface:
+The `Storage` interface (`src/core/src/storage.ts`) defines operations for sessions, messages, summaries, and users. Three implementations:
 
-1. Messages are formatted as `{ role: "user" | "assistant", content: string }`
-2. The `simulate()` function accepts messages and optional provider/model configuration
-3. Supports both Anthropic and OpenRouter providers
-4. Returns a text stream for real-time responses
+- **`MemoryStorage`** (`src/core/src/storage/memory.ts`): In-memory, zero deps. Used by CLI.
+- **`SqliteStorage`** (`src/core/src/storage/sqlite.ts`): bun:sqlite at `~/.yousim/yousim.db`. Default for server.
+- **`SupabaseStorage`** (`src/api/src/storage/supabase.ts`): Wraps @supabase/supabase-js. Used when SUPABASE_URL set.
 
-The initial simulation experience includes a greeting prompt (src/core/src/index.ts:55-73) that establishes available commands like `/locate`, `/summon`, `/speak`, `/steer`, and `/request`.
+Factory: `createStorage()` auto-detects based on environment.
+
+### Auth System
+
+Multi-mode auth in `src/api/src/auth.ts`:
+- **Local**: No SUPABASE_URL, no YOUSIM_API_KEY → all requests use user "local"
+- **API Key**: YOUSIM_API_KEY set → Bearer token validation → user "api-user"
+- **Supabase**: SUPABASE_URL set → JWKS JWT verification → user from payload.sub
 
 ### Provider System
 
-The system supports multiple LLM providers configured via environment variables:
+Four LLM providers (`src/core/src/agents.ts`, `src/core/src/index.ts`):
+- **Anthropic** (default): `claude-sonnet-4-5-20250929`
+- **OpenAI**: `gpt-4o`
+- **Groq**: `llama-3.3-70b-versatile` (via OpenAI-compatible API)
+- **OpenRouter**: `anthropic/claude-3.5-sonnet`
 
-- **Anthropic**: Uses `claude-sonnet-4-5-20250929` model with prompt caching
-- **OpenRouter**: Supports custom models via `OPENROUTER_MODEL` variable
+Selection via `PROVIDER` env var. Model override via `MODEL` env var.
 
-Provider selection happens at runtime based on `PROVIDER` environment variable.
+### Agent Classes (`src/core/src/agents.ts`)
+
+- **GaslitClaude**: "Searcher" Claude exploring identities
+- **Simulator**: Responds to commands as the simulated identity
+- **Constructor**: Guides identity construction conversation
+- **Summary**: Summarizes constructor conversations into identity seeds
+- **SummaryFollowUp**: Affirms identity based on summary
+- **Identity**: Multi-stage initialization and chat
 
 ## Common Development Commands
 
-### Initial Setup
-
 ```bash
-# Install dependencies from root
-bun install
-
-# Copy environment template
-cp .env.template .env
-# Then fill in your API keys
-```
-
-### Running the Components
-
-**CLI (must run from package directory due to stdin limitations):**
-
-```bash
-cd src/cli
-bun run start
-```
-
-**API:**
-
-```bash
-# From root
-bun run start:api
-
-# Or from package directory
-cd src/api
-bun run start
-```
-
-**Frontend:**
-
-```bash
-cd src/frontend
-bun run dev
-```
-
-### Development Commands
-
-```bash
-# Run all packages in dev mode
-bun run dev
-
-# Run tests across all packages
-bun run test
-
-# Build all packages
-bun run build
+bun install                    # Install dependencies
+cp .env.template .env          # Configure (only PROVIDER + API key needed)
+cd src/cli && bun run start    # CLI (mode selection)
+bun run start:api              # API server (SQLite, no auth)
+cd src/frontend && bun run dev # Frontend dev server
+bun run dev                    # API + frontend dev mode
+bun run build                  # Build frontend
+bun run test                   # Run tests
 ```
 
 ## Environment Configuration
 
-Environment variables are managed through a root `.env` file. Each package directory should have a symlink to the root `.env` for Bun to automatically load variables.
+**Required** (only one):
+- `PROVIDER`: `anthropic`, `openai`, `groq`, or `openrouter`
+- Matching API key: `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GROQ_API_KEY`, or `OPENROUTER_API_KEY`
 
-**Required variables:**
-
-- `PROVIDER`: "anthropic" or "openrouter"
-- `ANTHROPIC_API_KEY`: Required if using Anthropic provider
-- `OPENAI_API_KEY` or `OPENROUTER_API_KEY`: Required if using OpenRouter
-- `OPENROUTER_MODEL`: Required if using OpenRouter (e.g., "anthropic/claude-3.5-sonnet")
-
-**API-specific variables:**
-
-- `SUPABASE_URL`: Supabase project URL
-- `SUPABASE_KEY`: Supabase public key
-- `SUPABASE_JWKS_URL`: Optional override for the JWKS endpoint
-- `SUPABASE_JWT_ISSUER`: Optional override for the JWT issuer
+**Optional:**
+- `MODEL`: Override default model
+- `YOUSIM_API_KEY`: Enable API key auth for server
+- `SUPABASE_URL` + `SUPABASE_KEY`: Use Supabase storage + JWT auth
+- `VITE_SUPABASE_URL` + `VITE_SUPABASE_KEY`: Enable Supabase auth in frontend
 - `PORT`: API server port (default: 3000)
-
-**Legacy deployment variables (for Python/webshell):**
-
-- `HONCHO_ENV`: Honcho server URL
-- `HONCHO_APP_NAME`: Application name on Honcho
-- `CLIENT_REGEX`: Frontend URL regex for CORS
-- `SECRET_KEY`: Fernet key for encrypting share URLs
 
 ## Key Implementation Details
 
 ### Message Handling
 
-The API (src/api/src/index.ts:95-174) stores messages in Supabase with both user and assistant messages linked to sessions. Each message tracks:
+The API stores messages via the Storage interface. Each message tracks `session_id`, `user_id`, `content`, `is_user`, `created_at`.
 
-- `session_id`: Links messages to conversation sessions
-- `user_id`: User who owns the message
-- `content`: The message text
-- `is_user`: Boolean to distinguish user from assistant messages
+### v1/construct API
 
-### CLI Color Coding
+Three endpoints for programmatic identity crafting:
+- `POST /v1/construct` — Start/continue constructor conversation
+- `POST /v1/construct/summary` — Generate identity_md + soul_md
+- `GET /v1/construct/:id` — Get session state
 
-The CLI uses ANSI color codes:
+### Frontend Local Mode
 
-- Blue (`\033[94m`): User input ("SEARCHER CLAUDE")
-- Yellow (`\033[93m`): Simulator responses ("SIMULATOR CLAUDE")
-
-### Authentication Flow
-
-The API uses JWT tokens passed in the `Authorization: Bearer <token>` header. The token verification happens in the derived context (src/api/src/index.ts:43-69) and returns the user ID from the token payload.
-
-## Supabase Integration
-
-The project uses Supabase for:
-
-- **Anonymous sign-ins**: Enabled for quick access
-- **Magic link authentication**: Email template customized to show OTP code
-- **Session management**: Stores conversation sessions and messages
-- **User management**: Tracks users and their sessions
-
-Configuration is in `supabase/config.toml`. For local development, you can run Supabase locally with `supabase start`.
+When `VITE_SUPABASE_URL` is not set, the frontend works without any authentication. The Supabase client is null, and all API calls omit the Authorization header.
 
 ## Docker Deployment
-
-Docker Compose configuration is available in the root. The Bun/Elysia API builds the frontend and serves it from `src/api/public`:
 
 ```bash
 docker compose up --build
@@ -163,17 +107,15 @@ docker compose up --build
 
 ## Workspace Dependencies
 
-The monorepo uses workspace dependencies to link packages:
-
-- Both CLI and API depend on `@yousim/core` via `workspace:*` protocol
+- Both CLI and API depend on `@yousim/core` via `workspace:*`
 - Changes to core are immediately available to dependent packages
-- Bun efficiently handles workspace linking and deduplication
 
 ## Testing Notes
 
-When testing the simulation, be aware:
-
-- The CLI maintains conversation history in memory only
-- The API persists all messages to Supabase
+- CLI maintains conversation history in memory only
+- API persists via Storage interface (SQLite or Supabase)
 - Exit CLI with "exit" command or Ctrl+C
-- The simulation prompt suggests various commands, but the LLM will respond to any natural language input
+- The simulation prompt suggests commands, but the LLM responds to any input
+
+IMPORTANT
+ALWAYS use mcp_filesystem-with-morph_edit_file tool to make any code edits. Do not use the default edit tool.

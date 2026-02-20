@@ -2,16 +2,31 @@ import { createClient } from '@supabase/supabase-js';
 
 const API_BASE = import.meta.env.VITE_API_URL || '';
 
-// Initialize Supabase client for auth
-export const supabase = createClient(
-  import.meta.env.VITE_SUPABASE_URL || '',
-  import.meta.env.VITE_SUPABASE_KEY || ''
-);
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
+const supabaseKey = import.meta.env.VITE_SUPABASE_KEY || '';
+const hasSupabase = Boolean(supabaseUrl && supabaseKey);
 
-// Get auth token
+// Initialize Supabase client for auth (only if configured)
+export const supabase = hasSupabase
+  ? createClient(supabaseUrl, supabaseKey)
+  : null;
+
+// Get auth token — returns null in local mode (no auth needed)
 async function getAuthToken(): Promise<string | null> {
+  if (!supabase) return null;
   const { data } = await supabase.auth.getSession();
   return data.session?.access_token || null;
+}
+
+function buildHeaders(token: string | null, json = false): Record<string, string> {
+  const headers: Record<string, string> = {};
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+  if (json) {
+    headers['Content-Type'] = 'application/json';
+  }
+  return headers;
 }
 
 async function streamRequest(url: string, options: RequestInit): Promise<ReadableStreamDefaultReader<string>> {
@@ -34,16 +49,13 @@ export const api = {
   // Create a new session
   async resetSession(mode?: string): Promise<{ user_id: string; session_id: string }> {
     const token = await getAuthToken();
-    if (!token) throw new Error('Not authenticated');
 
     const params = new URLSearchParams();
     if (mode) params.append('mode', mode);
 
     const res = await fetch(`${API_BASE}/reset?${params}`, {
       method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${token}`
-      }
+      headers: buildHeaders(token),
     });
 
     if (!res.ok) throw new Error('Failed to reset session');
@@ -53,15 +65,11 @@ export const api = {
   // Send a manual command
   async sendManual(sessionId: string, command: string): Promise<string> {
     const token = await getAuthToken();
-    if (!token) throw new Error('Not authenticated');
 
     const res = await fetch(`${API_BASE}/manual`, {
       method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({ session_id: sessionId, command })
+      headers: buildHeaders(token, true),
+      body: JSON.stringify({ session_id: sessionId, command }),
     });
 
     if (!res.ok) throw new Error('Failed to send message');
@@ -70,29 +78,21 @@ export const api = {
 
   async streamManual(sessionId: string, command: string): Promise<ReadableStreamDefaultReader<string>> {
     const token = await getAuthToken();
-    if (!token) throw new Error('Not authenticated');
 
     return streamRequest(`${API_BASE}/manual`, {
       method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({ session_id: sessionId, command })
+      headers: buildHeaders(token, true),
+      body: JSON.stringify({ session_id: sessionId, command }),
     });
   },
 
   async sendAuto(sessionId: string): Promise<string> {
     const token = await getAuthToken();
-    if (!token) throw new Error('Not authenticated');
 
     const res = await fetch(`${API_BASE}/auto`, {
       method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({ session_id: sessionId })
+      headers: buildHeaders(token, true),
+      body: JSON.stringify({ session_id: sessionId }),
     });
 
     if (!res.ok) throw new Error('Failed to send auto command');
@@ -101,28 +101,21 @@ export const api = {
 
   async streamAuto(sessionId: string): Promise<ReadableStreamDefaultReader<string>> {
     const token = await getAuthToken();
-    if (!token) throw new Error('Not authenticated');
 
     return streamRequest(`${API_BASE}/auto`, {
       method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({ session_id: sessionId })
+      headers: buildHeaders(token, true),
+      body: JSON.stringify({ session_id: sessionId }),
     });
   },
 
   // Get session messages
   async getSession(sessionId?: string): Promise<{ session_id: string; messages: any[] }> {
     const token = await getAuthToken();
-    if (!token) throw new Error('Not authenticated');
 
     const params = sessionId ? `?session_id=${sessionId}` : '';
     const res = await fetch(`${API_BASE}/session${params}`, {
-      headers: {
-        'Authorization': `Bearer ${token}`
-      }
+      headers: buildHeaders(token),
     });
 
     if (!res.ok) throw new Error('Failed to get session');
@@ -132,13 +125,10 @@ export const api = {
   // List all sessions
   async getSessions(mode?: string): Promise<any[]> {
     const token = await getAuthToken();
-    if (!token) throw new Error('Not authenticated');
 
     const params = mode ? `?mode=${mode}` : '';
     const res = await fetch(`${API_BASE}/sessions${params}`, {
-      headers: {
-        'Authorization': `Bearer ${token}`
-      }
+      headers: buildHeaders(token),
     });
 
     if (!res.ok) throw new Error('Failed to get sessions');
@@ -147,18 +137,14 @@ export const api = {
 
   async updateSessionMetadata(sessionId: string, metadata: Record<string, any>): Promise<{ session_id: string; metadata: Record<string, any> }> {
     const token = await getAuthToken();
-    if (!token) throw new Error('Not authenticated');
 
     const res = await fetch(`${API_BASE}/sessions/${sessionId}/metadata`, {
       method: 'PUT',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(metadata)
+      headers: buildHeaders(token, true),
+      body: JSON.stringify(metadata),
     });
 
     if (!res.ok) throw new Error('Failed to update session metadata');
     return res.json();
-  }
+  },
 };

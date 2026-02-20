@@ -1,132 +1,160 @@
 # YouSim
 
-YouSim is an identity simulator that lets you explore identities within the latent space of Claude. This repository is a Bun-based monorepo (API, CLI, core, and frontend) with the legacy Python/webshell implementation preserved under `legacy-python/`.
+YouSim is a general-purpose identity simulator that lets you explore, construct, and chat with identities in the latent space of LLMs. Zero-config: only an LLM API key is required.
 
-## Repository Layout
-
-- `src/core` (`@yousim/core`): Shared simulation logic and LLM integration
-- `src/api` (`@yousim/api`): Bun/Elysia API with Supabase persistence
-- `src/cli` (`@yousim/cli`): Terminal-based interface
-- `src/frontend` (`@yousim/frontend`): React/Vite frontend
-- `src/launcher` (`@yousim/launcher`): Single binary launcher (`yousim`, `yousim server`)
-- `supabase/`: Local Supabase config and migrations
-- `PM/`: Project management/architecture notes
-- `legacy-python/`: Archived Python + webshell implementation
-
-## Quickstart (Bun)
-
-1. Install dependencies:
+## Quick Start
 
 ```bash
+# Install dependencies
 bun install
-```
 
-2. Configure environment:
-
-```bash
+# Configure (only PROVIDER + API key needed)
 cp .env.template .env
-```
+# Edit .env: set ANTHROPIC_API_KEY (or OPENAI_API_KEY, GROQ_API_KEY, OPENROUTER_API_KEY)
 
-Fill in at least:
-
-- `PROVIDER`, `MODEL` (or `OPENROUTER_MODEL`)
-- `ANTHROPIC_API_KEY` or `OPENAI_API_KEY` / `OPENROUTER_API_KEY`
-- `SUPABASE_URL`, `SUPABASE_KEY`
-- `VITE_SUPABASE_URL`, `VITE_SUPABASE_KEY`
-
-3. (Optional) Start local Supabase:
-
-```bash
-supabase start
-```
-
-4. Run API + frontend in dev:
-
-```bash
-bun run dev
-```
-
-- API: `http://localhost:3000`
-- Frontend: `http://localhost:5173`
-
-5. Run the CLI:
-
-```bash
+# Run CLI (mode selection: Simulator, Constructor, Chat)
 cd src/cli
 bun run start
-```
 
-## Global Binary (npm)
-
-Install a single launcher that provides `yousim` and `yousim server` commands:
-
-```bash
-npm i -g @yousim/launcher
-```
-
-```bash
-# CLI
-yousim
-
-# Server
-yousim server --port 3000
-```
-
-Requires Bun on the host machine.
-
-Configuration can be stored in `~/.yousim`:
-
-```bash
-# ~/.yousim/.env
-PROVIDER=anthropic
-ANTHROPIC_API_KEY=...
-SUPABASE_URL=...
-SUPABASE_KEY=...
-```
-
-```json
-// ~/.yousim/config.json
-{
-  "PROVIDER": "anthropic",
-  "ANTHROPIC_API_KEY": "...",
-  "SUPABASE_URL": "...",
-  "SUPABASE_KEY": "..."
-}
-```
-
-## Production / Deployment
-
-The API serves the built frontend from `src/api/public`.
-
-1. Build the frontend into the API public directory:
-
-```bash
-bun run build
-```
-
-2. Start the API (serves API + frontend):
-
-```bash
+# Or run server (API + frontend, uses SQLite locally)
 bun run start:api
 ```
 
-3. Docker:
+No Supabase required. No database setup. Just an API key.
+
+## Repository Layout
+
+- `src/core` (`@yousim/core`): Shared simulation logic, agents, and storage abstraction
+- `src/api` (`@yousim/api`): Bun/Elysia API with pluggable storage (SQLite, Supabase)
+- `src/cli` (`@yousim/cli`): Terminal interface — Simulator, Constructor, and Chat modes
+- `src/frontend` (`@yousim/frontend`): React/Vite frontend (works with or without Supabase)
+- `src/launcher` (`yousim`): Single binary launcher
+- `openclaw/`: OpenClaw skill for programmatic identity crafting
+- `supabase/`: Supabase config and migrations (optional)
+- `PM/`: Project management/architecture notes
+- `legacy-python/`: Archived Python + webshell implementation
+
+## Features
+
+### Multi-Mode CLI
+```bash
+yousim
+# Select: 1) Simulator  2) Constructor  3) Chat
+```
+
+- **Simulator**: Explore identities in the latent space (Searcher Claude + Simulator Claude)
+- **Constructor**: Build a new identity through guided conversation, then optionally chat with it
+- **Chat**: Chat with a previously constructed identity
+
+### BYOK Multi-Provider
+Supports 4 LLM providers out of the box:
+
+| Provider | Env Var | Default Model |
+|---|---|---|
+| Anthropic | `ANTHROPIC_API_KEY` | `claude-sonnet-4-5-20250929` |
+| OpenAI | `OPENAI_API_KEY` | `gpt-4o` |
+| Groq | `GROQ_API_KEY` | `llama-3.3-70b-versatile` |
+| OpenRouter | `OPENROUTER_API_KEY` | `anthropic/claude-3.5-sonnet` |
+
+Set `PROVIDER=openai` (or `groq`, `openrouter`) and the matching API key.
+
+### Zero-Config Storage
+- **No env vars**: SQLite at `~/.yousim/yousim.db` (auto-created)
+- **`SUPABASE_URL` + `SUPABASE_KEY` set**: Supabase with JWT auth
+- **`YOUSIM_API_KEY` set**: API key auth (no Supabase needed)
+
+### Programmatic API (`/v1/construct`)
+Any agent framework can craft identities programmatically:
 
 ```bash
+# Start a constructor conversation
+curl -s localhost:3000/v1/construct \
+  -H "Content-Type: application/json" \
+  -d '{"message": "Nova"}'
+# Returns: { session_id, response, turn, done }
+
+# Continue the conversation
+curl -s localhost:3000/v1/construct \
+  -H "Content-Type: application/json" \
+  -d '{"message": "3", "session_id": "..."}'
+
+# Generate identity files
+curl -s localhost:3000/v1/construct/summary \
+  -H "Content-Type: application/json" \
+  -d '{"session_id": "...", "name": "Nova"}'
+# Returns: { summary, identity_md, soul_md }
+```
+
+### OpenClaw Skill
+```bash
+# Interactive
+bash openclaw/craft-identity.sh
+
+# Automated
+bash openclaw/craft-identity.sh --auto '{"name":"Nova","creature":"autonomous agent","vibe":"sharp"}'
+```
+
+## Global Binary
+
+```bash
+# Install
+npm i -g yousim  # or: bunx yousim
+
+# CLI (mode selection)
+yousim
+
+# Server (API + frontend)
+yousim server --port 3000
+
+# Show config
+yousim config
+```
+
+Requires Bun on the host machine. Config stored in `~/.yousim/.env` or `~/.yousim/config.json`.
+
+## Server Mode
+
+```bash
+yousim server
+# or: bun run start:api
+```
+
+Runs the Elysia API + serves the built frontend. Auth mode auto-detected:
+
+| Config Present | Auth Mode | Storage |
+|---|---|---|
+| Nothing | Local (no auth) | SQLite |
+| `YOUSIM_API_KEY` | API key bearer | SQLite |
+| `SUPABASE_URL` + `SUPABASE_KEY` | Supabase JWT | Supabase |
+
+`GET /api/mode` returns the active auth mode.
+
+## Production / Deployment
+
+```bash
+# Build frontend into API public directory
+bun run build
+
+# Start API (serves API + frontend)
+bun run start:api
+
+# Docker
 docker compose up --build
 ```
 
-## Supabase Notes
+## Environment Variables
 
-Migrations live under `supabase/migrations` and set up:
+See `.env.template` for the full list. Only `PROVIDER` + matching API key are required.
 
-- `users`
-- `sessions`
-- `messages`
-- `summaries`
+## Supabase (Optional)
 
-Anonymous sign-in is supported. Ensure your Supabase project has anonymous sign-ins enabled. For asymmetric JWT verification, the API uses Supabase JWKS and issuer derived from `SUPABASE_URL` (override via `SUPABASE_JWKS_URL` / `SUPABASE_JWT_ISSUER` if needed).
+Supabase is fully optional. When `SUPABASE_URL` and `SUPABASE_KEY` are set:
+- API uses Supabase for persistence (sessions, messages, summaries, users)
+- Frontend uses Supabase for anonymous sign-in and JWT auth
+- Migrations live under `supabase/migrations`
+
+Without Supabase, everything works with local SQLite storage and no authentication.
 
 ## Legacy Python/Webshell
 
-The original Python API + webshell frontend are preserved under `legacy-python/` for reference. They are not used by the Bun/Elysia deployment.
+The original Python API + webshell frontend are preserved under `legacy-python/` for reference.
