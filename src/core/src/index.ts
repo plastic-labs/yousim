@@ -22,6 +22,7 @@ const openrouter = createOpenAI({
 });
 
 const openai = createOpenAI({
+  baseURL: process.env.OPENAI_BASE_URL,
   apiKey: process.env.OPENAI_API_KEY || "placeholder",
 });
 
@@ -69,11 +70,11 @@ export async function simulate(messages: Message[], options: SimulationOptions =
   if (provider === "anthropic") {
     modelInstance = anthropic(model);
   } else if (provider === "openrouter") {
-    modelInstance = openrouter(model);
+    modelInstance = openrouter.chat(model);
   } else if (provider === "openai") {
-    modelInstance = openai(model);
+    modelInstance = openai.chat(model);
   } else if (provider === "groq") {
-    modelInstance = groq(model);
+    modelInstance = groq.chat(model);
   } else {
     throw new Error(`Unsupported provider: ${provider}. Supported: anthropic, openrouter, openai, groq`);
   }

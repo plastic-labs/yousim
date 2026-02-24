@@ -13,7 +13,7 @@
     "build": "bun run --filter '@yousim/frontend' build",
     "test": "bun run --filter '@yousim/core' test",
     "start:api": "bun run --filter '@yousim/api' start",
-    "start:cli": "bun run --filter '@yousim/cli' start"
+    "start:cli": "bun run src/cli/src/cli.ts"
   },
   "dependencies": {
     "elysia": "^1.4.25"

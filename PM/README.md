@@ -11,3 +11,4 @@ This folder contains architecture and status documentation for the YouSim monore
 - [frontend-module.md](frontend-module.md) — React frontend, local mode support
 - [status.md](status.md) — Refactor status, what's done, what needs validation
 - [identity-plan.md](identity-plan.md) — Original sprint plan for YouSim Identity API + OpenClaw skill
+- [testing-checklist.md](testing-checklist.md) — Manual testing checklist for verifying the refactor
