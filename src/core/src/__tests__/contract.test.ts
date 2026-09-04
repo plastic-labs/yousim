@@ -130,3 +130,19 @@ test("contract does not transitively import platform-only modules", async () => 
   expect(seen.has("model.ts")).toBe(true);
   expect(seen.has("simulate.ts")).toBe(true);
 });
+
+test("the OpenRouter default has a valid id shape", async () => {
+  // OpenRouter ids are namespaced "vendor/model". A bare name is either a
+  // different provider's id or a retired one, and either way it 404s at
+  // request time — which reads as "YouSim is broken", not "bad config".
+  const { resolveModel } = await import("../model");
+  const saved = { m: process.env.MODEL, om: process.env.OPENROUTER_MODEL };
+  delete process.env.MODEL;
+  delete process.env.OPENROUTER_MODEL;
+  try {
+    expect(resolveModel({ provider: "openrouter" })).toContain("/");
+  } finally {
+    if (saved.m !== undefined) process.env.MODEL = saved.m;
+    if (saved.om !== undefined) process.env.OPENROUTER_MODEL = saved.om;
+  }
+});

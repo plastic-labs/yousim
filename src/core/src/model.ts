@@ -25,9 +25,15 @@ export interface ModelConfig {
   maxOutputTokens?: number;
 }
 
+// Defaults matter more here than in most projects: the simulator effect
+// depends heavily on the model, and a wrong default makes YouSim look broken
+// rather than misconfigured.
+//
+// anthropic/claude-3.5-sonnet was the OpenRouter default and has been retired —
+// it 404s. Verified live 2026-09-04.
 const PROVIDER_DEFAULTS: Record<Provider, string> = {
   anthropic: "claude-sonnet-4-5-20250929",
-  openrouter: "anthropic/claude-3.5-sonnet",
+  openrouter: "meta-llama/llama-3.3-70b-instruct",
   openai: "gpt-4o",
   groq: "llama-3.3-70b-versatile",
 };
@@ -77,7 +83,12 @@ function envKeyFor(provider: Provider): string | undefined {
     case "anthropic":
       return env("ANTHROPIC_API_KEY");
     case "openrouter":
-      return env("OPENROUTER_API_KEY") ?? env("OPENAI_API_KEY");
+      // Deliberately NOT falling back to OPENAI_API_KEY. A key for one
+      // provider must never authenticate another: OPENAI_API_KEY is commonly
+      // a placeholder for a local OpenAI-compatible server, and letting it
+      // satisfy OpenRouter sends a bogus token and shadows a connected
+      // account, producing a 401 that looks like the connect flow failed.
+      return env("OPENROUTER_API_KEY");
     case "openai":
       return env("OPENAI_API_KEY");
     case "groq":
