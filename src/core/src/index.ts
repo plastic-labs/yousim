@@ -2,7 +2,13 @@ export * from "./agents";
 
 // Model access (per-call credentials)
 export type { ModelConfig, Provider } from "./model";
-export { createModelInstance, resolveModel, resolveProvider } from "./model";
+export { createModelInstance, resolveModel, resolveProvider, setCredentialResolver } from "./model";
+
+// BYOK auth (portable: Web Crypto + fetch only)
+export * from "./pkce";
+
+// Local credential storage (Bun/Node only)
+export * from "./credentials";
 
 // Simulation
 export * from "./simulate";

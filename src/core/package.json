@@ -9,7 +9,9 @@
     ".": "./src/index.ts",
     "./storage": "./src/storage/index.ts",
     "./contract": "./src/contract.ts",
-    "./model": "./src/model.ts"
+    "./model": "./src/model.ts",
+    "./pkce": "./src/pkce.ts",
+    "./credentials": "./src/credentials.ts"
   },
   "files": [
     "src/",

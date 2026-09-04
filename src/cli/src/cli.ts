@@ -12,7 +12,13 @@ import {
   SqliteStorage,
 } from "@yousim/core";
 import type { StoredSession, ModelConfig, Provider } from "@yousim/core";
-import { resolveModel } from "@yousim/core";
+import { resolveModel, setCredentialResolver, loadCredential } from "@yousim/core";
+
+// A key linked with `yousim connect` should work without any env var. Env
+// still wins, so CI and one-off overrides need no disconnect.
+setCredentialResolver((provider: Provider) =>
+  provider === "openrouter" ? loadCredential("openrouter") : undefined
+);
 import * as readline from "readline";
 import chalk from "chalk";
 

@@ -12,12 +12,19 @@
   "bin": {
     "yousim-cli": "./src/cli.ts"
   },
-  "files": ["src/", "README.md"],
+  "files": [
+    "src/",
+    "README.md"
+  ],
   "publishConfig": {
     "access": "public"
   },
   "dependencies": {
     "@yousim/core": "workspace:*",
     "chalk": "^5.3.0"
+  },
+  "exports": {
+    ".": "./src/cli.ts",
+    "./connect": "./src/connect.ts"
   }
 }

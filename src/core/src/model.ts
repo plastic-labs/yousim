@@ -54,8 +54,25 @@ export function resolveModel(cfg: ModelConfig = {}): string {
   return PROVIDER_DEFAULTS[provider];
 }
 
+/**
+ * Optional fallback consulted after cfg.apiKey and env, set by surfaces that
+ * have a credential store (the CLI). Injected rather than imported so this
+ * module stays free of filesystem imports and usable in a browser.
+ */
+let credentialResolver: ((provider: Provider) => string | undefined) | null = null;
+
+export function setCredentialResolver(fn: (provider: Provider) => string | undefined) {
+  credentialResolver = fn;
+}
+
 function resolveApiKey(provider: Provider, cfg: ModelConfig): string | undefined {
   if (cfg.apiKey) return cfg.apiKey;
+  const fromEnv = envKeyFor(provider);
+  if (fromEnv) return fromEnv;
+  return credentialResolver?.(provider);
+}
+
+function envKeyFor(provider: Provider): string | undefined {
   switch (provider) {
     case "anthropic":
       return env("ANTHROPIC_API_KEY");
@@ -81,8 +98,8 @@ export function createModelInstance(cfg: ModelConfig = {}): LanguageModel {
 
   if (!apiKey) {
     throw new Error(
-      `No API key for provider "${provider}". Pass ModelConfig.apiKey (browser/BYOK) ` +
-        `or set the matching env var (CLI/server).`
+      `No API key for provider "${provider}". Either run \`yousim connect\` to link ` +
+        `an OpenRouter account, pass ModelConfig.apiKey, or set the matching env var.`
     );
   }
 

@@ -10,6 +10,8 @@ const printHelp = () => {
 
 Usage:
   yousim              Start the CLI (mode selection)
+  yousim connect      Link an OpenRouter account (OAuth, no key to paste)
+  yousim disconnect   Forget the stored key
   yousim sessions     List saved sessions
   yousim resume [id]  Resume a session (picker if no id given)
   yousim server       Start the API server + frontend
@@ -17,6 +19,8 @@ Usage:
 
 Options:
   -p, --port <port>   Set server port (default: 3000)
+      --headless      With "connect": print a URL and paste the code back,
+                      for SSH sessions and containers
   -h, --help          Show help
 
 Config:
@@ -69,6 +73,8 @@ const printConfig = async () => {
 
   const { resolveDbPath } = await import("@yousim/core");
   console.log(`\nStorage: ${resolveDbPath()}`);
+  const { connectionStatus } = await import("@yousim/cli/connect");
+  connectionStatus();
 };
 
 if (command === "-h" || command === "--help" || command === "help") {
@@ -82,6 +88,18 @@ const main = async () => {
   if (command === "config") {
     await printConfig();
     process.exit(0);
+  }
+
+  if (command === "connect") {
+    const { connect } = await import("@yousim/cli/connect");
+    await connect({ headless: args.includes("--headless") });
+    return;
+  }
+
+  if (command === "disconnect") {
+    const { disconnect } = await import("@yousim/cli/connect");
+    await disconnect();
+    return;
   }
 
   if (command === "sessions") {
