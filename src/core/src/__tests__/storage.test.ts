@@ -3,6 +3,7 @@ import { rmSync, mkdtempSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { SqliteStorage, resolveDbPath, SCHEMA_VERSION } from "../storage/sqlite";
+import { MemoryStorage } from "../storage/memory";
 import { Database } from "bun:sqlite";
 
 const dirs: string[] = [];
@@ -112,4 +113,30 @@ test("sessions are scoped by user", async () => {
   expect(await s.getMessages(sa.id, "b")).toHaveLength(0);
   expect(await s.getSession(sa.id, "b")).toBeNull();
   s.close();
+});
+
+test("a user cannot write into another user's session", async () => {
+  // Ownership was checked as session_id alone, so this insert was ACCEPTED:
+  // the row landed in Alice's session attributed to Bob, invisible to Alice
+  // and visible to Bob. Not reachable through the single-user local API, but
+  // the Storage contract is what a multi-user consumer implements against.
+  //
+  // This test exists because the fix was silently lost once already — a
+  // history rewrite reset the working tree over the uncommitted edit.
+  for (const store of [new MemoryStorage(), new SqliteStorage(tmpDb())]) {
+    await store.upsertUser("alice", "a");
+    await store.upsertUser("bob", "b");
+    const session = await store.createSession("alice", {});
+
+    await expect(store.insertMessage(session.id, "bob", "injected", true)).rejects.toThrow(
+      /does not belong to user/
+    );
+    await expect(store.insertSummary(session.id, "bob", "injected")).rejects.toThrow(
+      /does not belong to user/
+    );
+
+    // The owner is unaffected.
+    expect(await store.insertMessage(session.id, "alice", "legit", true)).toBeTruthy();
+    expect(await store.getMessages(session.id, "alice")).toHaveLength(1);
+  }
 });

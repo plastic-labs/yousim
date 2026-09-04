@@ -75,6 +75,15 @@ export class MemoryStorage implements Storage {
     content: string,
     isUser: boolean
   ): Promise<StoredMessage> {
+    // Ownership is (session_id, user_id), not session_id alone. Without this a
+    // caller can write into someone else's session: the row is accepted, the
+    // owner cannot see it, and the writer can — orphaned data attributed to
+    // the wrong user. Not reachable through the single-user local API, but the
+    // Storage contract is what a multi-user consumer implements against.
+    const owner = await this.getSession(sessionId, userId);
+    if (!owner) {
+      throw new Error(`Session ${sessionId} does not belong to user ${userId}`);
+    }
     const message: StoredMessage = {
       id: crypto.randomUUID(),
       session_id: sessionId,
@@ -103,6 +112,15 @@ export class MemoryStorage implements Storage {
   }
 
   async insertSummary(sessionId: string, userId: string, content: string): Promise<StoredSummary> {
+    // Ownership is (session_id, user_id), not session_id alone. Without this a
+    // caller can write into someone else's session: the row is accepted, the
+    // owner cannot see it, and the writer can — orphaned data attributed to
+    // the wrong user. Not reachable through the single-user local API, but the
+    // Storage contract is what a multi-user consumer implements against.
+    const owner = await this.getSession(sessionId, userId);
+    if (!owner) {
+      throw new Error(`Session ${sessionId} does not belong to user ${userId}`);
+    }
     const summary: StoredSummary = {
       id: crypto.randomUUID(),
       session_id: sessionId,

@@ -43,6 +43,7 @@ Options:
   -p, --port <port>   Set server port (default: 3000)
       --headless      With "connect": print a URL and paste the code back,
                       for SSH sessions and containers
+  -v, --version       Show version
   -h, --help          Show help
 
 Config, highest precedence first:
@@ -155,6 +156,14 @@ const printConfig = async (resolution: import("./config").Resolution) => {
   connectionStatus();
 };
 
+if (command === "-v" || command === "--version" || command === "version") {
+  // Read from the manifest rather than a second hardcoded constant, so this
+  // can't drift from what was actually published.
+  const { version } = await import("../package.json");
+  console.log(version);
+  process.exit(0);
+}
+
 if (command === "-h" || command === "--help" || command === "help") {
   printHelp();
   process.exit(0);
@@ -207,6 +216,15 @@ const main = async () => {
     const { startServer } = await import("@yousim/api");
     startServer();
     return;
+  }
+
+  // A bare word could plausibly be something the user meant to type at the
+  // prompt, so it falls through to a session. An unrecognized *flag* is always
+  // a mistake, and silently starting a session hides it — `yousim --version`
+  // used to open the simulator.
+  if (command?.startsWith("-")) {
+    console.error(`Unknown option: ${command}\nRun \`yousim --help\` for usage.`);
+    process.exit(2);
   }
 
   const { runCli } = await import("@yousim/cli");
