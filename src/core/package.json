@@ -11,7 +11,8 @@
     "./contract": "./src/contract.ts",
     "./model": "./src/model.ts",
     "./pkce": "./src/pkce.ts",
-    "./credentials": "./src/credentials.ts"
+    "./credentials": "./src/credentials.ts",
+    "./config": "./src/config.ts"
   },
   "files": [
     "src/",

@@ -1,25 +1,22 @@
 import { Database } from "bun:sqlite";
 import fs from "fs";
-import os from "os";
 import path from "path";
+import { dataHome } from "../config";
 import type { Storage, StoredSession, StoredMessage, StoredSummary } from "../storage";
 
 /** Current schema version, tracked in `PRAGMA user_version`. */
 export const SCHEMA_VERSION = 1;
 
 /**
- * Where the database lives, in precedence order:
+ * Where the database lives:
  *   1. an explicit path
- *   2. $YOUSIM_DB               — useful for tests and separate profiles
- *   3. $XDG_DATA_HOME/yousim/   — respected when set
- *   4. ~/.yousim/               — the default
+ *   2. $YOUSIM_DB   — useful for tests and separate profiles
+ *   3. dataHome()   — the shared resolver, so paths can't disagree
  */
 export function resolveDbPath(explicit?: string): string {
   if (explicit) return explicit;
   if (process.env.YOUSIM_DB) return process.env.YOUSIM_DB;
-  const xdg = process.env.XDG_DATA_HOME;
-  if (xdg) return path.join(xdg, "yousim", "yousim.db");
-  return path.join(os.homedir(), ".yousim", "yousim.db");
+  return path.join(dataHome(), "yousim.db");
 }
 
 /**

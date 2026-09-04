@@ -12,7 +12,24 @@ import {
   SqliteStorage,
 } from "@yousim/core";
 import type { StoredSession, ModelConfig, Provider } from "@yousim/core";
-import { resolveModel, setCredentialResolver, loadCredential, listCredentials } from "@yousim/core";
+import {
+  resolveModel,
+  setCredentialResolver,
+  loadCredential,
+  listCredentials,
+  connectedProvider,
+  neutralizeCwdEnv,
+} from "@yousim/core";
+
+// The launcher already does this, but `yousim-cli` is its own bin and this
+// module is importable directly, so the guard belongs at both entry points.
+// Bun auto-loads ./.env; a cloned repo's .env must not be able to redirect
+// inference with the user's credential attached. Safe to run twice — the
+// second pass finds nothing left to drop. Nothing above reads env at import
+// time, which is what makes this position sufficient.
+//
+// Silent: `yousim config` is where what-got-ignored belongs, not every launch.
+neutralizeCwdEnv();
 
 // A key linked with `yousim connect` should work without any env var. Env
 // still wins, so CI and one-off overrides need no disconnect.
@@ -58,8 +75,7 @@ function getAgentOptions(): ModelConfig {
   // anthropic. Falling straight to anthropic would mean `yousim connect`
   // followed by `yousim` fails with "no API key" despite having just
   // connected one — the single most confusing thing this CLI could do.
-  const connected = listCredentials().map((c) => c.provider);
-  const raw = process.env.PROVIDER ?? connected[0] ?? "anthropic";
+  const raw = process.env.PROVIDER ?? connectedProvider() ?? "anthropic";
 
   // PROVIDER is user input, so validate rather than trusting the cast.
   if (!PROVIDERS.includes(raw as Provider)) {
@@ -110,7 +126,8 @@ function describeTarget(options: ModelConfig) {
       theme.command(
         `  note: connected to ${connected.join(", ")}, but PROVIDER=${active} is set` +
           (baseUrl ? ` (${baseUrl})` : "") +
-          `.\n  That env var wins. Unset PROVIDER, or run: PROVIDER=${connected[0]} yousim`
+          `.\n  That wins over the connected account. Run "yousim config" to see which` +
+          ` layer set it, or: PROVIDER=${connected[0]} yousim`
       )
     );
   }
