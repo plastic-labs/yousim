@@ -10,6 +10,11 @@ import {
   credentialsPath,
 } from "../credentials";
 
+// The keychain is machine-global and cannot be isolated with YOUSIM_HOME, so
+// every test here runs against the file store only. Without this the suite
+// writes test values into the developer's real login keychain.
+process.env.YOUSIM_KEYCHAIN = "0";
+
 let home: string | undefined;
 afterEach(() => {
   if (home) rmSync(home, { recursive: true, force: true });

@@ -7,6 +7,9 @@ export { createModelInstance, resolveModel, resolveProvider, setCredentialResolv
 // BYOK auth (portable: Web Crypto + fetch only)
 export * from "./pkce";
 
+// Config resolution and paths (Bun/Node only)
+export * from "./config";
+
 // Local credential storage (Bun/Node only)
 export * from "./credentials";
 
