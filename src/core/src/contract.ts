@@ -53,6 +53,21 @@ export {
   Identity,
 } from "./agents";
 
+// ---------------------------------------------------------------------------
+// Client extension seam: meta-commands.
+//
+// `parseInput` MUST be shared — if two surfaces classify input differently,
+// the same text behaves differently depending on where it was typed. The
+// registry is per-surface: a browser cannot open a localhost listener, and a
+// local install has no account to log into. Some commands (`connect`) share a
+// name and description across surfaces while needing a different `run`.
+// ---------------------------------------------------------------------------
+export type { ParsedInput, MetaCommand, MetaCommandResult } from "./commands";
+export { parseInput, buildRegistry, renderHelp } from "./commands";
+
+export type { ModelPreset } from "./models";
+export { MODEL_PRESETS, defaultModelFor, checkModelId } from "./models";
+
 export { simulate } from "./simulate";
 export { INITIAL_PROMPT, INITIAL_RESPONSE } from "./simulate";
 

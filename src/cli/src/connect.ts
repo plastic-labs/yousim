@@ -21,6 +21,17 @@ import * as readline from "readline";
 
 const PROVIDER = "openrouter";
 
+/**
+ * Report where the key actually went. saveCredential prefers the OS keychain
+ * and falls back to a file, so claiming a file path unconditionally is wrong
+ * whenever the keychain accepted it.
+ */
+function describeStorage(where: "keychain" | "file"): string {
+  return where === "keychain"
+    ? "Key stored in the system keychain."
+    : `Key stored in ${credentialsPath()} (0600).`;
+}
+
 async function openBrowser(url: string): Promise<boolean> {
   const cmd =
     process.platform === "darwin" ? "open" : process.platform === "win32" ? "start" : "xdg-open";
@@ -50,8 +61,7 @@ async function connectHeadless(): Promise<void> {
   }
 
   const key = await exchangeCode(code, verifier);
-  saveCredential(PROVIDER, key);
-  console.log(`\nConnected. Key stored in ${credentialsPath()} (0600).`);
+  console.log(`\nConnected. ${describeStorage(saveCredential(PROVIDER, key))}`);
 }
 
 export async function connect(opts: { headless?: boolean } = {}): Promise<void> {
@@ -110,8 +120,7 @@ export async function connect(opts: { headless?: boolean } = {}): Promise<void> 
 
     const code = await codePromise.finally(() => clearTimeout(timeout));
     const key = await exchangeCode(code, verifier);
-    saveCredential(PROVIDER, key);
-    console.log(`Connected. Key stored in ${credentialsPath()} (0600).`);
+    console.log(`Connected. ${describeStorage(saveCredential(PROVIDER, key))}`);
   } finally {
     server.stop(true);
   }

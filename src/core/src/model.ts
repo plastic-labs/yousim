@@ -1,6 +1,7 @@
 import { createAnthropic } from "@ai-sdk/anthropic";
 import { createOpenAI } from "@ai-sdk/openai";
 import type { LanguageModel } from "ai";
+import { defaultModelFor } from "./models";
 
 export type Provider = "anthropic" | "openrouter" | "openai" | "groq";
 
@@ -25,18 +26,8 @@ export interface ModelConfig {
   maxOutputTokens?: number;
 }
 
-// Defaults matter more here than in most projects: the simulator effect
-// depends heavily on the model, and a wrong default makes YouSim look broken
-// rather than misconfigured.
-//
-// anthropic/claude-3.5-sonnet was the OpenRouter default and has been retired —
-// it 404s. Verified live 2026-09-04.
-const PROVIDER_DEFAULTS: Record<Provider, string> = {
-  anthropic: "claude-sonnet-4-5-20250929",
-  openrouter: "meta-llama/llama-3.3-70b-instruct",
-  openai: "gpt-4o",
-  groq: "llama-3.3-70b-versatile",
-};
+// Defaults come from the curated preset list, so there is one source of
+// truth for "which model actually produces the effect". See models.ts.
 
 const PROVIDER_BASE_URLS: Partial<Record<Provider, string>> = {
   openrouter: "https://openrouter.ai/api/v1",
@@ -57,7 +48,7 @@ export function resolveModel(cfg: ModelConfig = {}): string {
   if (cfg.model) return cfg.model;
   if (env("MODEL")) return env("MODEL")!;
   if (provider === "openrouter" && env("OPENROUTER_MODEL")) return env("OPENROUTER_MODEL")!;
-  return PROVIDER_DEFAULTS[provider];
+  return defaultModelFor(provider);
 }
 
 /**

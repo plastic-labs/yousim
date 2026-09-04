@@ -19,7 +19,13 @@ import {
   listCredentials,
   connectedProvider,
   neutralizeCwdEnv,
+  parseInput,
+  buildRegistry,
+  renderHelp,
+  MODEL_PRESETS,
+  checkModelId,
 } from "@yousim/core";
+import type { MetaCommand } from "@yousim/core";
 
 // The launcher already does this, but `yousim-cli` is its own bin and this
 // module is importable directly, so the guard belongs at both entry points.
@@ -87,50 +93,6 @@ function getAgentOptions(): ModelConfig {
   const provider = raw as Provider;
   // Model and credential resolution live in core so every surface agrees.
   return { provider, model: resolveModel({ provider }) };
-}
-
-/**
- * Say exactly where inference is going, and flag the case that is otherwise
- * invisible: an account was connected for one provider while env points
- * somewhere else. Env winning is deliberate, but it should never be silent.
- */
-function describeTarget(options: ModelConfig) {
-  const baseUrl = process.env.OPENAI_BASE_URL;
-  const endpoint =
-    options.provider === "openai" && baseUrl ? baseUrl : options.provider;
-
-  console.log(
-    `\n${theme.info(`provider: ${options.provider}  model: ${options.model}  endpoint: ${endpoint}`)}`
-  );
-
-  const active = options.provider ?? "anthropic";
-
-  // Model ids are provider-namespaced, but MODEL is global — so a name set for
-  // one provider silently leaks to another. OpenRouter ids always contain a
-  // "/" (vendor/model), so a bare name there is almost certainly a leftover.
-  if (active === "openrouter" && options.model && !options.model.includes("/")) {
-    console.log(
-      theme.command(
-        `  warning: "${options.model}" is not an OpenRouter model id — those look like` +
-          ` "vendor/model" (e.g. meta-llama/llama-3.3-70b-instruct).\n` +
-          `  MODEL applies to every provider, so a name set for a local endpoint leaks here.` +
-          ` Unset MODEL or use a valid id.`
-      )
-    );
-  }
-
-  const connected = listCredentials().map((c) => c.provider);
-  const explicit = Boolean(process.env.PROVIDER);
-  if (explicit && connected.length > 0 && !connected.includes(active)) {
-    console.log(
-      theme.command(
-        `  note: connected to ${connected.join(", ")}, but PROVIDER=${active} is set` +
-          (baseUrl ? ` (${baseUrl})` : "") +
-          `.\n  That wins over the connected account. Run "yousim config" to see which` +
-          ` layer set it, or: PROVIDER=${connected[0]} yousim`
-      )
-    );
-  }
 }
 
 // ─── Persistence ───────────────────────────────────────────────────────────
@@ -214,11 +176,166 @@ class Recorder {
   }
 }
 
+// ─── Meta-commands ─────────────────────────────────────────────────────────
+//
+// Bare words, as in the original. Anything unrecognized goes to the simulator
+// untouched, so `/locate chateau ruins` is never swallowed.
+
+interface CommandDeps {
+  rl: readline.Interface;
+  recorder: () => Recorder;
+  options: () => ModelConfig;
+  setModel: (model: string) => void;
+  switchTo: (sessionId: string) => void;
+  resetSession: () => Promise<void>;
+}
+
+function baseCommands(deps: CommandDeps): MetaCommand[] {
+  const cmds: MetaCommand[] = [
+    {
+      name: "help",
+      description: "show this list",
+      run: () => ({ output: renderHelp(registryRef!) }),
+    },
+    {
+      name: "clear",
+      description: "clear the screen, keep the session",
+      run: () => ({ clear: true }),
+    },
+    {
+      name: "sessions",
+      aliases: ["session"],
+      description: "list saved sessions, or switch: session <id>",
+      run: async (args) => {
+        if (args.length === 0) {
+          const rows = await listSessions();
+          return { output: rows.length === 0 ? "" : "" };
+        }
+        const full = await expandSessionId(args[0]!);
+        if (!full) return { output: `No session matching "${args[0]}".` };
+        deps.switchTo(full);
+        return { exit: true, output: `Switching to ${full.slice(0, 8)}…` };
+      },
+    },
+    {
+      name: "reset",
+      description: "start a new session",
+      run: async () => {
+        await deps.resetSession();
+        return { exit: true, output: "New session." };
+      },
+    },
+    {
+      name: "export",
+      description: "write this session's transcript to a file",
+      run: async () => {
+        const r = deps.recorder();
+        const msgs = await r.history();
+        const name = r.session.metadata?.name || r.session.id.slice(0, 8);
+        const file = `yousim-${String(name).replace(/[^\w.-]+/g, "-").slice(0, 40)}.txt`;
+        const body = msgs
+          .map((m) => `${m.role === "user" ? ">" : ""} ${m.content}`.trim())
+          .join("\n\n");
+        await Bun.write(file, body + "\n");
+        return { output: `Wrote ${msgs.length} messages to ${file}` };
+      },
+    },
+    {
+      name: "model",
+      description: "show or switch the model: model <id>",
+      run: (args) => {
+        const opts = deps.options();
+        const provider = opts.provider ?? "anthropic";
+        if (args.length === 0) {
+          const baseUrl = process.env.OPENAI_BASE_URL;
+          const endpoint = provider === "openai" && baseUrl ? baseUrl : provider;
+          const notes: string[] = [];
+
+          // MODEL is global while ids are provider-namespaced, so a name set
+          // for one provider leaks to another and fails opaquely at request
+          // time. Surfaced here rather than at startup: this is where someone
+          // is actually asking about the model.
+          const check = checkModelId(provider, opts.model ?? "");
+          if (!check.ok) notes.push(`  warning: ${check.reason}`);
+
+          const connected = listCredentials().map((c) => c.provider);
+          if (process.env.PROVIDER && connected.length && !connected.includes(provider)) {
+            notes.push(
+              `  note: connected to ${connected.join(", ")}, but PROVIDER=${provider} is set.` +
+                ` Run "yousim config" to see which layer won.`
+            );
+          }
+
+          const lines = [
+            `provider: ${provider}`,
+            `model:    ${opts.model}`,
+            `endpoint: ${endpoint}`,
+            ...notes,
+            "",
+            `presets for ${provider}:`,
+            ...MODEL_PRESETS[provider].map(
+              (m) =>
+                `  ${m.id === opts.model ? "*" : " "} ${m.id}` +
+                `\n      ${m.note}`
+            ),
+            "",
+            "switch with: model <id>",
+          ];
+          return { output: lines.join("\n") };
+        }
+        const wanted = args.join(" ");
+        const check = checkModelId(provider, wanted);
+        if (!check.ok) return { output: `  ${check.reason}` };
+        deps.setModel(wanted);
+        return { output: `model: ${wanted}` };
+      },
+    },
+    {
+      name: "connect",
+      description: "link an OpenRouter account",
+      run: async () => {
+        const { connect } = await import("./connect");
+        await connect({});
+        return { output: "" };
+      },
+    },
+    {
+      name: "mode",
+      description: "switch mode: mode <simulator|constructor|chat>",
+      run: (args) => {
+        const wanted = args[0];
+        if (!wanted) {
+          return { output: `current mode: ${process.env.YOUSIM_MODE ?? "simulator"}` };
+        }
+        if (!["simulator", "constructor", "chat"].includes(wanted)) {
+          return { output: `unknown mode "${wanted}" — simulator, constructor, or chat` };
+        }
+        // Switching rebuilds the agents, so leave the loop and re-enter. The
+        // original reloaded the page for the same reason.
+        process.env.YOUSIM_MODE = wanted;
+        pendingMode = wanted as Mode;
+        return { exit: true, output: `mode: ${wanted}` };
+      },
+    },
+    {
+      name: "exit",
+      aliases: ["quit"],
+      description: "leave",
+      run: () => ({ exit: true }),
+    },
+  ];
+  return cmds;
+}
+
+// `help` renders from the live registry, so it can never advertise a command
+// that isn't wired — which is how `share` ended up documented but missing.
+let registryRef: Map<string, MetaCommand> | null = null;
+let pendingMode: Mode | null = null;
+
 // ─── Mode: Simulator ───────────────────────────────────────────────────────
 
 async function runSimulator(rl: readline.Interface, resumeId?: string) {
   const agentOptions = getAgentOptions();
-  describeTarget(agentOptions);
 
   const commandPrompt = theme.prompt("simulator@anthropic:~$ ");
 
@@ -320,20 +437,50 @@ async function runSimulator(rl: readline.Interface, resumeId?: string) {
     await manual(initialLocate);
   }
 
+  // Registry is built here because the commands close over this session's
+  // recorder and options.
+  let switchToId: string | null = null;
+  const registry = buildRegistry(
+    baseCommands({
+      rl,
+      recorder: () => recorder,
+      options: () => agentOptions,
+      setModel: (m) => {
+        agentOptions.model = m;
+      },
+      switchTo: (id) => {
+        switchToId = id;
+      },
+      resetSession: async () => {
+        recorder.close();
+        recorder = await Recorder.start("simulator", name);
+      },
+    })
+  );
+  registryRef = registry;
+
   try {
     while (true) {
-      const command = await readInput(rl, commandPrompt);
+      const input = await readInput(rl, commandPrompt);
+      const parsed = parseInput(input, registry.keys());
 
-      if (command === "exit") return;
-
-      if (command === "") {
+      if (parsed.kind === "auto") {
         await auto();
         continue;
       }
 
+      if (parsed.kind === "meta") {
+        const result = await registry.get(parsed.name)!.run(parsed.args);
+        if (result.clear) console.clear();
+        if (result.output) console.log(result.output);
+        if (result.exit) return;
+        continue;
+      }
+
+      // Anything else is the simulator's, verbatim.
       console.log(`\n${theme.command("SIMULATOR CLAUDE:")}`);
-      console.log(theme.command(command));
-      await manual(command);
+      console.log(theme.command(parsed.text));
+      await manual(parsed.text);
     }
   } finally {
     console.log(theme.info(`\n  session ${recorder.session.id}`));
@@ -346,7 +493,6 @@ async function runSimulator(rl: readline.Interface, resumeId?: string) {
 
 async function runConstructor(rl: readline.Interface): Promise<{ summary: string; name: string } | null> {
   const agentOptions = getAgentOptions();
-  describeTarget(agentOptions);
 
   const constructorPrompt = theme.constructor("constructor> ");
 
@@ -597,9 +743,19 @@ export async function resumeSession(idOrPrefix?: string) {
 
 // ─── Mode Selection ────────────────────────────────────────────────────────
 
-export async function runCli() {
-  console.log("Welcome to YouSim CLI!\n");
+/**
+ * Which mode to open in. Persisted so `mode` survives the process restart
+ * that switching requires, mirroring how the original stored it client-side.
+ */
+type Mode = "simulator" | "constructor" | "chat";
 
+function initialMode(): Mode {
+  const stored = process.env.YOUSIM_MODE;
+  if (stored === "constructor" || stored === "chat") return stored;
+  return "simulator";
+}
+
+export async function runCli(requestedMode?: Mode) {
   const rl = createRl();
 
   const handleExit = () => {
@@ -610,34 +766,23 @@ export async function runCli() {
   process.on("SIGINT", handleExit);
   process.on("SIGTERM", handleExit);
 
-  console.log("Select a mode:");
-  console.log("  1) Simulator  - Explore identities in the latent space");
-  console.log("  2) Constructor - Build a new identity through conversation");
-  console.log("  3) Chat       - Chat with a constructed identity");
-  console.log("");
-
-  const choice = await readInput(rl, "Mode (1/2/3): ");
+  // No mode menu. The original showed a banner and dropped you straight into
+  // the simulator with "Enter a Name to Simulate"; you typed `mode
+  // constructor` to move. A launch-time menu is a gate the original didn't
+  // have, and without an in-session `mode` it was a one-way door.
+  const mode = requestedMode ?? initialMode();
 
   try {
-    switch (choice) {
-      case "1":
-      case "simulator":
-        await runSimulator(rl);
-        break;
-      case "2":
+    switch (mode) {
       case "constructor": {
         const result = await runConstructor(rl);
-        if (result) {
-          await runChat(rl, result.summary, result.name);
-        }
+        if (result) await runChat(rl, result.summary, result.name);
         break;
       }
-      case "3":
       case "chat":
         await runChat(rl);
         break;
       default:
-        // Default to simulator
         await runSimulator(rl);
         break;
     }

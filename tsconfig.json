@@ -7,11 +7,20 @@
     "esModuleInterop": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
-    "lib": ["ES2020", "DOM"],
+    "lib": [
+      "ES2020",
+      "DOM"
+    ],
     "jsx": "react-jsx",
-    "types": ["bun-types"],
+    "types": [
+      "bun-types"
+    ],
     "allowImportingTsExtensions": true,
     "noEmit": true
   },
-  "exclude": ["node_modules", ".venv"]
+  "exclude": [
+    "node_modules",
+    ".venv",
+    "legacy-python"
+  ]
 }
