@@ -41,8 +41,20 @@
         "ai": "^5.0.85",
       },
     },
-    "src/frontend": {
-      "name": "@yousim/frontend",
+    "src/launcher": {
+      "name": "yousim",
+      "version": "0.1.0",
+      "bin": {
+        "yousim": "./src/index.ts",
+      },
+      "dependencies": {
+        "@yousim/api": "workspace:*",
+        "@yousim/cli": "workspace:*",
+        "@yousim/core": "workspace:*",
+      },
+    },
+    "src/web": {
+      "name": "@yousim/web",
       "version": "0.1.0",
       "dependencies": {
         "@tanstack/react-query": "^5.0.0",
@@ -56,18 +68,6 @@
         "@vitejs/plugin-react": "^4.0.0",
         "typescript": "^5.0.0",
         "vite": "^5.0.0",
-      },
-    },
-    "src/launcher": {
-      "name": "yousim",
-      "version": "0.1.0",
-      "bin": {
-        "yousim": "./src/index.ts",
-      },
-      "dependencies": {
-        "@yousim/api": "workspace:*",
-        "@yousim/cli": "workspace:*",
-        "@yousim/core": "workspace:*",
       },
     },
   },
@@ -274,7 +274,7 @@
 
     "@yousim/core": ["@yousim/core@workspace:src/core"],
 
-    "@yousim/frontend": ["@yousim/frontend@workspace:src/frontend"],
+    "@yousim/web": ["@yousim/web@workspace:src/web"],
 
     "ai": ["ai@5.0.85", "", { "dependencies": { "@ai-sdk/gateway": "2.0.5", "@ai-sdk/provider": "2.0.0", "@ai-sdk/provider-utils": "3.0.15", "@opentelemetry/api": "1.9.0" }, "peerDependencies": { "zod": "^3.25.76 || ^4.1.8" } }, "sha512-7aB4e0uJWpC+em2U9Q59UsmvQIab0d46Un6E9b4Y5gdhu7PNov3bGsnuVk2sfCTJSn+uNncB84BWRC2NkmSCMA=="],
 

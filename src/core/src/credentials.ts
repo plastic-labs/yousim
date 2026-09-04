@@ -55,14 +55,35 @@ function keychainGet(provider: string): string | undefined {
   }
 }
 
+/**
+ * Whether a key survives `security -i` quoting.
+ *
+ * `-i` tokenizes each line it reads and round-trips neither `"` nor `\`: it
+ * stores a silently truncated value instead of failing. No provider issues keys
+ * containing either, but writing the wrong credential without saying so is not
+ * a failure mode worth risking on a value we do not control.
+ */
+function keychainQuotable(key: string): boolean {
+  return !/["\\\r\n]/.test(key);
+}
+
 function keychainSet(provider: string, key: string): boolean {
   if (!keychainAvailable()) return false;
+  // -U updates in place rather than erroring when an entry already exists.
+  const args = ["-U", "-s", `${SERVICE}-${provider}`, "-a", provider];
   try {
-    // -U updates in place rather than erroring when an entry already exists.
-    const p = Bun.spawnSync([
-      "security", "add-generic-password",
-      "-s", `${SERVICE}-${provider}`, "-a", provider, "-w", key, "-U",
-    ]);
+    // `security -i` reads whole commands from stdin, which keeps the key out of
+    // argv — `-w <key>` exposes it to anything that can read this process's
+    // arguments for the duration of the call.
+    if (keychainQuotable(key)) {
+      const p = Bun.spawnSync(["security", "-i"], {
+        stdin: new TextEncoder().encode(
+          `add-generic-password ${args.join(" ")} -w "${key}"\n`
+        ),
+      });
+      return p.exitCode === 0;
+    }
+    const p = Bun.spawnSync(["security", "add-generic-password", ...args, "-w", key]);
     return p.exitCode === 0;
   } catch {
     return false;

@@ -2,6 +2,7 @@ import { Elysia, t } from "elysia";
 import { cors } from "@elysiajs/cors";
 import { staticPlugin } from "@elysiajs/static";
 import path from "path";
+import { existsSync } from "fs";
 import {
   Message,
   GaslitClaude,
@@ -48,9 +49,21 @@ interface ChatRequest extends ManualRequest {
   prompt?: Array<Record<string, any>>;
 }
 
+/**
+ * Origins allowed to call this server.
+ *
+ * `cors()` with no options reflects back whatever Origin the caller sends and
+ * pairs it with Allow-Credentials. On a server where every request is already
+ * the local owner, that means any page the user happens to have open can read
+ * their sessions, delete them, and spend their model credit. The built frontend
+ * is served from this same origin and needs no allowance at all — this exists
+ * for `bun run dev`, where Vite serves the frontend from a second port.
+ */
+const LOCAL_ORIGIN = /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/;
+
 export const createApp = () => {
   const app = new Elysia()
-    .use(cors())
+    .use(cors({ origin: LOCAL_ORIGIN }))
     .derive(() => ({ userId: LOCAL_USER, storage: getStorage() }))
     .get("/api/health", () => "YouSim API - Bun/Elysia version")
     .get("/api/mode", () => ({ auth: "local" as const }))
@@ -673,9 +686,26 @@ export const createApp = () => {
 };
 
 export const startServer = () => {
+  // publicDir is resolved from import.meta.dir, which points inside the
+  // embedded bundle in a `bun build --compile` binary — so the frontend
+  // assets are not there. Elysia reports any listen failure as "Is port N in
+  // use?", which sends you chasing a port conflict that doesn't exist.
+  if (!existsSync(publicDir)) {
+    throw new Error(
+      `Frontend assets not found at ${publicDir}. Run \`bun run build\` in ` +
+        `src/web, or use the CLI instead of \`server\` — a compiled ` +
+        `standalone binary cannot serve them.`
+    );
+  }
+
   const app = createApp();
   const port = Number(process.env.PORT || 3000);
-  app.listen(port);
+  // Loopback unless asked otherwise. There is no auth here by design, so Bun's
+  // default wildcard bind would put every session on this machine within reach
+  // of anyone on the same network. A container is the one case that genuinely
+  // needs 0.0.0.0, since a published port cannot reach loopback inside it.
+  const hostname = process.env.HOST || "127.0.0.1";
+  app.listen({ port, hostname });
   console.log(
     `YouSim API is running at http://${app.server?.hostname}:${app.server?.port}`
   );

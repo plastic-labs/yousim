@@ -1,6 +1,7 @@
 {
   "name": "@yousim/core",
   "version": "0.1.0",
+  "license": "AGPL-3.0-only",
   "description": "Core simulation logic for YouSim - provider-agnostic identity simulator",
   "type": "module",
   "main": "src/index.ts",

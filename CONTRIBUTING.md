@@ -113,4 +113,4 @@ yousim config          # now resolves from source
 ```
 
 `bun unlink` in the same directory removes it. Only `yousim server` needs
-`bun run build` in `src/frontend` after frontend changes.
+`bun run build` in `src/web` after frontend changes.

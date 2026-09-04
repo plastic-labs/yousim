@@ -311,4 +311,9 @@ together.
 
 ## License
 
-See [LICENSE](LICENSE).
+YouSim is [AGPL-3.0-only](LICENSE).
+
+`legacy-python/webshell/` is vendored third-party code — the WebShell terminal
+UI, MIT licensed, © 2023 Nathaniel Macapinlac — and keeps its own
+[LICENSE](legacy-python/webshell/LICENSE) next to it. That directory is
+archived and is not part of the build.

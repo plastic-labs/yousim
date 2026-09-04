@@ -55,6 +55,9 @@ Environment:
   OPENROUTER_API_KEY  OpenRouter API key (or just run \`yousim connect\`)
   GROQ_API_KEY        Groq API key
   OPENAI_BASE_URL     Any OpenAI-compatible endpoint (local vLLM, Ollama)
+  HOST                Address the server binds (default: 127.0.0.1). There is
+                      no auth, so 0.0.0.0 hands every session on this machine
+                      to anyone who can reach the port.
   YOUSIM_DB           Database path override
   YOUSIM_HOME         Override the config and data directory outright
   YOUSIM_KEYCHAIN=0   Never use the macOS Keychain; store keys in a 0600 file

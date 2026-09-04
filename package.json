@@ -1,16 +1,17 @@
 {
   "name": "yousim",
   "version": "1.0.0",
+  "license": "AGPL-3.0-only",
   "description": "YouSim - Identity simulation in the latent space",
   "workspaces": [
     "src/*"
   ],
   "private": true,
   "scripts": {
-    "dev": "bun run --filter '@yousim/api' dev & bun run --filter '@yousim/frontend' dev",
+    "dev": "bun run --filter '@yousim/api' dev & bun run --filter '@yousim/web' dev",
     "dev:api": "bun run --filter '@yousim/api' dev",
-    "dev:frontend": "bun run --filter '@yousim/frontend' dev",
-    "build": "bun run --filter '@yousim/frontend' build",
+    "dev:web": "bun run --filter '@yousim/web' dev",
+    "build": "bun run --filter '@yousim/web' build",
     "test": "bun run --filter '@yousim/core' test",
     "start:api": "bun run --filter '@yousim/api' start",
     "start:cli": "bun run src/cli/src/cli.ts"

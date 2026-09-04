@@ -55,6 +55,7 @@ export const KEYS = [
   "OPENAI_BASE_URL",
   "YOUSIM_DB",
   "PORT",
+  "HOST",
 ];
 
 /**

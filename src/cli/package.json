@@ -1,6 +1,7 @@
 {
   "name": "@yousim/cli",
   "version": "0.1.0",
+  "license": "AGPL-3.0-only",
   "description": "CLI version of YouSim - Simulator, Constructor, and Chat modes",
   "type": "module",
   "main": "src/cli.ts",

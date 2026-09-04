@@ -20,6 +20,18 @@ downstream consumer of `@yousim/core`, not in this package. An auth module and
 a Supabase backend were both removed from this tree deliberately; re-adding
 them is a regression, not a feature.
 
+Two things in `src/api` are what make "local" true in the absence of auth, and
+neither is redundant:
+
+- **The server binds `127.0.0.1`**, not Bun's default wildcard. `HOST` overrides
+  it, which is how the container gets `0.0.0.0` from the Dockerfile.
+- **CORS is scoped to local origins.** `cors()` with no options reflects any
+  Origin back with Allow-Credentials, which would let any page the user has open
+  read their sessions and spend their model credit.
+
+`HOST` is in `CWD_ENV_KEYS` for the same reason `OPENAI_BASE_URL` is: a cloned
+repo's `./.env` must not be able to widen the bind.
+
 ## Layout
 
 | path            | package            | role                                                                 |
@@ -27,7 +39,7 @@ them is a regression, not a feature.
 | `src/core`      | `@yousim/core`     | Agents, model access, config resolution, credentials, storage        |
 | `src/cli`       | `@yousim/cli`      | Terminal interface and the OAuth connect flow                        |
 | `src/api`       | `@yousim/api`      | Elysia server for local use, plus `/v1/construct`                    |
-| `src/frontend`  | `@yousim/frontend` | React/Vite web UI, served by the API from the same origin            |
+| `src/web`       | `@yousim/web`      | React/Vite web UI, served by the API from the same origin            |
 | `src/launcher`  | `yousim`           | The published binary: subcommand dispatch and config resolution      |
 | `openclaw/`     | —                  | Skill wrapping `/v1/construct`                                       |
 | `legacy-python/`| —                  | Original Python implementation. Archived, not maintained             |
@@ -179,6 +191,11 @@ travel with it.
 set it.** The keychain is machine-global and cannot be isolated by pointing
 `YOUSIM_HOME` elsewhere; the credential tests overwrote a real connected key in
 the login keychain the first time they shipped without this guard.
+
+Writes go through `security -i`, which takes the command on stdin, so the key
+never lands in argv. `-i` tokenizes what it reads and round-trips neither `"`
+nor `\`, silently truncating instead of failing — so a key containing either
+falls back to the argv form rather than being stored wrong.
 
 `connectedProvider()` lives here rather than in the CLI so that `yousim config`
 reports the same provider the CLI actually uses. Two copies of that rule is how

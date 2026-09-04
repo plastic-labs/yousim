@@ -116,6 +116,7 @@ export const CWD_ENV_KEYS = [
   "YOUSIM_HOME",
   "YOUSIM_KEYCHAIN",
   "PORT",
+  "HOST",
   "VITE_API_URL",
 ];
 

@@ -1,6 +1,7 @@
 {
   "name": "@yousim/api",
   "version": "0.1.0",
+  "license": "AGPL-3.0-only",
   "description": "Local YouSim server: Elysia + SQLite, no auth",
   "type": "module",
   "main": "src/index.ts",
