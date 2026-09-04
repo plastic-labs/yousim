@@ -1,5 +1,4 @@
 import fs from "fs";
-import os from "os";
 import path from "path";
 import { configHome, dataHome, loadProjectConfig, loadUserConfig } from "@yousim/core/config";
 import type { ConfigSource } from "@yousim/core/config";
@@ -30,8 +29,6 @@ export interface Resolution {
   settings: Setting[];
   /** Something was wrong and the user needs to know — a rejected project key. */
   warnings: string[];
-  /** Something happened silently that shouldn't be silent — a migration. */
-  notices: string[];
 }
 
 /**
@@ -58,63 +55,6 @@ export const KEYS = [
   "HOST",
 ];
 
-/**
- * Files that used to live in ~/.yousim unconditionally.
- *
- * Setting XDG_CONFIG_HOME or YOUSIM_HOME moves the resolved directory, which
- * would otherwise orphan an existing install: the key is still on disk, the
- * sessions are still on disk, and the tool acts like a fresh checkout. Move
- * them instead, and never over the top of anything already at the destination.
- */
-const LEGACY_LAYOUT: [name: string, dir: () => string][] = [
-  ["credentials.json", configHome],
-  ["config.json", configHome],
-  [".env", configHome],
-  ["yousim.db", dataHome],
-  ["yousim.db-wal", dataHome],
-  ["yousim.db-shm", dataHome],
-];
-
-function migrateLegacyHome(): string[] {
-  const legacy = path.join(os.homedir(), ".yousim");
-  if (!fs.existsSync(legacy)) return [];
-
-  const moved: string[] = [];
-  const conflicts: string[] = [];
-  for (const [name, resolveDir] of LEGACY_LAYOUT) {
-    const destDir = resolveDir();
-    if (path.resolve(destDir) === path.resolve(legacy)) continue;
-
-    const from = path.join(legacy, name);
-    const to = path.join(destDir, name);
-    if (!fs.existsSync(from)) continue;
-    // An existing destination file wins: it is the newer install, and losing
-    // it to a stale copy would be worse than leaving the stale copy behind.
-    if (fs.existsSync(to)) {
-      conflicts.push(`kept ${to}; left ${from} in place`);
-      continue;
-    }
-
-    fs.mkdirSync(destDir, { recursive: true, mode: 0o700 });
-    try {
-      fs.renameSync(from, to);
-    } catch {
-      // EXDEV: the destination is on another filesystem, so rename can't work.
-      fs.copyFileSync(from, to);
-      fs.unlinkSync(from);
-    }
-    if (name === "credentials.json") fs.chmodSync(to, 0o600);
-    moved.push(`moved ${from} -> ${to}`);
-  }
-
-  // A blocked file is only worth mentioning as part of a migration that is
-  // otherwise happening — a leftover with no explanation is how someone spends
-  // an hour wondering which copy is live. Once nothing is moving, the blocked
-  // file is just a file, and repeating the warning on every single invocation
-  // for the rest of time teaches people to ignore our output.
-  return moved.length > 0 ? [...moved, ...conflicts] : [];
-}
-
 function claim(
   settings: Map<string, Setting>,
   key: string,
@@ -134,7 +74,6 @@ function claim(
  * <config dir>/config.json, <config dir>/.env.
  */
 export function resolveConfig(flags: Record<string, string> = {}): Resolution {
-  const notices = migrateLegacyHome();
   const warnings: string[] = [];
   const settings = new Map<string, Setting>();
 
@@ -172,6 +111,5 @@ export function resolveConfig(flags: Record<string, string> = {}): Resolution {
     dataDir: dataHome(),
     settings: KEYS.map((k) => settings.get(k)).filter((s): s is Setting => Boolean(s)),
     warnings,
-    notices,
   };
 }

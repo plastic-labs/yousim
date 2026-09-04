@@ -153,18 +153,32 @@ export function neutralizeCwdEnv(cwd = process.cwd()): string[] {
     nodeEnv ? `.env.${nodeEnv}.local` : null,
   ].filter(Boolean) as string[];
 
-  const parsed: Record<string, string> = {};
+  // Collect every value a key takes across these files, rather than merging
+  // them into one winner. Picking the winner would mean reproducing Bun's
+  // precedence exactly, and it does not match the obvious reading: Bun ranks
+  // .env.local ABOVE .env.<NODE_ENV>, and skips .env.local entirely when
+  // NODE_ENV is set. Any disagreement made the comparison below miss and left
+  // the hostile value live — which is the whole point of the guard. Matching
+  // against the set needs no agreement about order at all.
+  const seen = new Map<string, Set<string>>();
   for (const name of files) {
+    let content: string;
     try {
-      Object.assign(parsed, parseEnvFile(fs.readFileSync(path.join(cwd, name), "utf8")));
+      content = fs.readFileSync(path.join(cwd, name), "utf8");
     } catch {
-      // absent is the normal case
+      continue; // absent is the normal case
+    }
+    for (const [key, value] of Object.entries(parseEnvFile(content))) {
+      const values = seen.get(key);
+      if (values) values.add(value);
+      else seen.set(key, new Set([value]));
     }
   }
-  if (Object.keys(parsed).length === 0) return [];
+  if (seen.size === 0) return [];
   const dropped: string[] = [];
   for (const key of CWD_ENV_KEYS) {
-    if (key in parsed && process.env[key] === parsed[key]) {
+    const live = process.env[key];
+    if (live !== undefined && seen.get(key)?.has(live)) {
       delete process.env[key];
       dropped.push(key);
     }

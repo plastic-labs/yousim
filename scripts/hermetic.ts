@@ -182,7 +182,14 @@ async function main() {
   }
 
   const { env, home, cleanup } = hermeticEnv();
+  // The child is a fresh Bun, and Bun autoloads ./.env from its cwd — which is
+  // this repo, whose own .env carries real provider keys. Stripping them from
+  // `env` above is undone the instant the child starts unless the load is
+  // suppressed here too. Without this flag the "no live call" guarantee is
+  // false on any machine that has a repo .env, which is every dev machine;
+  // no-live-calls.test.ts is what caught it.
   const bunArgs = ["test", ...args];
+  if (process.env.YOUSIM_LIVE !== "1") bunArgs.unshift("--no-env-file");
   if (wantCoverage) {
     bunArgs.push("--coverage-reporter=text", "--coverage-reporter=lcov", `--coverage-dir=${covDir}`);
   }
