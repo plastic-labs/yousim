@@ -27,9 +27,26 @@ bunx tsc --noEmit   # typecheck every package
 Neither needs a model credential. Both should be clean before you open a pull
 request.
 
-Tests that touch credentials must run with `YOUSIM_KEYCHAIN=0` — the macOS
-Keychain is machine-global and cannot be isolated by moving `YOUSIM_HOME`, so a
-run without the guard can overwrite a real connected key.
+Run the tests through `bun run test`, not `bun test` directly. That script is
+`scripts/hermetic.ts`, which builds the environment the suite has to run in and
+then starts Bun inside it:
+
+- a throwaway `HOME`, `XDG_CONFIG_HOME`, `XDG_DATA_HOME`, `YOUSIM_HOME` and
+  `YOUSIM_DB`, deleted when the run ends
+- `YOUSIM_KEYCHAIN=0` **before Bun starts**. The macOS Keychain is
+  machine-global and cannot be isolated by moving `YOUSIM_HOME`; a run without
+  the guard has already overwritten a real connected key. Setting it at the top
+  of a test file is too late — static imports have run by then.
+- every provider credential stripped from the child, so no test can make a
+  live billed call even if you have keys exported
+
+`bun run test:ci` is the full gate: typecheck, then build and `npm pack`, then
+the suite with per-module coverage floors. It is what CI runs.
+
+A test that genuinely needs a live provider credential goes behind
+`bun run test:live`, which leaves the environment alone. There are none today,
+and `src/core/src/__tests__/no-live-calls.test.ts` keeps one from landing in
+the default path by accident.
 
 ## Running from a clone
 
@@ -104,13 +121,17 @@ it to match new work, and do not cite it as current behavior.
 
 ## Testing the CLI as an installed command
 
-`bun link` in `src/launcher` puts `yousim` on your PATH pointing at the repo,
-so edits are live with no rebuild:
+The published package is a bundle, so `bin` points at `dist/yousim.js` rather
+than at the source. Build it once before linking:
 
 ```bash
+bun run pack                      # builds the web assets and bundles the launcher
 cd src/launcher && bun link
-yousim config          # now resolves from source
+yousim config
 ```
 
-`bun unlink` in the same directory removes it. Only `yousim server` needs
-`bun run build` in `src/web` after frontend changes.
+`bun unlink` in the same directory removes it. Because the link now points at
+the bundle rather than at source, edits are **not** live — re-run `bun run
+pack` after a change. When you want live edits, go through
+`bun run src/launcher/src/index.ts` instead; the only thing you lose is the
+bundling, which is what the packaging tests cover.

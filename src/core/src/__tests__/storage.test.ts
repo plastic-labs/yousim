@@ -16,12 +16,19 @@ afterEach(() => {
   while (dirs.length) rmSync(dirs.pop()!, { recursive: true, force: true });
 });
 
-test("resolveDbPath precedence: explicit > YOUSIM_DB > XDG > home", () => {
+test("resolveDbPath precedence: explicit > YOUSIM_DB > XDG_DATA_HOME > home", () => {
   const savedDb = process.env.YOUSIM_DB;
   const savedXdg = process.env.XDG_DATA_HOME;
+  // YOUSIM_HOME outranks both of the others, so leaving it set made the
+  // "falls back to ~/.yousim" leg below assert against whatever it pointed at.
+  // It went unnoticed while the suite ran with an empty environment; the
+  // hermetic runner sets it, which is exactly the kind of ambient assumption
+  // the isolation is there to surface.
+  const savedHome = process.env.YOUSIM_HOME;
   try {
     delete process.env.YOUSIM_DB;
     delete process.env.XDG_DATA_HOME;
+    delete process.env.YOUSIM_HOME;
     expect(resolveDbPath()).toContain(".yousim");
 
     process.env.XDG_DATA_HOME = "/xdg";
@@ -34,6 +41,7 @@ test("resolveDbPath precedence: explicit > YOUSIM_DB > XDG > home", () => {
   } finally {
     savedDb === undefined ? delete process.env.YOUSIM_DB : (process.env.YOUSIM_DB = savedDb);
     savedXdg === undefined ? delete process.env.XDG_DATA_HOME : (process.env.XDG_DATA_HOME = savedXdg);
+    savedHome === undefined ? delete process.env.YOUSIM_HOME : (process.env.YOUSIM_HOME = savedHome);
   }
 });
 

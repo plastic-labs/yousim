@@ -92,43 +92,117 @@ test("storage round-trips a session with messages and a summary", async () => {
   expect(await s.getMessages(session.id, "other-user")).toHaveLength(0);
 });
 
-test("contract does not transitively import platform-only modules", async () => {
-  // The stable surface must be importable from a browser and an edge runtime,
-  // neither of which has bun:sqlite, fs, os, or path. Regression guard: the
-  // contract used to reach these through the index barrel.
-  const { readFileSync } = await import("node:fs");
-  const { join, dirname } = await import("node:path");
-  const root = join(dirname(import.meta.dir), ""); // src/core/src
+/**
+ * Platform modules the stable surface must never reach, at any depth.
+ *
+ * The `node:` and bare forms of the same module are both listed because both
+ * appear in this tree, and `bun:` covers bun:sqlite.
+ */
+const BANNED = /^(bun:|node:(fs|os|path|child_process))|^(fs|os|path|child_process)$/;
 
-  const banned = ["bun:sqlite", '"fs"', '"os"', '"path"', "node:fs", "node:os", "node:path"];
-  const seen = new Set<string>();
+/**
+ * Bundle an entry for the browser and report every banned module the
+ * BUNDLER's own resolver walked into, with the file that imported it.
+ *
+ * This replaces a regex that scanned for `from "..."` matches. That regex
+ * missed single-quoted specifiers, `import()`, `export ... from`, aliased
+ * imports and subpath exports — and, being a hand-rolled walk, it silently
+ * passed on any file it failed to find, which means a walk that resolved
+ * nothing at all still reported success. Asking the bundler removes all of
+ * that: if a module is in the graph, the resolver sees it, whatever syntax
+ * pulled it in.
+ *
+ * A plugin rather than `build.success`: `target: "browser"` does not fail on a
+ * Node builtin, it quietly substitutes a shim. So the build succeeds and the
+ * literal string is gone from the output — which is exactly how a naive
+ * version of this test passes while the contract is broken. The trap catches
+ * the resolution itself.
+ */
+interface BundleResult {
+  /** Banned modules the resolver walked into, each with its importer. */
+  banned: string[];
+  /** Bundled output, so a test can check the build produced something real. */
+  code: string;
+  errors: string[];
+  success: boolean;
+}
 
-  const walk = (rel: string) => {
-    if (seen.has(rel)) return;
-    seen.add(rel);
-    const src = readFileSync(join(root, rel), "utf8");
-    for (const b of banned) {
-      expect(src.includes(`from ${b}`) || src.includes(`from "${b}"`)).toBe(false);
-    }
-    for (const m of src.matchAll(/from\s+"(\.[^"]+)"/g)) {
-      let target = m[1].replace(/^\.\//, "");
-      if (target.startsWith("../")) continue;
-      if (!target.endsWith(".ts")) {
-        target = seen.has(`${target}.ts`) ? `${target}.ts` : `${target}.ts`;
-      }
-      try {
-        walk(target);
-      } catch {
-        walk(`${m[1].replace(/^\.\//, "")}/index.ts`);
-      }
-    }
-  };
+/**
+ * Memoized: one build per entry, for the whole file.
+ *
+ * Not just for speed. Repeating `Bun.build` on the same graph inside a single
+ * `bun test` process makes later builds fail with "Unexpected reading file"
+ * on a dependency that is plainly on disk — a Bun issue, not a real result.
+ * One build per entry keeps that out of the way, and the assertions all read
+ * from the same result anyway.
+ */
+const bundles = new Map<string, Promise<BundleResult>>();
 
-  walk("contract.ts");
-  // Sanity: the walk actually visited the real dependency graph.
-  expect(seen.has("agents.ts")).toBe(true);
-  expect(seen.has("model.ts")).toBe(true);
-  expect(seen.has("simulate.ts")).toBe(true);
+function bundle(entry: string): Promise<BundleResult> {
+  const cached = bundles.get(entry);
+  if (cached) return cached;
+
+  const promise = (async (): Promise<BundleResult> => {
+    const { join, dirname } = await import("node:path");
+    const root = dirname(import.meta.dir); // src/core/src
+    const banned: string[] = [];
+
+    const build = await Bun.build({
+      entrypoints: [join(root, entry)],
+      target: "browser",
+      throw: false,
+      plugins: [
+        {
+          name: "ban-platform-modules",
+          setup(b) {
+            b.onResolve({ filter: BANNED }, (args) => {
+              banned.push(`${args.path} <- ${args.importer.replace(root + "/", "")}`);
+              // Marked external so the build completes and reports EVERY
+              // offender rather than stopping at the first.
+              return { path: args.path, external: true };
+            });
+          },
+        },
+      ],
+    });
+
+    return {
+      banned,
+      code: build.success && build.outputs[0] ? await build.outputs[0].text() : "",
+      errors: build.logs.filter((l) => l.level === "error").map((l) => String(l.message)),
+      success: build.success,
+    };
+  })();
+
+  bundles.set(entry, promise);
+  return promise;
+}
+
+test("contract reaches no platform-only module, at any depth", async () => {
+  // The stable surface has to be importable from a browser and an edge
+  // runtime, neither of which has bun:sqlite, fs, os or path.
+  const { banned, errors, success } = await bundle("contract.ts");
+  expect(errors).toEqual([]);
+  expect(success).toBe(true);
+  expect(banned).toEqual([]);
+});
+
+test("contract bundles to something real, not an empty module", async () => {
+  // Guards the test above from passing vacuously: an entry that resolves to
+  // nothing also reaches no banned module.
+  const { code } = await bundle("contract.ts");
+  expect(code).toContain("CONTRACT_VERSION");
+  expect(code).toContain("GaslitClaude");
+  expect(code.length).toBeGreaterThan(5_000);
+});
+
+test("the index barrel DOES reach platform modules, which is why contract.ts exists", async () => {
+  // The control. The barrel exports the stores and the stores import
+  // bun:sqlite and fs, so this must come back non-empty. If it ever comes back
+  // clean, the trap has stopped working and the test above proves nothing.
+  const { banned } = await bundle("index.ts");
+  expect(banned.some((h) => h.startsWith("bun:sqlite"))).toBe(true);
+  expect(banned.some((h) => h.includes("storage/sqlite.ts"))).toBe(true);
 });
 
 test("the OpenRouter default has a valid id shape", async () => {

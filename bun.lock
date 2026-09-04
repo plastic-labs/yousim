@@ -45,9 +45,9 @@
       "name": "yousim",
       "version": "0.1.0",
       "bin": {
-        "yousim": "./src/index.ts",
+        "yousim": "./dist/yousim.js",
       },
-      "dependencies": {
+      "devDependencies": {
         "@yousim/api": "workspace:*",
         "@yousim/cli": "workspace:*",
         "@yousim/core": "workspace:*",

@@ -32,3 +32,9 @@ supabase/
 # deliberate .claude/settings.json or agent config is still trackable.
 .claude/worktrees/
 .claude/settings.local.json
+
+# Build and test artifacts. `.pack` holds the bundled tarball plus the throwaway
+# install the packaging tests assert against; `coverage` is the lcov the
+# per-module floors are checked from.
+.pack/
+coverage/

@@ -1,6 +1,7 @@
 {
   "name": "@yousim/web",
   "private": true,
+  "comment:private": "Not published. `yousim` is the only package that ships; bun build --target bun inlines this one into it.",
   "version": "0.1.0",
   "license": "AGPL-3.0-only",
   "type": "module",

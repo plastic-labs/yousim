@@ -11,9 +11,24 @@ import {
 } from "../credentials";
 
 // The keychain is machine-global and cannot be isolated with YOUSIM_HOME, so
-// every test here runs against the file store only. Without this the suite
-// writes test values into the developer's real login keychain.
-process.env.YOUSIM_KEYCHAIN = "0";
+// every test here runs against the file store only. Without that guard this
+// suite writes test values into the developer's real login keychain, which is
+// not hypothetical — it happened.
+//
+// The guard is NOT set here any more. scripts/hermetic.ts sets it in the
+// environment before Bun starts, because an assignment at the top of a test
+// file runs after every static import in the module graph. Today nothing reads
+// a credential at load time; the day something does, a line here would be too
+// late, and its presence would hide that it was too late.
+//
+// So this asserts instead of assigning. A run that reaches this without the
+// guard already in the environment must stop, not quietly protect itself.
+if (process.env.YOUSIM_KEYCHAIN !== "0") {
+  throw new Error(
+    "refusing to run: YOUSIM_KEYCHAIN=0 was not set before Bun started. " +
+      "Use `bun run test` (scripts/hermetic.ts) rather than `bun test` directly."
+  );
+}
 
 let home: string | undefined;
 afterEach(() => {
