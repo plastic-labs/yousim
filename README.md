@@ -1,119 +1,144 @@
 # YouSim
 
-YouSim is a simulator that lets you simulate identities within the latent space
-of Claude 3.5 Sonnet. It's live at [https://yousim.ai](https://yousim.ai)!
+YouSim is a general-purpose identity simulator that lets you explore, construct, and chat with identities in the latent space of LLMs. Zero-config: only an LLM API key is required.
+
+## Quick Start
+
+```bash
+# Install dependencies
+bun install
+
+# Configure (only PROVIDER + API key needed)
+cp .env.template .env
+# Edit .env: set ANTHROPIC_API_KEY (or OPENAI_API_KEY, GROQ_API_KEY, OPENROUTER_API_KEY)
+
+# Run CLI (mode selection: Simulator, Constructor, Chat)
+cd src/cli
+bun run start
+
+# Or run server (API + frontend, uses SQLite locally)
+bun run start:api
+```
+
+
+## Repository Layout
+
+- `src/core` (`@yousim/core`): Shared simulation logic, agents, and storage abstraction
+- `src/cli` (`@yousim/cli`): Terminal interface — Simulator, Constructor, and Chat modes
+- `src/launcher` (`yousim`): Single binary launcher
+- `openclaw/`: OpenClaw skill for programmatic identity crafting
+- `PM/`: Project management/architecture notes
+- `legacy-python/`: Archived Python + webshell implementation
+
+## Features
+
+### Multi-Mode CLI
+```bash
+yousim
+# Select: 1) Simulator  2) Constructor  3) Chat
+```
+
+- **Simulator**: Explore identities in the latent space (Searcher Claude + Simulator Claude)
+- **Constructor**: Build a new identity through guided conversation, then optionally chat with it
+- **Chat**: Chat with a previously constructed identity
+
+### BYOK Multi-Provider
+Supports 4 LLM providers out of the box:
+
+| Provider | Env Var | Default Model |
+|---|---|---|
+| Anthropic | `ANTHROPIC_API_KEY` | `claude-sonnet-4-5-20250929` |
+| OpenAI | `OPENAI_API_KEY` | `gpt-4o` |
+| Groq | `GROQ_API_KEY` | `llama-3.3-70b-versatile` |
+| OpenRouter | `OPENROUTER_API_KEY` | `anthropic/claude-3.5-sonnet` |
+
+Set `PROVIDER=openai` (or `groq`, `openrouter`) and the matching API key.
+
+### Zero-Config Storage
+- **No env vars**: SQLite at `~/.yousim/yousim.db` (auto-created)
+
+### Programmatic API (`/v1/construct`)
+Any agent framework can craft identities programmatically:
+
+```bash
+# Start a constructor conversation
+curl -s localhost:3000/v1/construct \
+  -H "Content-Type: application/json" \
+  -d '{"message": "Nova"}'
+# Returns: { session_id, response, turn, done }
+
+# Continue the conversation
+curl -s localhost:3000/v1/construct \
+  -H "Content-Type: application/json" \
+  -d '{"message": "3", "session_id": "..."}'
+
+# Generate identity files
+curl -s localhost:3000/v1/construct/summary \
+  -H "Content-Type: application/json" \
+  -d '{"session_id": "...", "name": "Nova"}'
+# Returns: { summary, identity_md, soul_md }
+```
+
+### OpenClaw Skill
+```bash
+# Interactive
+bash openclaw/craft-identity.sh
+
+# Automated
+bash openclaw/craft-identity.sh --auto '{"name":"Nova","creature":"autonomous agent","vibe":"sharp"}'
+```
+
+## Global Binary
+
+```bash
+# Install
+npm i -g yousim  # or: bunx yousim
+
+# CLI (mode selection)
+yousim
+
+# Server (API + frontend)
+yousim server --port 3000
+
+# Show config
+yousim config
+```
+
+Requires Bun on the host machine. Config stored in `~/.yousim/.env` or `~/.yousim/config.json`.
+
+## Server Mode
+
+```bash
+yousim server
+# or: bun run start:api
+```
+
+Runs the Elysia API + serves the built frontend. Auth mode auto-detected:
+
+| Config Present | Auth Mode | Storage |
+|---|---|---|
+| Nothing | Local (no auth) | SQLite |
+| `YOUSIM_API_KEY` | API key bearer | SQLite |
+
+`GET /api/mode` returns the active auth mode.
+
+## Production / Deployment
+
+```bash
+# Build frontend into API public directory
+bun run build
+
+# Start API (serves API + frontend)
+bun run start:api
+
+# Docker
+docker compose up --build
+```
 
 ## Environment Variables
 
-These are different values you set in a `.env` file that affect the behavior of
-YouSim. Some of them are related to the web deployment for things like user
-accounts and shareable links, while other's impact the core behavior of YouSim.
+See `.env.template` for the full list. Only `PROVIDER` + matching API key are required.
 
-There is an `.env.template` file that covers all of these. Some special callouts
-and notes.
+## Legacy Python/Webshell
 
-There is a `PROVIDER` variable that controls which LLM provider is used by
-YouSim. Currently, this only supports
-
-- `anthropic`
-- `openrouter`
-
-If you specify `anthropic` It will use `claude-sonnet-3.5` as the model and make
-use of the new [caching](https://docs.anthropic.com/en/docs/build-with-claude/prompt-caching) feature. This also means you needs to specify a
-`ANTHROPIC_API_KEY` in your `.env`.
-
-If you specify `openrouter` you then need to provide an additional variable
-called `OPENROUTER_MODEL` to specify which model you want to use. This also
-means you need to specify an `OPENAI_API_KEY` in your `.env` which corresponds
-to your OPENROUTER API Key.
-
-## Self-Hosting
-
-If you don't want to run the entire web deployment of YouSim you can run the
-main conversation loop experience all from the terminal by running the `main.py`
-file. This won't save conversations, let you share, or link them to any account,
-but it's a quick way to get started.
-
-Run the following commands to run the terminal experience:
-
-```bash
-poetry install
-poetry run python main.py
-```
-
-Make sure you have the appropriate API keys specified in your `.env`
-
-### Web Experience
-
-You can run Yousim locally with Docker Compose. To get started, configure your `.env` files: `.env` for the backend and `webshell/.env` for the frontend.
-
-For the backend, copy the `.env.template` file to `.env` and fill out the variables:
-
-```bash
-cp .env.template .env
-```
-
-`ANTHROPIC_API_KEY`: Anthropic API key  
-`HONCHO_ENV`: Default value in `.env.template` goes to the [Honcho](https://github.com/plastic-labs/honcho) demo server. You'd only change this if you were running Honcho locally  
-`HONCHO_APP_NAME`: This denotes your application on the Honcho demo server  
-`CLIENT_REGEX`: Use default value in `.env.template`  
-`JWT_SECRET`: This comes from your supabase project (more on that below)  
-`SECRET_KEY`: Generate this with `python generate_fernet_key.py` -- makes links shareable without revealing information
-
-For the frontend, copy the `.env.template` file to `.env` and fill out the variables:
-
-```bash
-cp webshell/.env.template webshell/.env
-```
-
-`VITE_API_URL`: This should be the url of your backend  
-`VITE_SUPABASE_URL`: This comes from your supabase project  
-`VITE_SUPABASE_KEY`: This comes from your supabase project (public key!)
-
-### Docker
-
-We've included a `Dockerfiles` and a `docker-compose.yml` for convenience when
-running the YouSim locally.
-
-There are some special consideration to make.
-
-1. For the webshell front end the `.env` variables are used during build time,
-   so ensure they are set correctly before building your docker images.
-2. The webshell front end runs on port 3000 when running via docker so change
-   your Python API `.env` `CLIENT_REGEX` to `localhost:3000` to match.
-
-You can run both the backend and the frontend with:
-
-```bash
-docker-compose up
-```
-
-## Supabase
-
-This project uses Supabase for account management and authentication. We made
-use of the magic link and anonymous account sign features. To run this with your
-own supabase project ensure you take the following steps.
-
-1. Turn on anonymous sign ins
-
-https://supabase.com/docs/guides/auth/auth-anonymous
-
-2. Change the magic link email template to include the OTP Code
-
-In your Supabase project go to Authentication > Email Templates and select the
-Magic Link template. Below is an example of a template you can use:
-
-```html
-<h2>YouSim Login Code</h2>
-
-<p>Use this code to login:</p>
-<p>{{ .Token }}</p>
-```
-
-## Credits
-
-Thanks to [nasan16](https://github.com/nasan016) for their initial work on
-[webshell](https://github.com/nasan016/webshell) and [Andy
-Ayrey](https://x.com/AndyAyrey) for his work on [Infinite
-Backrooms](https://dreams-of-an-electric-mind.webflow.io/), whose prompts
-heavily inspired this project.
+The original Python API + webshell frontend are preserved under `legacy-python/` for reference.

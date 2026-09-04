@@ -1,25 +1,7 @@
-# version: '3.8'
-
 services:
-  backend:
-    build:
-      context: .
-      dockerfile: Dockerfile
+  app:
+    build: .
     ports:
-      - "${PORT}:${PORT}"
-    environment:
-      - HONCHO_AUTH_TOKEN=default
-      - PORT=${PORT}
+      - "${PORT:-3000}:${PORT:-3000}"
     env_file:
       - .env
-
-  frontend:
-    build:
-      context: ./webshell
-      dockerfile: Dockerfile
-    ports:
-      - "3000:5173"
-    depends_on:
-      - backend
-    env_file:
-      - ./webshell/.env
