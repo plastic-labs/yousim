@@ -278,6 +278,33 @@ Bear this in mind when writing anything that sets `MODEL`.
 `simulator@anthropic:~/$` in the agent prompts. It is cosmetic, and part of the
 fiction rather than a config bug — but do not read it as reporting the provider.
 
+### npm ships neither symlinks nor files from outside the package directory
+
+`src/launcher` is the only published package, and `files` there is an
+allowlist. Three of its four entries do not exist in the source tree at all:
+`scripts/package.ts` builds `src/web` and then **copies** `dist/` in as
+`public/`, plus the repo-root `README.md` and `LICENSE`, before `npm pack`
+runs. `bun run pack` is the whole procedure; there is no manual step.
+
+They are copies rather than links because npm drops a symlink *silently* when
+packing — no warning, no entry, just a package whose `public/` is absent and
+whose `server` command has nothing to serve. That is how the web assets went
+missing from the tarball once already, and `packaged.test.ts` now gates both
+the absence of symlinks and the presence of all three copies. Do not
+reintroduce the shortcut, and do not use one for a new `files` entry either.
+
+The three copies are gitignored build output. `src/api/src/index.ts` therefore
+looks for the assets in two places — `../public` next to the bundle in the
+published package, `../../web/dist` in a clone — instead of relying on a
+tracked link.
+
+**No lifecycle script may live in `src/launcher/package.json`.** npm copies
+`scripts` into the packed manifest verbatim, and a published package must not
+run code on install; `packaged.test.ts` asserts that, and the list it checks
+covers `prepare`, `prepack` and `prepublishOnly` as well as the install hooks.
+So the build cannot hang off a lifecycle hook there — which is also why `bin`
+points at gitignored output and `bun link` needs `bun run pack` first.
+
 ## Tests
 
 ```bash

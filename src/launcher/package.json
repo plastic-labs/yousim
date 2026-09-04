@@ -13,6 +13,16 @@
     "README.md",
     "LICENSE"
   ],
+  "comment:files": [
+    "Every entry is build output; none of it is in git. `bun run pack` puts it",
+    "here: it bundles the launcher into dist/, copies src/web/dist in as",
+    "public/, and copies the repo-root README and LICENSE across. Copies, not",
+    "symlinks - npm drops a symlink silently when packing, which is how the",
+    "web UI went missing from a published tarball. And no lifecycle script may",
+    "be added below to automate this: npm copies `scripts` into the packed",
+    "manifest verbatim, and packaged.test.ts asserts the published package",
+    "runs no code on install."
+  ],
   "publishConfig": {
     "access": "public"
   },
