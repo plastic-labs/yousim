@@ -16,9 +16,11 @@ Nothing yet.
 
 ## [0.1.0] — unreleased
 
-First release of the `yousim` package. Nothing has been published to npm under
-this name yet, so there is no upgrade path to describe and no older layout to
-migrate from; everything below is "how it arrives", not "what changed".
+First functional release of the `yousim` package. The only thing on npm under
+this name is `0.0.1`, a three-file placeholder published to hold the name that
+prints a "not released yet" notice and does nothing else. So there is no
+upgrade path to describe and no older layout to migrate from; everything below
+is "how it arrives", not "what changed".
 
 Package version `0.1.0`. Contract version `0.1.0`.
 
