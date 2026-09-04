@@ -12,7 +12,9 @@
     "./model": "./src/model.ts",
     "./pkce": "./src/pkce.ts",
     "./credentials": "./src/credentials.ts",
-    "./config": "./src/config.ts"
+    "./config": "./src/config.ts",
+    "./commands": "./src/commands.ts",
+    "./models": "./src/models.ts"
   },
   "files": [
     "src/",

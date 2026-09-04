@@ -1,6 +1,7 @@
 import { streamText } from "ai";
 import { createModelInstance, type ModelConfig } from "./model";
 import type { Message } from "./agents";
+import { explainProviderError } from "./errors";
 
 // Runtime-portable: this module must never import a store implementation,
 // so it stays usable from a browser and an edge runtime.
@@ -18,6 +19,11 @@ export async function simulate(messages: Message[], options: ModelConfig = {}) {
       model: createModelInstance(options),
       messages,
       ...(options.maxOutputTokens ? { maxOutputTokens: options.maxOutputTokens } : {}),
+      // Callers consume the stream themselves, so surface the failure rather
+      // than letting the SDK log it and end the stream empty.
+      onError: ({ error }) => {
+        console.error(explainProviderError(error));
+      },
     });
   } catch (error: any) {
     console.error("Error communicating with the model:", error.message);

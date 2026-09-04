@@ -13,6 +13,15 @@ export * from "./config";
 // Local credential storage (Bun/Node only)
 export * from "./credentials";
 
+// Meta-command classification and registry
+export * from "./commands";
+
+// Model presets
+export * from "./models";
+
+// Provider error explanation
+export * from "./errors";
+
 // Simulation
 export * from "./simulate";
 

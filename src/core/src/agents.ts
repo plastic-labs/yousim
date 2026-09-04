@@ -1,5 +1,6 @@
 import { streamText } from "ai";
 import { createModelInstance, type ModelConfig } from "./model";
+import { SimulationError, explainProviderError } from "./errors";
 
 export interface Message {
   role: "user" | "assistant";
@@ -28,10 +29,32 @@ async function* streamFromModel(
     streamConfig.system = systemPrompt;
   }
 
+  // streamText does not reject on provider errors — it calls onError and the
+  // text stream ends empty. Without capturing here, a 401 or a retired model
+  // shows the user an empty turn plus a stack trace from the SDK's default
+  // logger, and any try/catch around the iteration never fires.
+  let captured: unknown;
+  streamConfig.onError = ({ error }: { error: unknown }) => {
+    captured = error;
+  };
+
   const stream = await streamText(streamConfig);
 
+  let produced = false;
   for await (const chunk of stream.textStream) {
+    produced = true;
     yield chunk;
+  }
+
+  if (captured && !produced) {
+    throw new SimulationError(explainProviderError(captured), captured);
+  }
+  // Mid-stream failure: keep what arrived, but don't pretend the turn is whole.
+  if (captured) {
+    throw new SimulationError(
+      `The response was cut short. ${explainProviderError(captured)}`,
+      captured
+    );
   }
 }
 
