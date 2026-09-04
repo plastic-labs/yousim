@@ -101,3 +101,16 @@ between them, and never create a second copy of a doc under a different name.
 
 `legacy-python/` is historical and is not maintained. Do not update
 it to match new work, and do not cite it as current behavior.
+
+## Testing the CLI as an installed command
+
+`bun link` in `src/launcher` puts `yousim` on your PATH pointing at the repo,
+so edits are live with no rebuild:
+
+```bash
+cd src/launcher && bun link
+yousim config          # now resolves from source
+```
+
+`bun unlink` in the same directory removes it. Only `yousim server` needs
+`bun run build` in `src/frontend` after frontend changes.

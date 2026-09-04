@@ -18,6 +18,17 @@ bunx yousim connect     # link your OpenRouter account in the browser
 bunx yousim             # start
 ```
 
+Or install it once and drop the prefix:
+
+```bash
+bun add -g yousim       # or: npm i -g yousim
+yousim connect
+yousim
+```
+
+Either way YouSim runs on Bun, so a global install still needs Bun on your
+PATH — `npm i -g` puts the `yousim` command there, not a Bun runtime.
+
 `connect` uses OAuth (PKCE) — there is no API key to find, copy, or paste. The
 key OpenRouter issues is stored in the macOS Keychain where available, and
 otherwise in `~/.yousim/credentials.json` with mode `0600`. It is never sent
