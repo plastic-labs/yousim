@@ -19,7 +19,7 @@ const printHelp = () => {
   console.log(`YouSim - Identity Simulator
 
 Usage:
-  yousim              Start the CLI (mode selection)
+  yousim              Start a simulator session
   yousim connect      Link an OpenRouter account (OAuth, no key to paste)
   yousim disconnect   Forget the stored key
   yousim sessions     List saved sessions

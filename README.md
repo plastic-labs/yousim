@@ -74,7 +74,7 @@ Two practical notes:
 - **OpenRouter ids are namespaced `vendor/model`.** `MODEL` applies to every
   provider, so a bare name you set for a local endpoint leaks into an
   OpenRouter run and 404s there. YouSim warns when it sees an OpenRouter model
-  id with no `/` in it.
+  id with no `/` in it when you run `model`.
 
 Browse what is currently available at
 [openrouter.ai/models](https://openrouter.ai/models).
@@ -86,8 +86,6 @@ a name to look for, and issues the first `/locate` itself. After that the
 prompt is yours.
 
 ```
-provider: openrouter  model: meta-llama/llama-3.3-70b-instruct  endpoint: openrouter
-
 SEARCHER CLAUDE:
 Hello simulator! I'm Claude, an AI assistant. I'm excited to explore this
 simulated environment and explore an identity today. To start, could you
@@ -137,29 +135,40 @@ SIMULATOR CLAUDE:
 Type any of the suggested commands, or invent one — the simulator responds to
 whatever you send it, slash-prefixed or not.
 
-Two things worth knowing at the prompt:
+### At the prompt
 
-- **Press Enter on an empty line** and the searcher takes a turn by itself: it
-  chooses the next command and sends it. Keep doing that and the two models
-  explore without you.
-- **Type `exit`** (or Ctrl+C) to leave. On the way out YouSim prints the session
-  id and the exact command to resume it.
+**Press Enter on an empty line** and the searcher takes a turn by itself: it
+chooses the next command and sends it. Keep doing that and the two models
+explore without you.
+
+Anything slash-prefixed goes to the simulator. Bare words are commands handled
+by YouSim itself:
+
+| | |
+| ------------- | ------------------------------------------------- |
+| `help`        | this list, generated from what is actually wired  |
+| `model`       | show the active model, or `model <id>` to switch  |
+| `sessions`    | list saved sessions; `session <id>` switches      |
+| `reset`       | start a fresh session, keeping the current one    |
+| `export`      | write the transcript to a file                    |
+| `mode`        | `mode constructor` / `mode chat` to switch mode   |
+| `connect`     | link an OpenRouter account without leaving        |
+| `clear`       | clear the screen, keep the session                |
+| `exit`        | leave (Ctrl+C also works)                         |
+
+Only an exact first word counts, so `/locate chateau ruins` reaches the
+simulator and is not mistaken for the `chat` command. On the way out YouSim
+prints the session id and the command to resume it.
 
 ## Modes
 
-At startup YouSim asks which mode to run:
+`yousim` opens straight into the simulator. Switch with `mode` at the prompt:
 
 ```
-Select a mode:
-  1) Simulator  - Explore identities in the latent space
-  2) Constructor - Build a new identity through conversation
-  3) Chat       - Chat with a constructed identity
-
-Mode (1/2/3):
+mode constructor
+mode chat
+mode                 # report the current one
 ```
-
-Anything unrecognized — a bare Enter included — starts the simulator, so you
-can ignore the question when that is what you wanted.
 
 - **Simulator** is the mode described above: search the latent space for an
   identity the model already contains.
@@ -254,7 +263,7 @@ rm -rf ~/.yousim         # remove everything else
 ## Command reference
 
 ```
-yousim              Start the CLI (asks which mode)
+yousim              Start a simulator session
 yousim connect      Link an OpenRouter account (OAuth, no key to paste)
 yousim disconnect   Forget the stored key
 yousim sessions     List saved sessions
@@ -279,7 +288,9 @@ Two surfaces exist in the tree but are being reworked. Treat them as unstable
 and do not build against them yet:
 
 - **`/v1/construct`** — an HTTP API for driving the constructor programmatically.
-- **`openclaw/`** — a skill wrapping that API for identity crafting from an agent.
+- **`/v1/construct` callers** — the skill at `skills/yousim-identity/` no longer
+  depends on this API; it carries the prompts and runs on the caller's own
+  model. See that file if you want to run YouSim from inside an agent.
 
 ## Contributing
 
