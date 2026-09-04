@@ -54,8 +54,14 @@ function readInput(rl: readline.Interface, prompt: string): Promise<string> {
 const PROVIDERS = ["anthropic", "openrouter", "openai", "groq"] as const;
 
 function getAgentOptions(): ModelConfig {
+  // Precedence: explicit PROVIDER, then whatever account is connected, then
+  // anthropic. Falling straight to anthropic would mean `yousim connect`
+  // followed by `yousim` fails with "no API key" despite having just
+  // connected one — the single most confusing thing this CLI could do.
+  const connected = listCredentials().map((c) => c.provider);
+  const raw = process.env.PROVIDER ?? connected[0] ?? "anthropic";
+
   // PROVIDER is user input, so validate rather than trusting the cast.
-  const raw = process.env.PROVIDER ?? "anthropic";
   if (!PROVIDERS.includes(raw as Provider)) {
     console.error(
       `Unsupported PROVIDER "${raw}". Supported: ${PROVIDERS.join(", ")}`
@@ -98,7 +104,8 @@ function describeTarget(options: ModelConfig) {
   }
 
   const connected = listCredentials().map((c) => c.provider);
-  if (connected.length > 0 && !connected.includes(active)) {
+  const explicit = Boolean(process.env.PROVIDER);
+  if (explicit && connected.length > 0 && !connected.includes(active)) {
     console.log(
       theme.command(
         `  note: connected to ${connected.join(", ")}, but PROVIDER=${active} is set` +
