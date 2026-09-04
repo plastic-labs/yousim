@@ -1,0 +1,127 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# A queued run on the same ref is always testing older code than the one that
+# superseded it.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  gate:
+    name: ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      # One platform failing is information about that platform, not a reason
+      # to stop learning about the others. The Windows result in particular is
+      # the whole point of having Windows here (see below).
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          # PINNED, deliberately. This gate makes claims about what Bun does
+          # with ./bunfig.toml, ./.env, ./.env.local and .env.<NODE_ENV>, and
+          # about how `bun build --target bun` treats a shebang. All of that is
+          # runtime behaviour that a minor release can change underneath us. A
+          # floating version turns this job into a canary for Bun's changelog
+          # and makes every unrelated PR flaky. Bump it on purpose, in a commit
+          # that says so.
+          bun-version: 1.3.6
+
+      - run: bun install --frozen-lockfile
+
+      # ── The gate ──────────────────────────────────────────────────────────
+      #
+      # typecheck -> pack -> hermetic test run with per-module coverage floors.
+      # `pack` builds the web assets, bundles the launcher with
+      # `bun build --target bun`, and runs `npm pack`; the packaging and
+      # hostile-directory tests then assert against that tarball and against a
+      # real `npm install` of it.
+      #
+      # NOT set here, on purpose: no ANTHROPIC_API_KEY, OPENAI_API_KEY,
+      # OPENROUTER_API_KEY or GROQ_API_KEY, and no secrets of any kind. The
+      # suite is designed to need none — scripts/hermetic.ts strips them from
+      # the child environment and src/core/src/__tests__/no-live-calls.test.ts
+      # asserts the stripping worked. If a job here ever needs a model
+      # credential, that is a regression in the tests, not a missing secret.
+      - name: test:ci
+        run: bun run test:ci
+
+      - name: Upload coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-${{ matrix.os }}
+          path: coverage/
+          if-no-files-found: warn
+
+  # ── Windows: the shebang question ───────────────────────────────────────────
+  #
+  # The published entrypoint's security controls live in its shebang:
+  #
+  #     #!/usr/bin/env -S bun --no-env-file --config=/dev/null
+  #
+  # `--config=/dev/null` is the only thing that stops a `bunfig.toml` in the
+  # user's current directory from running arbitrary code via `preload` before
+  # our first line executes. Nothing in-process can undo a preload.
+  #
+  # `env -S` does not exist on Windows. What npm installs there is a generated
+  # `.cmd`/`.ps1` shim, and whether the flags survive depends entirely on
+  # whether npm's shim generator parses `env -S` and forwards the interpreter
+  # arguments. That is not something this repo controls or can assert by
+  # reading its own source, so the `gate` job above runs the same
+  # hostile-directory tests on windows-latest against the real installed
+  # command and lets the answer be observed.
+  #
+  # If the Windows leg of `gate` fails on
+  # "src/launcher/src/__tests__/hostile-dir.test.ts > bunfig preload does not
+  # execute", that is not a broken test. It means running `yousim` from an
+  # untrusted directory on Windows is arbitrary code execution, and the fix is
+  # a real one — a `.cmd` shim that passes the flags itself, or an in-process
+  # re-exec — not a skip on this job.
+  #
+  # There is currently no documented Windows invocation to test instead: README
+  # and CONTRIBUTING say nothing about Windows. Adding one that tells users to
+  # run `bun --no-env-file --config=/dev/null <path>` by hand would document
+  # the hole rather than close it.
+
+  publish-dry-run:
+    name: publish --dry-run
+    runs-on: ubuntu-latest
+    needs: gate
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.6
+      - run: bun install --frozen-lockfile
+      - run: bun run pack
+
+      # What npm would actually upload, printed in the log. `npm pack` already
+      # ran and the tarball's contents are asserted in packaged.test.ts; this
+      # is the manifest-level check that only `publish` performs — a name
+      # collision, a bad `access`, a version already on the registry.
+      #
+      # Note: this is a log-and-eyeball step, not an assertion. `npm publish
+      # --dry-run` exits 0 for a package marked private and only warns, so any
+      # gate keyed on its exit code would read as passing while checking
+      # nothing. "yousim is the only publishable package" is asserted from the
+      # manifests in packaged.test.ts instead, where it runs on all three
+      # platforms and locally.
+      - name: npm publish --dry-run
+        working-directory: src/launcher
+        run: npm publish --dry-run

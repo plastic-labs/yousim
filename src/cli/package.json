@@ -1,5 +1,7 @@
 {
   "name": "@yousim/cli",
+  "private": true,
+  "comment:private": "Not published. `yousim` is the only package that ships; bun build --target bun inlines this one into it.",
   "version": "0.1.0",
   "license": "AGPL-3.0-only",
   "description": "CLI version of YouSim - Simulator, Constructor, and Chat modes",
@@ -12,13 +14,6 @@
   },
   "bin": {
     "yousim-cli": "./src/cli.ts"
-  },
-  "files": [
-    "src/",
-    "README.md"
-  ],
-  "publishConfig": {
-    "access": "public"
   },
   "dependencies": {
     "@yousim/core": "workspace:*",

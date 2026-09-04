@@ -5,15 +5,31 @@
   "description": "YouSim - Identity simulator. Run as CLI or server.",
   "type": "module",
   "bin": {
-    "yousim": "./src/index.ts"
+    "yousim": "./dist/yousim.js"
   },
   "files": [
-    "src/",
-    "README.md"
+    "dist/",
+    "public/",
+    "README.md",
+    "LICENSE"
   ],
-  "dependencies": {
-    "@yousim/cli": "workspace:*",
+  "publishConfig": {
+    "access": "public"
+  },
+  "comment:deps": [
+    "No RUNTIME dependencies, on purpose. `bun build --target bun` inlines",
+    "@yousim/core, @yousim/cli and @yousim/api into dist/yousim.js, so the",
+    "published package needs nothing at install time and there is no",
+    "workspace:* left in `dependencies` for someone else's npm to fail on.",
+    "They stay in devDependencies because that declaration is what makes bun",
+    "link the workspace members the bundle step resolves through - dropping it",
+    "leaves node_modules/@yousim empty and the build cannot resolve them.",
+    "npm keeps devDependencies in the packed manifest but never installs a",
+    "dependency's devDependencies, so they are inert for consumers."
+  ],
+  "devDependencies": {
     "@yousim/api": "workspace:*",
+    "@yousim/cli": "workspace:*",
     "@yousim/core": "workspace:*"
   },
   "engines": {

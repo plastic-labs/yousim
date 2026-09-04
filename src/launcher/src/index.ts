@@ -180,7 +180,6 @@ const main = async () => {
 
   const { resolveConfig } = await import("./config");
   const resolution = resolveConfig(flags);
-  for (const notice of resolution.notices) console.error(`yousim: ${notice}`);
   for (const warning of resolution.warnings) console.error(`yousim: ${warning}`);
 
   if (command === "config") {

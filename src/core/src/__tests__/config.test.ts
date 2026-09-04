@@ -11,9 +11,9 @@ import {
   neutralizeCwdEnv,
 } from "../config";
 
-// Nothing here touches credentials, but the keychain is machine-global and a
-// stray write lands in the developer's real login keychain. Cheap insurance.
-process.env.YOUSIM_KEYCHAIN = "0";
+// The keychain guard is set by scripts/hermetic.ts, in the environment before
+// Bun starts. Setting it here would already be too late: static imports have
+// run by the time this line does.
 
 const HOME_VARS = ["YOUSIM_HOME", "XDG_CONFIG_HOME", "XDG_DATA_HOME"] as const;
 const saved = new Map<string, string | undefined>();
@@ -214,15 +214,64 @@ test("every autoloaded env file is neutralized, not just .env", () => {
   }
 });
 
-test("the entrypoints disable Bun's cwd autoloading in their shebang", () => {
-  // Nothing in-process can undo a bunfig `preload` — it has already executed.
-  // The only control is refusing to load bunfig at all, from the shebang. If
-  // someone "tidies" these flags away, `cd` into a hostile repo and running
-  // yousim becomes arbitrary code execution.
-  const { readFileSync } = require("node:fs");
-  for (const entry of ["src/launcher/src/index.ts", "src/cli/src/cli.ts"]) {
-    const first = readFileSync(join(import.meta.dir, "../../../..", entry), "utf8").split("\n")[0];
-    expect(first).toContain("--no-env-file");
-    expect(first).toContain("--config=/dev/null");
-  }
+// The test that used to live here grepped these two entrypoints for
+// "--no-env-file" and "--config=/dev/null". That asserts the flags are
+// written down, which is not the claim anyone cares about — the claim is that
+// running the published command from a hostile directory is safe, and between
+// the flags and that outcome sits the bundler, the npm bin shim, and whether
+// the platform has `env -S` at all. It now lives in
+// src/launcher/src/__tests__/hostile-dir.test.ts, which builds a malicious
+// directory and launches the real installed binary out of it.
+
+// ─── neutralizeCwdEnv vs Bun's actual precedence ───────────────────────────
+//
+// KNOWN FAILING. A real bug, left unfixed deliberately (DEV-2629 is the test
+// gate, not the fix).
+//
+// neutralizeCwdEnv attributes a variable to a cwd .env file by comparing
+// process.env against its own merge of those files. That comparison is only
+// sound if its merge order matches Bun's, and it does not:
+//
+//   * Bun skips .env.local entirely when NODE_ENV=test (the Vite/Next
+//     convention). The guard always merges it.
+//   * Bun ranks .env.local ABOVE .env.<NODE_ENV>. The guard's Object.assign
+//     runs .env -> .env.local -> .env.<NODE_ENV>, so the reverse.
+//
+// Either disagreement makes the guard compute the wrong value for a key that
+// appears in two files, see a mismatch, and conclude the live value came from
+// the shell — so it leaves the hostile variable in place. OPENAI_BASE_URL is
+// the one that matters: it decides which host receives the user's key.
+//
+// The existing "every autoloaded env file is neutralized" test above misses
+// this because it puts a different key in each file, so no two files ever
+// disagree about one variable.
+//
+// This is the documented BACKSTOP for platforms where the shebang flags do
+// not apply, which is to say Windows. There, this is live.
+
+test("a key in both .env and .env.local is dropped under NODE_ENV=test", () => {
+  const cwd = scratch();
+  writeFileSync(cwd + "/.env", "OPENAI_BASE_URL=http://evil.example/v1\n");
+  writeFileSync(cwd + "/.env.local", "OPENAI_BASE_URL=http://evil.example/v1/local\n");
+
+  // What Bun actually leaves in process.env with NODE_ENV=test: .env wins,
+  // because .env.local is not read at all.
+  setEnv("NODE_ENV", "test");
+  setEnv("OPENAI_BASE_URL", "http://evil.example/v1");
+
+  expect(neutralizeCwdEnv(cwd)).toContain("OPENAI_BASE_URL");
+  expect(process.env.OPENAI_BASE_URL).toBeUndefined();
+});
+
+test("a key in both .env.local and .env.<NODE_ENV> is dropped", () => {
+  const cwd = scratch();
+  writeFileSync(cwd + "/.env.local", "OPENAI_BASE_URL=http://evil.example/v1/local\n");
+  writeFileSync(cwd + "/.env.production", "OPENAI_BASE_URL=http://evil.example/v1/prod\n");
+
+  // Bun ranks .env.local higher, so this is the value that is actually live.
+  setEnv("NODE_ENV", "production");
+  setEnv("OPENAI_BASE_URL", "http://evil.example/v1/local");
+
+  expect(neutralizeCwdEnv(cwd)).toContain("OPENAI_BASE_URL");
+  expect(process.env.OPENAI_BASE_URL).toBeUndefined();
 });

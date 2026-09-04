@@ -1,5 +1,5 @@
 {
-  "name": "yousim",
+  "name": "yousim-monorepo",
   "version": "1.0.0",
   "license": "AGPL-3.0-only",
   "description": "YouSim - Identity simulation in the latent space",
@@ -12,7 +12,11 @@
     "dev:api": "bun run --filter '@yousim/api' dev",
     "dev:web": "bun run --filter '@yousim/web' dev",
     "build": "bun run --filter '@yousim/web' build",
-    "test": "bun run --filter '@yousim/core' test",
+    "typecheck": "bunx tsc --noEmit",
+    "test": "bun run scripts/hermetic.ts",
+    "test:live": "bun run scripts/hermetic.ts --live",
+    "pack": "bun run scripts/package.ts",
+    "test:ci": "bun run typecheck && bun run pack && bun run scripts/hermetic.ts --coverage",
     "start:api": "bun run --filter '@yousim/api' start",
     "start:cli": "bun run src/cli/src/cli.ts"
   },

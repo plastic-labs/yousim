@@ -64,9 +64,15 @@ which has a filesystem.
 `fs`, `os`, `path`, or their `node:` forms. Not directly, and not through
 anything it imports, at any depth.
 
-`src/core/src/__tests__/contract.test.ts` walks the actual import graph from
-`contract.ts` and fails if one reappears. That test is the guard that keeps this
-package usable outside Bun; keep it passing.
+`src/core/src/__tests__/contract.test.ts` bundles `contract.ts` for the browser
+with a resolver plugin that traps every banned specifier, and fails naming the
+file that imported it. Asking the bundler rather than scanning the source is
+deliberate: the resolver sees every import form (`import()`, `export ... from`,
+single quotes, aliases, subpaths), and a hand-rolled walk that fails to resolve
+anything reports success. Note that `target: "browser"` on its own does NOT
+fail on a Node builtin — it silently substitutes a shim, so the build succeeds
+and the string vanishes from the output. The trap is what makes the test real.
+Keep it passing.
 
 This constraint is why `simulate()` lives in `simulate.ts` and is re-exported
 from `contract.ts` directly, rather than being reached through the `index.ts`
@@ -265,18 +271,63 @@ fiction rather than a config bug — but do not read it as reporting the provide
 ## Tests
 
 ```bash
-bun run test        # core suite (bun test in src/core)
-bunx tsc --noEmit   # typecheck
+bun run test        # the whole suite, in a hermetic environment
+bun run test:ci     # typecheck + build + pack + suite + coverage floors
+bunx tsc --noEmit   # typecheck alone
 ```
 
-Five suites in `src/core/src/__tests__/`: `contract.test.ts`, `config.test.ts`,
-`credentials.test.ts`, `pkce.test.ts`, `storage.test.ts`.
+**Do not run `bun test` directly.** `bun run test` is `scripts/hermetic.ts`,
+which builds the environment the suite has to run in and then starts Bun inside
+it. That ordering is the point:
 
-Two of them are load-bearing guards rather than ordinary coverage:
+- a throwaway `HOME`, `USERPROFILE`, `XDG_CONFIG_HOME`, `XDG_DATA_HOME`,
+  `YOUSIM_HOME` and `YOUSIM_DB`, removed when the run ends
+- `YOUSIM_KEYCHAIN=0` **before Bun starts**. The macOS Keychain is
+  machine-global and cannot be redirected with `YOUSIM_HOME`; a run without the
+  guard has already overwritten a real connected key. Setting it at the top of
+  a test file is too late — every static import has already run. So
+  `credentials.test.ts` now *asserts* the variable instead of assigning it, and
+  refuses to run without it.
+- every provider credential stripped from the child, so no test can make a
+  live billed call even with keys exported. `no-live-calls.test.ts` asserts the
+  stripping worked. A test that genuinely needs a real credential goes behind
+  `bun run test:live`; there are none.
 
-- **`contract.test.ts`** walks the import graph and enforces invariant 1. Keep
-  it passing. It also asserts the OpenRouter default id shape.
-- **`credentials.test.ts`** must run with `YOUSIM_KEYCHAIN=0` — see above.
+A throwaway `HOME` is not belt-and-braces. `resolveConfig()` in the launcher
+calls `migrateLegacyHome()`, which **moves** `~/.yousim/credentials.json` and
+`yousim.db` whenever `YOUSIM_HOME` or `XDG_CONFIG_HOME` points elsewhere. A run
+that isolates only `YOUSIM_HOME` relocates the developer's real credential into
+a temp directory that is then deleted.
+
+`scripts/hermetic.ts` also refuses to pass quietly:
+
+- it counts `*.test.ts` on disk and fails if Bun discovered fewer, which is the
+  bug the old root `test` script had — it only ran `@yousim/core`
+- it enforces per-module line-coverage floors (config, credentials, pkce,
+  storage) read from lcov. Deliberately not a repo-wide number: `agents.ts` is
+  380 lines of prompt text a percentage says nothing useful about.
+
+Suites, and what each is actually for:
+
+| file | claim |
+| ---- | ----- |
+| `core/__tests__/contract.test.ts` | invariant 1, via a real browser bundle |
+| `core/__tests__/config.test.ts` | config precedence and the cwd-`.env` guard |
+| `core/__tests__/credentials.test.ts` | key storage, 0600, keychain isolation |
+| `core/__tests__/pkce.test.ts` | the OAuth exchange, including its error paths |
+| `core/__tests__/storage.test.ts` | schema, path resolution, per-user scoping |
+| `core/__tests__/no-live-calls.test.ts` | the suite needs no account |
+| `api/__tests__/boundary.test.ts` | loopback bind, CORS, malformed bodies, no path leaks |
+| `launcher/__tests__/packaged.test.ts` | what `npm pack` actually ships |
+| `launcher/__tests__/hostile-dir.test.ts` | the published command, launched from a malicious cwd |
+
+`hostile-dir.test.ts` is the one to keep honest. It builds a directory
+containing `.env`, `.env.local`, `.env.production`, a `bunfig.toml` whose
+`preload` writes a marker file, and a fake provider endpoint that is a live
+local listener counting requests — then launches the **installed** command out
+of it. The test it replaced grepped the entrypoint for its shebang flags, which
+proves they are written down, not that they work. Between the two sits the
+bundler, npm's bin shim, and whether the platform has `env -S` at all.
 
 ## Documentation split
 
