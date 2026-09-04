@@ -348,6 +348,22 @@ enough to trigger it. That code is gone, and
 Isolating `HOME` is what keeps the next bug of that shape cheap rather than
 expensive.
 
+**A test that redirects `process.env` must restore it**, in an `afterEach` or a
+`finally` — see `credentials.test.ts` and `storage.test.ts`. This is
+load-bearing, and it is load-bearing only on Windows, which is what makes it
+easy to get wrong.
+
+Bun 1.3.6 gives each test *file* its own view of `process.env` on macOS and
+Linux: a variable deleted in one file is back to the hermetic value in the
+next. On the `windows-latest` runner, on the same Bun version, it is not — the
+delete persists into every file that runs after it. So a suite that leaves
+`YOUSIM_HOME` deleted un-isolates the rest of the run, and
+`no-live-calls.test.ts > the run is isolated from the real home` fails on
+Windows CI while passing on every developer's machine.
+
+Do not conclude from a green local run that env leakage is impossible here.
+Check the Windows job.
+
 `scripts/hermetic.ts` also refuses to pass quietly:
 
 - it counts `*.test.ts` on disk and fails if Bun discovered fewer, which is the

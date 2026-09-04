@@ -30,10 +30,22 @@ if (process.env.YOUSIM_KEYCHAIN !== "0") {
   );
 }
 
+// Captured before any test redirects it, and restored below rather than
+// deleted. Whether that matters is platform-dependent, which is why it looks
+// like dead hygiene: on macOS and Linux, Bun 1.3.6 gives each test file its own
+// view of process.env, so a delete here cannot escape this file. On the
+// windows-latest runner, on the same Bun version, it can and does — leaving
+// YOUSIM_HOME deleted un-isolates every file that runs after this one, and
+// no-live-calls.test.ts > "the run is isolated from the real home" fails there
+// while passing locally. Restore, don't delete.
+const hermeticHome = process.env.YOUSIM_HOME;
+
 let home: string | undefined;
 afterEach(() => {
   if (home) rmSync(home, { recursive: true, force: true });
-  delete process.env.YOUSIM_HOME;
+  hermeticHome === undefined
+    ? delete process.env.YOUSIM_HOME
+    : (process.env.YOUSIM_HOME = hermeticHome);
   home = undefined;
 });
 function isolate() {
