@@ -86,7 +86,7 @@ export async function simulate(messages: Message[], options: SimulationOptions =
     });
 
     return stream;
-  } catch (error) {
+  } catch (error: any) {
     console.error("Error communicating with the model:", error.message);
     throw error;
   }

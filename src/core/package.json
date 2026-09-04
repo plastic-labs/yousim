@@ -19,8 +19,6 @@
   "dependencies": {
     "@ai-sdk/anthropic": "^2.0.40",
     "@ai-sdk/openai": "^2.0.59",
-    "@anthropic-ai/sdk": "^0.9.1",
-    "ai": "^5.0.85",
-    "openai": "^4.24.1"
+    "ai": "^5.0.85"
   }
 }

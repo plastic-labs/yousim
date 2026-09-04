@@ -18,7 +18,6 @@
   },
   "dependencies": {
     "@yousim/core": "workspace:*",
-    "chalk": "^5.3.0",
-    "readline": "^1.3.0"
+    "chalk": "^5.3.0"
   }
 }
