@@ -21,3 +21,8 @@ webshell/.env.sentry-build-plugin
 
 node_modules/
 dist/
+
+# Supabase belongs to the hosted deployment, not this package. Listed so a
+# stray `supabase start` here can never track config or a signing key again.
+supabase/
+**/signing_key.json
