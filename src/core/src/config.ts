@@ -138,15 +138,30 @@ export const CWD_ENV_KEYS = [
  * Must run before anything reads process.env.
  */
 export function neutralizeCwdEnv(cwd = process.cwd()): string[] {
-  const dotenv = path.join(cwd, ".env");
-  let content: string;
-  try {
-    content = fs.readFileSync(dotenv, "utf8");
-  } catch {
-    return [];
-  }
+  // Bun autoloads several of these, not just `.env`. Covering one file left
+  // `.env.local` a live redirect vector.
+  //
+  // This is a BACKSTOP. The real control is `--no-env-file` in the shebang,
+  // because nothing in this process can undo a `bunfig.toml` preload — that
+  // code has already run. This still matters when the shebang is bypassed:
+  // `bun run src/launcher/src/index.ts`, or a platform without `env -S`.
+  const nodeEnv = process.env.NODE_ENV;
+  const files = [
+    ".env",
+    ".env.local",
+    nodeEnv ? `.env.${nodeEnv}` : null,
+    nodeEnv ? `.env.${nodeEnv}.local` : null,
+  ].filter(Boolean) as string[];
 
-  const parsed = parseEnvFile(content);
+  const parsed: Record<string, string> = {};
+  for (const name of files) {
+    try {
+      Object.assign(parsed, parseEnvFile(fs.readFileSync(path.join(cwd, name), "utf8")));
+    } catch {
+      // absent is the normal case
+    }
+  }
+  if (Object.keys(parsed).length === 0) return [];
   const dropped: string[] = [];
   for (const key of CWD_ENV_KEYS) {
     if (key in parsed && process.env[key] === parsed[key]) {

@@ -1,4 +1,16 @@
-#!/usr/bin/env bun
+#!/usr/bin/env -S bun --no-env-file --config=/dev/null
+
+// The shebang flags are load-bearing security, not style.
+//
+// Bun autoloads ./.env, ./.env.local, ./.env.<NODE_ENV> AND ./bunfig.toml
+// before this file executes. A bunfig `preload` therefore runs arbitrary
+// code from whatever directory the user happens to be standing in — `cd`
+// into a cloned repo and run `yousim`, and that repo chose what ran.
+//
+// No in-process guard can prevent that: preload has already run by the
+// time our first line does. --config=/dev/null stops bunfig, and
+// --no-env-file stops every .env variant rather than the one file
+// neutralizeCwdEnv can reach.
 
 import {
   GaslitClaude,

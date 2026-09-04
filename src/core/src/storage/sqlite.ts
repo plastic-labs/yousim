@@ -36,6 +36,16 @@ export class SqliteStorage implements Storage {
       fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
     }
     this.db = new Database(this.path);
+    // Conversations are private. The 0700 directory already covers this on a
+    // single-user machine, but the file's own mode is what survives someone
+    // widening the directory, copying it, or a differing umask.
+    for (const suffix of ["", "-wal", "-shm"]) {
+      try {
+        fs.chmodSync(this.path + suffix, 0o600);
+      } catch {
+        // -wal/-shm may not exist yet; the main file is created by the open above
+      }
+    }
     this.db.exec("PRAGMA journal_mode = WAL;");
     this.db.exec("PRAGMA foreign_keys = ON;");
     this.migrate();

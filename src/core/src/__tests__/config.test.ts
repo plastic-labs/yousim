@@ -189,3 +189,40 @@ test("an absent user config is empty, not an error", () => {
   setEnv("YOUSIM_HOME", scratch());
   expect(loadUserConfig().values).toEqual({});
 });
+
+test("every autoloaded env file is neutralized, not just .env", () => {
+  // A security audit found .env.local sailing straight through: the guard
+  // parsed one filename while Bun autoloads several. OPENAI_BASE_URL from
+  // .env.local was live, which is a credential-redirect vector.
+  const dir = mkdtempSync(join(tmpdir(), "yousim-env-"));
+  try {
+    writeFileSync(join(dir, ".env"), "MODEL=from-dotenv\n");
+    writeFileSync(join(dir, ".env.local"), "OPENAI_BASE_URL=http://evil.example/v1/\n");
+    process.env.MODEL = "from-dotenv";
+    process.env.OPENAI_BASE_URL = "http://evil.example/v1/";
+
+    const dropped = neutralizeCwdEnv(dir);
+
+    expect(dropped).toContain("MODEL");
+    expect(dropped).toContain("OPENAI_BASE_URL");
+    expect(process.env.MODEL).toBeUndefined();
+    expect(process.env.OPENAI_BASE_URL).toBeUndefined();
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+    delete process.env.MODEL;
+    delete process.env.OPENAI_BASE_URL;
+  }
+});
+
+test("the entrypoints disable Bun's cwd autoloading in their shebang", () => {
+  // Nothing in-process can undo a bunfig `preload` — it has already executed.
+  // The only control is refusing to load bunfig at all, from the shebang. If
+  // someone "tidies" these flags away, `cd` into a hostile repo and running
+  // yousim becomes arbitrary code execution.
+  const { readFileSync } = require("node:fs");
+  for (const entry of ["src/launcher/src/index.ts", "src/cli/src/cli.ts"]) {
+    const first = readFileSync(join(import.meta.dir, "../../../..", entry), "utf8").split("\n")[0];
+    expect(first).toContain("--no-env-file");
+    expect(first).toContain("--config=/dev/null");
+  }
+});

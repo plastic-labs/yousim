@@ -1,6 +1,7 @@
 {
   "name": "yousim",
   "version": "0.1.0",
+  "license": "AGPL-3.0-only",
   "description": "YouSim - Identity simulator. Run as CLI or server.",
   "type": "module",
   "bin": {

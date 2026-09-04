@@ -26,3 +26,9 @@ dist/
 # stray `supabase start` here can never track config or a signing key again.
 supabase/
 **/signing_key.json
+
+# Claude Code scratch. The worktrees are throwaway checkouts of this same repo
+# and were committed once already; settings.local.json is per-machine. A
+# deliberate .claude/settings.json or agent config is still trackable.
+.claude/worktrees/
+.claude/settings.local.json
