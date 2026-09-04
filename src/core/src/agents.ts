@@ -1,61 +1,13 @@
-import { createAnthropic } from "@ai-sdk/anthropic";
-import { createOpenAI } from "@ai-sdk/openai";
 import { streamText } from "ai";
-
-// Initialize clients for different providers
-const anthropic = createAnthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY || "placeholder",
-});
-
-const openrouter = createOpenAI({
-  baseURL: "https://openrouter.ai/api/v1",
-  apiKey: process.env.OPENAI_API_KEY || process.env.OPENROUTER_API_KEY || "placeholder",
-});
-
-const openai = createOpenAI({
-  baseURL: process.env.OPENAI_BASE_URL,
-  apiKey: process.env.OPENAI_API_KEY || "placeholder",
-});
-
-const groq = createOpenAI({
-  baseURL: "https://api.groq.com/openai/v1",
-  apiKey: process.env.GROQ_API_KEY || "placeholder",
-});
+import { createModelInstance, type ModelConfig } from "./model";
 
 export interface Message {
   role: "user" | "assistant";
   content: string;
 }
 
-interface AgentOptions {
-  provider?: string;
-  model?: string;
-}
-
-const DEFAULT_MODEL = "claude-sonnet-4-5-20250929";
-
-const PROVIDER_DEFAULTS: Record<string, string> = {
-  anthropic: "claude-sonnet-4-5-20250929",
-  openrouter: "anthropic/claude-3.5-sonnet",
-  openai: "gpt-4o",
-  groq: "llama-3.3-70b-versatile",
-};
-
-function resolveModel(provider: string, explicitModel?: string): string {
-  if (explicitModel) {
-    return explicitModel;
-  }
-
-  if (process.env.MODEL) {
-    return process.env.MODEL;
-  }
-
-  if (provider === "openrouter" && process.env.OPENROUTER_MODEL) {
-    return process.env.OPENROUTER_MODEL;
-  }
-
-  return PROVIDER_DEFAULTS[provider] || DEFAULT_MODEL;
-}
+/** Agents take the same per-call model config as everything else. */
+type AgentOptions = ModelConfig;
 
 // Utility function to handle streaming from different providers
 async function* streamFromModel(
@@ -63,27 +15,14 @@ async function* streamFromModel(
   options: AgentOptions = {},
   systemPrompt?: string
 ) {
-  const provider = options.provider || process.env.PROVIDER || "anthropic";
-  const model = resolveModel(provider, options.model);
-
-  let modelInstance;
-
-  if (provider === "anthropic") {
-    modelInstance = anthropic(model);
-  } else if (provider === "openrouter") {
-    modelInstance = openrouter.chat(model);
-  } else if (provider === "openai") {
-    modelInstance = openai.chat(model);
-  } else if (provider === "groq") {
-    modelInstance = groq.chat(model);
-  } else {
-    throw new Error(`Unsupported provider: ${provider}. Supported: anthropic, openrouter, openai, groq`);
-  }
-
   const streamConfig: any = {
-    model: modelInstance,
+    model: createModelInstance(options),
     messages: messages,
   };
+
+  if (options.maxOutputTokens) {
+    streamConfig.maxOutputTokens = options.maxOutputTokens;
+  }
 
   if (systemPrompt) {
     streamConfig.system = systemPrompt;

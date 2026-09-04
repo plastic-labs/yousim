@@ -1,9 +1,12 @@
-import { createAnthropic } from "@ai-sdk/anthropic";
-import { createOpenAI } from "@ai-sdk/openai";
 import { streamText } from "ai";
+import { createModelInstance, type ModelConfig } from "./model";
 
 // Export agents
 export * from "./agents";
+
+// Export model config (per-call credentials)
+export type { ModelConfig, Provider } from "./model";
+export { createModelInstance, resolveModel, resolveProvider } from "./model";
 
 // Export storage
 export type { Storage, StoredSession, StoredMessage, StoredSummary } from "./storage";
@@ -11,81 +14,23 @@ export { MemoryStorage } from "./storage/memory";
 export { SqliteStorage } from "./storage/sqlite";
 export { createStorage } from "./storage/index";
 
-// Initialize clients for different providers
-const anthropic = createAnthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY || "placeholder",
-});
-
-const openrouter = createOpenAI({
-  baseURL: "https://openrouter.ai/api/v1",
-  apiKey: process.env.OPENAI_API_KEY || process.env.OPENROUTER_API_KEY || "placeholder",
-});
-
-const openai = createOpenAI({
-  baseURL: process.env.OPENAI_BASE_URL,
-  apiKey: process.env.OPENAI_API_KEY || "placeholder",
-});
-
-const groq = createOpenAI({
-  baseURL: "https://api.groq.com/openai/v1",
-  apiKey: process.env.GROQ_API_KEY || "placeholder",
-});
-
 // Core simulation interface
 export interface Message {
   role: "user" | "assistant";
   content: string;
 }
 
-export interface SimulationOptions {
-  provider?: string;
-  model?: string;
-}
-
-const DEFAULT_MODEL = "claude-sonnet-4-5-20250929";
-
-function resolveModel(provider: string, explicitModel?: string): string {
-  if (explicitModel) {
-    return explicitModel;
-  }
-
-  if (process.env.MODEL) {
-    return process.env.MODEL;
-  }
-
-  if (provider === "openrouter" && process.env.OPENROUTER_MODEL) {
-    return process.env.OPENROUTER_MODEL;
-  }
-
-  return DEFAULT_MODEL;
-}
+/** @deprecated Use ModelConfig. Kept as an alias so existing callers compile. */
+export type SimulationOptions = ModelConfig;
 
 // Core simulation function
-export async function simulate(messages: Message[], options: SimulationOptions = {}) {
-  const provider = options.provider || process.env.PROVIDER || "anthropic";
-  const model = resolveModel(provider, options.model);
-  
-  let modelInstance;
-  
-  if (provider === "anthropic") {
-    modelInstance = anthropic(model);
-  } else if (provider === "openrouter") {
-    modelInstance = openrouter.chat(model);
-  } else if (provider === "openai") {
-    modelInstance = openai.chat(model);
-  } else if (provider === "groq") {
-    modelInstance = groq.chat(model);
-  } else {
-    throw new Error(`Unsupported provider: ${provider}. Supported: anthropic, openrouter, openai, groq`);
-  }
-
+export async function simulate(messages: Message[], options: ModelConfig = {}) {
   try {
-    const stream = await streamText({
-      model: modelInstance,
-      messages: messages,
+    return await streamText({
+      model: createModelInstance(options),
+      messages,
+      ...(options.maxOutputTokens ? { maxOutputTokens: options.maxOutputTokens } : {}),
     });
-
-    return stream;
   } catch (error: any) {
     console.error("Error communicating with the model:", error.message);
     throw error;

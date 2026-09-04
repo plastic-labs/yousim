@@ -11,11 +11,11 @@ import {
   INITIAL_RESPONSE,
   MemoryStorage,
 } from "@yousim/core";
-import type { Storage } from "@yousim/core";
+import type { Storage, ModelConfig, Provider } from "@yousim/core";
+import { resolveModel } from "@yousim/core";
 import * as readline from "readline";
 import chalk from "chalk";
 
-const DEFAULT_MODEL = "claude-sonnet-4-5-20250929";
 
 const theme = {
   prompt: chalk.hex("#6b6be8"),
@@ -45,10 +45,20 @@ function readInput(rl: readline.Interface, prompt: string): Promise<string> {
   });
 }
 
-function getAgentOptions() {
-  const provider = process.env.PROVIDER || "anthropic";
-  const model = process.env.MODEL || process.env.OPENROUTER_MODEL || DEFAULT_MODEL;
-  return { provider, model };
+const PROVIDERS = ["anthropic", "openrouter", "openai", "groq"] as const;
+
+function getAgentOptions(): ModelConfig {
+  // PROVIDER is user input, so validate rather than trusting the cast.
+  const raw = process.env.PROVIDER ?? "anthropic";
+  if (!PROVIDERS.includes(raw as Provider)) {
+    console.error(
+      `Unsupported PROVIDER "${raw}". Supported: ${PROVIDERS.join(", ")}`
+    );
+    process.exit(1);
+  }
+  const provider = raw as Provider;
+  // Model and credential resolution live in core so every surface agrees.
+  return { provider, model: resolveModel({ provider }) };
 }
 
 // ─── Mode: Simulator ───────────────────────────────────────────────────────

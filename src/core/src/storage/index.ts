@@ -7,27 +7,19 @@ import { MemoryStorage } from "./memory";
 import { SqliteStorage } from "./sqlite";
 
 /**
- * Factory function to create the appropriate storage backend.
+ * Create a local storage backend.
  *
- * Auto-detection order:
- *   1. SUPABASE_URL set → "supabase" (must be created separately in @yousim/api)
- *   2. Explicit type passed → use that
- *   3. Default → "sqlite" for server, "memory" for cli
+ * The open package only ships local stores. A hosted deployment implements
+ * `Storage` itself against whatever it uses (see contract.ts) rather than
+ * being selected here.
  */
-export function createStorage(type?: "memory" | "sqlite" | "supabase"): Storage {
-  const resolved = type || (process.env.SUPABASE_URL ? "supabase" : "sqlite");
-
-  switch (resolved) {
+export function createStorage(type: "memory" | "sqlite" = "sqlite"): Storage {
+  switch (type) {
     case "memory":
       return new MemoryStorage();
     case "sqlite":
       return new SqliteStorage();
-    case "supabase":
-      throw new Error(
-        "Supabase storage must be created via @yousim/api SupabaseStorage class. " +
-        "Import { SupabaseStorage } from '@yousim/api' instead."
-      );
     default:
-      throw new Error(`Unknown storage type: ${resolved}`);
+      throw new Error(`Unknown storage type: ${type}`);
   }
 }
