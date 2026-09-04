@@ -12,7 +12,7 @@ import {
   SqliteStorage,
 } from "@yousim/core";
 import type { StoredSession, ModelConfig, Provider } from "@yousim/core";
-import { resolveModel, setCredentialResolver, loadCredential } from "@yousim/core";
+import { resolveModel, setCredentialResolver, loadCredential, listCredentials } from "@yousim/core";
 
 // A key linked with `yousim connect` should work without any env var. Env
 // still wins, so CI and one-off overrides need no disconnect.
@@ -65,6 +65,48 @@ function getAgentOptions(): ModelConfig {
   const provider = raw as Provider;
   // Model and credential resolution live in core so every surface agrees.
   return { provider, model: resolveModel({ provider }) };
+}
+
+/**
+ * Say exactly where inference is going, and flag the case that is otherwise
+ * invisible: an account was connected for one provider while env points
+ * somewhere else. Env winning is deliberate, but it should never be silent.
+ */
+function describeTarget(options: ModelConfig) {
+  const baseUrl = process.env.OPENAI_BASE_URL;
+  const endpoint =
+    options.provider === "openai" && baseUrl ? baseUrl : options.provider;
+
+  console.log(
+    `\n${theme.info(`provider: ${options.provider}  model: ${options.model}  endpoint: ${endpoint}`)}`
+  );
+
+  const active = options.provider ?? "anthropic";
+
+  // Model ids are provider-namespaced, but MODEL is global — so a name set for
+  // one provider silently leaks to another. OpenRouter ids always contain a
+  // "/" (vendor/model), so a bare name there is almost certainly a leftover.
+  if (active === "openrouter" && options.model && !options.model.includes("/")) {
+    console.log(
+      theme.command(
+        `  warning: "${options.model}" is not an OpenRouter model id — those look like` +
+          ` "vendor/model" (e.g. meta-llama/llama-3.3-70b-instruct).\n` +
+          `  MODEL applies to every provider, so a name set for a local endpoint leaks here.` +
+          ` Unset MODEL or use a valid id.`
+      )
+    );
+  }
+
+  const connected = listCredentials().map((c) => c.provider);
+  if (connected.length > 0 && !connected.includes(active)) {
+    console.log(
+      theme.command(
+        `  note: connected to ${connected.join(", ")}, but PROVIDER=${active} is set` +
+          (baseUrl ? ` (${baseUrl})` : "") +
+          `.\n  That env var wins. Unset PROVIDER, or run: PROVIDER=${connected[0]} yousim`
+      )
+    );
+  }
 }
 
 // ─── Persistence ───────────────────────────────────────────────────────────
@@ -152,7 +194,7 @@ class Recorder {
 
 async function runSimulator(rl: readline.Interface, resumeId?: string) {
   const agentOptions = getAgentOptions();
-  console.log(`\nUsing provider: ${agentOptions.provider}, model: ${agentOptions.model}`);
+  describeTarget(agentOptions);
 
   const commandPrompt = theme.prompt("simulator@anthropic:~$ ");
 
@@ -280,7 +322,7 @@ async function runSimulator(rl: readline.Interface, resumeId?: string) {
 
 async function runConstructor(rl: readline.Interface): Promise<{ summary: string; name: string } | null> {
   const agentOptions = getAgentOptions();
-  console.log(`\nUsing provider: ${agentOptions.provider}, model: ${agentOptions.model}`);
+  describeTarget(agentOptions);
 
   const constructorPrompt = theme.constructor("constructor> ");
 
