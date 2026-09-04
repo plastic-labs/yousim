@@ -91,3 +91,42 @@ test("storage round-trips a session with messages and a summary", async () => {
 
   expect(await s.getMessages(session.id, "other-user")).toHaveLength(0);
 });
+
+test("contract does not transitively import platform-only modules", async () => {
+  // The stable surface must be importable from a browser and an edge runtime,
+  // neither of which has bun:sqlite, fs, os, or path. Regression guard: the
+  // contract used to reach these through the index barrel.
+  const { readFileSync } = await import("node:fs");
+  const { join, dirname } = await import("node:path");
+  const root = join(dirname(import.meta.dir), ""); // src/core/src
+
+  const banned = ["bun:sqlite", '"fs"', '"os"', '"path"', "node:fs", "node:os", "node:path"];
+  const seen = new Set<string>();
+
+  const walk = (rel: string) => {
+    if (seen.has(rel)) return;
+    seen.add(rel);
+    const src = readFileSync(join(root, rel), "utf8");
+    for (const b of banned) {
+      expect(src.includes(`from ${b}`) || src.includes(`from "${b}"`)).toBe(false);
+    }
+    for (const m of src.matchAll(/from\s+"(\.[^"]+)"/g)) {
+      let target = m[1].replace(/^\.\//, "");
+      if (target.startsWith("../")) continue;
+      if (!target.endsWith(".ts")) {
+        target = seen.has(`${target}.ts`) ? `${target}.ts` : `${target}.ts`;
+      }
+      try {
+        walk(target);
+      } catch {
+        walk(`${m[1].replace(/^\.\//, "")}/index.ts`);
+      }
+    }
+  };
+
+  walk("contract.ts");
+  // Sanity: the walk actually visited the real dependency graph.
+  expect(seen.has("agents.ts")).toBe(true);
+  expect(seen.has("model.ts")).toBe(true);
+  expect(seen.has("simulate.ts")).toBe(true);
+});

@@ -53,8 +53,8 @@ export {
   Identity,
 } from "./agents";
 
-export { simulate } from "./index";
-export { INITIAL_PROMPT, INITIAL_RESPONSE } from "./index";
+export { simulate } from "./simulate";
+export { INITIAL_PROMPT, INITIAL_RESPONSE } from "./simulate";
 
 // ---------------------------------------------------------------------------
 // Wire format
