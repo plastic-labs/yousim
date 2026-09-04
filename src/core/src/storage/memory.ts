@@ -13,6 +13,11 @@ export class MemoryStorage implements Storage {
   // Sessions
 
   async createSession(userId: string, metadata: Record<string, any> = {}): Promise<StoredSession> {
+    // Nothing here enforces it, but SqliteStorage cannot create a session for
+    // an owner row that does not exist — so it creates one. The two
+    // implementations answering differently about what a session implies is
+    // the drift the conformance test exists to catch.
+    if (!this.users.has(userId)) this.users.set(userId, { id: userId, name: "" });
     const session: StoredSession = {
       id: crypto.randomUUID(),
       user_id: userId,

@@ -61,9 +61,55 @@ interface ChatRequest extends ManualRequest {
  */
 const LOCAL_ORIGIN = /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/;
 
+/**
+ * Requests that change something, and therefore need more than CORS.
+ *
+ * CORS governs who may *read* a response, not who may cause an effect: by the
+ * time it withholds the body the handler has already run. `POST /reset` takes
+ * no body, which made it a CORS *simple* request — no preflight, the browser
+ * sent it, the session was deleted, and the attacking page was merely denied
+ * the reply it never wanted. Every mutating route has that shape, so the check
+ * is a single hook rather than a per-handler one.
+ *
+ * Two locks, because either alone fails open somewhere:
+ *
+ * - A foreign `Origin` is refused outright, on the request itself.
+ * - A browser-initiated mutation must carry `X-YouSim-Local`, which no
+ *   *simple* request can set. That turns every such request into a preflighted
+ *   one, so the origin decision happens before a handler runs at all, and it
+ *   still holds if `LOCAL_ORIGIN` is ever widened or a lookalike slips the
+ *   regex.
+ *
+ * "Browser-initiated" is `Origin` or `Sec-Fetch-Site` being present; both are
+ * forbidden header names, so page script cannot forge or suppress either. A
+ * caller with neither is not a page in a tab — it is curl, the CLI, or a
+ * `/v1/construct` consumer, none of which a hostile web page can impersonate,
+ * and all of which would break under a blanket header requirement.
+ */
+const MUTATING_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
+const LOCAL_CLIENT_HEADER = "x-yousim-local"; // sent by src/web/src/api.ts
+
+const forbidden = (reason: string) =>
+  new Response(JSON.stringify({ error: reason }), {
+    status: 403,
+    headers: { "Content-Type": "application/json" },
+  });
+
 export const createApp = () => {
   const app = new Elysia()
     .use(cors({ origin: LOCAL_ORIGIN }))
+    .onRequest(({ request }) => {
+      if (!MUTATING_METHODS.has(request.method)) return;
+
+      const origin = request.headers.get("origin");
+      if (origin !== null && !LOCAL_ORIGIN.test(origin)) {
+        return forbidden("Cross-origin request refused");
+      }
+      const fromBrowser = origin !== null || request.headers.has("sec-fetch-site");
+      if (fromBrowser && !request.headers.has(LOCAL_CLIENT_HEADER)) {
+        return forbidden("Missing X-YouSim-Local header");
+      }
+    })
     .derive(() => ({ userId: LOCAL_USER, storage: getStorage() }))
     .get("/api/health", () => "YouSim API - Bun/Elysia version")
     .get("/api/mode", () => ({ auth: "local" as const }))

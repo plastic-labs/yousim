@@ -20,14 +20,24 @@ downstream consumer of `@yousim/core`, not in this package. An auth module and
 a Supabase backend were both removed from this tree deliberately; re-adding
 them is a regression, not a feature.
 
-Two things in `src/api` are what make "local" true in the absence of auth, and
-neither is redundant:
+Three things in `src/api` are what make "local" true in the absence of auth,
+and none is redundant:
 
 - **The server binds `127.0.0.1`**, not Bun's default wildcard. `HOST` overrides
   it, which is how the container gets `0.0.0.0` from the Dockerfile.
 - **CORS is scoped to local origins.** `cors()` with no options reflects any
   Origin back with Allow-Credentials, which would let any page the user has open
   read their sessions and spend their model credit.
+- **Mutating routes are gated separately from CORS.** CORS decides who may
+  *read* a response; the handler has already run by the time it withholds one.
+  `POST /reset` takes no body, so it was a CORS *simple* request: any tab could
+  delete a session and be denied only the reply. The `onRequest` hook refuses a
+  foreign `Origin` on POST/PUT/PATCH/DELETE, and requires `X-YouSim-Local` on
+  anything browser-shaped — a header no simple request can set, which forces a
+  preflight so the origin decision precedes the handler. `src/web/src/api.ts`
+  sends it; a non-browser caller (the CLI, curl, a `/v1/construct` consumer)
+  sends neither `Origin` nor `Sec-Fetch-Site` and is not gated, because a
+  hostile page cannot impersonate one.
 
 `HOST` is in `CWD_ENV_KEYS` for the same reason `OPENAI_BASE_URL` is: a cloned
 repo's `./.env` must not be able to widen the bind.

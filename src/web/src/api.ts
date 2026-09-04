@@ -1,8 +1,16 @@
 const API_BASE = import.meta.env.VITE_API_URL || '';
 
 // This UI talks to a local server on your own machine, so there is no auth.
+//
+// X-YouSim-Local is not a credential — a header cannot be one when the page
+// asking for it is served from the same origin. It is unforgeable by a *third
+// party* page, which is the point: setting a custom header makes a request
+// non-simple, so a hostile tab cannot send one without a preflight the server
+// refuses. The API rejects browser-initiated mutations without it.
 function buildHeaders(json = false): Record<string, string> {
-  return json ? { 'Content-Type': 'application/json' } : {};
+  const headers: Record<string, string> = { 'X-YouSim-Local': '1' };
+  if (json) headers['Content-Type'] = 'application/json';
+  return headers;
 }
 
 async function streamRequest(url: string, options: RequestInit): Promise<ReadableStreamDefaultReader<string>> {
