@@ -97,8 +97,15 @@ test("storage round-trips a session with messages and a summary", async () => {
  *
  * The `node:` and bare forms of the same module are both listed because both
  * appear in this tree, and `bun:` covers bun:sqlite.
+ *
+ * `node:sqlite` is listed alongside it because the SQLite binding is now
+ * chosen by a conditional `exports` entry rather than by a literal import:
+ * `bun:sqlite` under Bun, `node:sqlite` under Node and everywhere else. A
+ * regex that knows only about `bun:sqlite` would let the store reach the
+ * contract through the Node branch and report nothing — which is precisely
+ * the kind of silent pass this whole test exists to prevent.
  */
-const BANNED = /^(bun:|node:(fs|os|path|child_process))|^(fs|os|path|child_process)$/;
+const BANNED = /^(bun:|node:(fs|os|path|child_process|sqlite))|^(fs|os|path|child_process)$/;
 
 /**
  * Bundle an entry for the browser and report every banned module the
@@ -197,11 +204,27 @@ test("contract bundles to something real, not an empty module", async () => {
 });
 
 test("the index barrel DOES reach platform modules, which is why contract.ts exists", async () => {
-  // The control. The barrel exports the stores and the stores import
-  // bun:sqlite and fs, so this must come back non-empty. If it ever comes back
+  // The control. The barrel exports the stores and the stores reach a SQLite
+  // binding and fs, so this must come back non-empty. If it ever comes back
   // clean, the trap has stopped working and the test above proves nothing.
   const { banned } = await bundle("index.ts");
-  expect(banned.some((h) => h.startsWith("bun:sqlite"))).toBe(true);
+
+  // Whichever binding the bundler's own conditions selected. Asserted as
+  // "either" rather than pinned to one: the point of the control is that a
+  // SQLite module is reached at all, and pinning it would make this test fail
+  // the day Bun's browser target starts preferring a different condition —
+  // which would say nothing about the contract.
+  expect(banned.some((h) => /^(bun|node):sqlite\b/.test(h))).toBe(true);
+
+  // And it is reached through the driver, not by a literal import in the
+  // store. This is the shape of the indirection, pinned: if someone
+  // "simplifies" storage/sqlite.ts back to importing a binding directly, the
+  // per-runtime selection is gone and this is what notices.
+  expect(banned.some((h) => /^(bun|node):sqlite <- storage\/driver\.(bun|node)\.ts$/.test(h))).toBe(
+    true
+  );
+
+  // fs, still imported directly by the store itself.
   expect(banned.some((h) => h.includes("storage/sqlite.ts"))).toBe(true);
 });
 

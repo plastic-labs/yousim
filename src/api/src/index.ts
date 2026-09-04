@@ -1,8 +1,9 @@
 import { Elysia, t } from "elysia";
 import { cors } from "@elysiajs/cors";
 import { staticPlugin } from "@elysiajs/static";
+import { node } from "@elysiajs/node";
 import path from "path";
-import { existsSync } from "fs";
+import { existsSync, readFileSync } from "fs";
 import {
   Message,
   GaslitClaude,
@@ -34,7 +35,9 @@ function getStorage(): Storage {
   return _storage;
 }
 
-const publicDir = path.resolve(import.meta.dir, "../public");
+// `import.meta.dirname`, not Bun's `import.meta.dir`: the standard spelling,
+// and both runtimes implement it.
+const publicDir = path.resolve(import.meta.dirname, "../public");
 
 // Types for request bodies
 interface ManualRequest {
@@ -62,10 +65,22 @@ interface ChatRequest extends ManualRequest {
 const LOCAL_ORIGIN = /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/;
 
 export const createApp = () => {
-  const app = new Elysia()
+  // `@elysiajs/node` on BOTH runtimes, not just on Node.
+  //
+  // Elysia's default adapter is `Bun.serve`, which does not exist under Node.
+  // Rather than choose an adapter per runtime, this uses the Node one
+  // everywhere: it is built on `node:http`, which Bun implements, so one
+  // adapter means one code path and one set of behaviours to reason about
+  // instead of two that have to be kept in agreement. This is a local,
+  // single-user tool — the throughput the Bun adapter would buy back is not
+  // worth a second server implementation nobody tests.
+  const app = new Elysia({ adapter: node() })
     .use(cors({ origin: LOCAL_ORIGIN }))
     .derive(() => ({ userId: LOCAL_USER, storage: getStorage() }))
-    .get("/api/health", () => "YouSim API - Bun/Elysia version")
+    // Not "Bun/Elysia version" any more: this server runs on Node as well,
+    // and a health endpoint that names the wrong runtime is a small lie in the
+    // one place people look when they are already confused.
+    .get("/api/health", () => "YouSim API - Elysia")
     .get("/api/mode", () => ({ auth: "local" as const }))
     .get("/user", async ({ query, set, userId, storage }) => {
       if (!userId) {
@@ -679,14 +694,21 @@ export const createApp = () => {
     )
     // SPA fallback - serve index.html for all unmatched routes
     .get("/*", () => {
-      return Bun.file(path.join(publicDir, "index.html"));
+      // `readFileSync` rather than `Bun.file`. A `BunFile` is a Bun-only lazy
+      // handle that only the Bun adapter knows how to unwrap; under the Node
+      // adapter it would serialize as an empty object and the UI would load a
+      // blank page. index.html is a few KB, so reading it costs nothing worth
+      // measuring.
+      return new Response(readFileSync(path.join(publicDir, "index.html")), {
+        headers: { "Content-Type": "text/html; charset=utf-8" },
+      });
     });
 
   return app;
 };
 
-export const startServer = () => {
-  // publicDir is resolved from import.meta.dir, which points inside the
+export const startServer = async () => {
+  // publicDir is resolved from import.meta.dirname, which points inside the
   // embedded bundle in a `bun build --compile` binary — so the frontend
   // assets are not there. Elysia reports any listen failure as "Is port N in
   // use?", which sends you chasing a port conflict that doesn't exist.
@@ -700,19 +722,39 @@ export const startServer = () => {
 
   const app = createApp();
   const port = Number(process.env.PORT || 3000);
-  // Loopback unless asked otherwise. There is no auth here by design, so Bun's
-  // default wildcard bind would put every session on this machine within reach
-  // of anyone on the same network. A container is the one case that genuinely
+  // Loopback unless asked otherwise. There is no auth here by design, so a
+  // wildcard bind would put every session on this machine within reach of
+  // anyone on the same network. A container is the one case that genuinely
   // needs 0.0.0.0, since a published port cannot reach loopback inside it.
+  //
+  // The key must be `hostname`. The adapter's own option is `host`, but it is
+  // reached through srvx, which translates `hostname` -> `host` and *drops* an
+  // unrecognised `host` — leaving the bind wide open on 0.0.0.0. Verified in
+  // both directions; do not "simplify" this to `host`.
   const hostname = process.env.HOST || "127.0.0.1";
-  app.listen({ port, hostname });
-  console.log(
-    `YouSim API is running at http://${app.server?.hostname}:${app.server?.port}`
-  );
+
+  const url = await new Promise<string>((resolve, reject) => {
+    app.listen({ port, hostname }, (server) => {
+      // The address is only knowable once the socket is up, and with PORT=0
+      // the reported port is the requested 0 until then. `raw` is the srvx
+      // server; awaiting its `ready()` and reading `url` is the one way to get
+      // the *resolved* host and port, and it works the same on both runtimes.
+      // Reported rather than echoed back from `hostname` above, so the line
+      // below is evidence of what was bound instead of a restatement of what
+      // was asked for.
+      const raw = (server as unknown as { raw?: { ready?: () => Promise<unknown>; url?: string } }).raw;
+      Promise.resolve(raw?.ready?.()).then(
+        () => (raw?.url ? resolve(raw.url) : reject(new Error("server reported no address"))),
+        reject
+      );
+    });
+  });
+
+  console.log(`YouSim API is running at ${url}`);
   console.log(`Storage: ${process.env.YOUSIM_DB ?? "~/.yousim/yousim.db"}`);
   return app;
 };
 
 if (import.meta.main) {
-  startServer();
+  await startServer();
 }

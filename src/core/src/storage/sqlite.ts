@@ -1,4 +1,9 @@
-import { Database } from "bun:sqlite";
+// Resolved per runtime: "bun" -> bun:sqlite, "node"/"default" -> node:sqlite.
+// Imported through the package name rather than by relative path because a
+// relative import bypasses `exports` entirely and would pin one binding.
+// See ./driver.ts for the whole story; nothing below branches on the runtime.
+import { SqliteDatabase, SQLITE_DRIVER } from "@yousim/core/storage/driver";
+import type { SqliteDatabase as SqliteDatabaseHandle } from "./driver";
 import fs from "fs";
 import path from "path";
 import { dataHome } from "../config";
@@ -20,14 +25,26 @@ export function resolveDbPath(explicit?: string): string {
 }
 
 /**
- * SQLite storage using bun:sqlite (built-in, zero npm deps).
+ * SQLite storage on whichever built-in binding the runtime has — `bun:sqlite`
+ * under Bun, `node:sqlite` under Node. Both are built in, so this still costs
+ * zero npm dependencies, which is what keeps `npx yousim` a single download.
  *
- * Bun-only: never import this from the contract surface, which has to stay
- * usable in a browser and on an edge runtime.
+ * Platform-only either way: never import this from the contract surface,
+ * which has to stay usable in a browser and on an edge runtime.
  */
 export class SqliteStorage implements Storage {
-  private db: Database;
+  private db: SqliteDatabaseHandle;
   readonly path: string;
+
+  /**
+   * The SQLite binding backing this store, e.g. "node:sqlite".
+   *
+   * Reported, never branched on. It exists so `yousim config` can say which
+   * runtime is actually in use, and so a test can prove the conditional
+   * `exports` really did select per runtime rather than merely that the code
+   * ran — the two are indistinguishable from the outside without this.
+   */
+  readonly driver = SQLITE_DRIVER;
 
   constructor(dbPath?: string) {
     this.path = resolveDbPath(dbPath);
@@ -35,7 +52,7 @@ export class SqliteStorage implements Storage {
     if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
     }
-    this.db = new Database(this.path);
+    this.db = new SqliteDatabase(this.path);
     // Conversations are private. The 0700 directory already covers this on a
     // single-user machine, but the file's own mode is what survives someone
     // widening the directory, copying it, or a differing umask.
@@ -57,7 +74,10 @@ export class SqliteStorage implements Storage {
   }
 
   private migrate() {
-    const current = (this.db.query("PRAGMA user_version").get() as any)?.user_version ?? 0;
+    // `prepare`, not bun:sqlite's `query`: the latter is a Bun-only statement
+    // cache with no node:sqlite counterpart, and every other call site here
+    // already uses `prepare`.
+    const current = (this.db.prepare("PRAGMA user_version").get() as any)?.user_version ?? 0;
     if (current > SCHEMA_VERSION) {
       throw new Error(
         `Database at ${this.path} has schema v${current}, but this build only ` +

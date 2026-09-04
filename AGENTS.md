@@ -13,6 +13,12 @@ A Bun workspaces monorepo producing one binary, `yousim`. It is a local,
 single-user tool: it runs on the user's machine, against their own data and
 their own model credential.
 
+**It runs on both Node (>= 24) and Bun.** Bun is the development runtime — the
+workspace tool, the bundler, the test runner — and the published bin's shebang
+is `#!/usr/bin/env node`. See [The two runtimes](#the-two-runtimes); the short
+version is that exactly one thing forks, and it forks in `package.json` rather
+than in code.
+
 There is no auth, no accounts, and no server-side user concept. Every request
 is the local owner (`"local"`, hardcoded). **Do not add an auth layer or a
 hosted storage backend here.** If a change seems to need one, it belongs in a
@@ -23,8 +29,12 @@ them is a regression, not a feature.
 Two things in `src/api` are what make "local" true in the absence of auth, and
 neither is redundant:
 
-- **The server binds `127.0.0.1`**, not Bun's default wildcard. `HOST` overrides
-  it, which is how the container gets `0.0.0.0` from the Dockerfile.
+- **The server binds `127.0.0.1`**, not the default wildcard. `HOST` overrides
+  it, which is how the container gets `0.0.0.0` from the Dockerfile. The option
+  key must be `hostname`: the Elysia Node adapter's own option is `host`, but
+  it is reached through srvx, which translates `hostname` -> `host` and
+  silently **drops** an unrecognised `host` — leaving the bind on `0.0.0.0`.
+  Verified in both directions. Do not "simplify" it.
 - **CORS is scoped to local origins.** `cors()` with no options reflects any
   Origin back with Allow-Credentials, which would let any page the user has open
   read their sessions and spend their model credit.
@@ -50,6 +60,114 @@ core changes are live immediately for both.
 Everything in `legacy-python/` is historical. Do not treat it as
 a description of current behavior.
 
+## The two runtimes
+
+Node >= 24 and Bun both run this package. One thing genuinely differs, and
+everything else is written once, the Node way, because Bun implements the Node
+APIs and the reverse is not true.
+
+### The one fork: the SQLite binding
+
+Bun has `bun:sqlite` and no `node:sqlite` ("No such built-in module"). Node has
+`node:sqlite` and no `bun:sqlite`. A single import cannot cover both, so the
+choice is made by the **resolver**, in `@yousim/core`'s `exports`:
+
+```json
+"./storage/driver": {
+  "bun":     "./src/storage/driver.bun.ts",
+  "node":    "./src/storage/driver.node.ts",
+  "default": "./src/storage/driver.node.ts"
+}
+```
+
+`storage/sqlite.ts` imports `@yousim/core/storage/driver` and never branches.
+There is **no `typeof Bun !== "undefined"` in the storage layer, and there must
+not be**: a runtime check is a thing that can be wrong at runtime; a resolver
+condition cannot. Three consequences worth knowing:
+
+- The import has to go through the **package name**, not a relative path.
+  `exports` only applies to bare specifiers; `./driver.node` bypasses it and
+  pins one binding.
+- `storage/driver.ts` holds a shared *type* both drivers are declared against,
+  so `bun:sqlite` and `node:sqlite` cannot drift apart unnoticed. Without it
+  each driver would only ever be checked against its own binding.
+- `bun:sqlite`'s `db.query()` has no `node:sqlite` counterpart. Use
+  `prepare()`, which both have.
+
+`SqliteStorage.driver` reports which binding is live, for `yousim config` and
+for the parity test. It is reported, never branched on.
+
+### Everything else is Node-only API
+
+Rewritten once rather than dual-pathed, because Bun runs all of it:
+`node:child_process` for the macOS Keychain, `node:http` for the PKCE callback
+listener, `node:fs` for the transcript export and the SPA fallback,
+`import.meta.dirname` (not Bun's `import.meta.dir`), and `@elysiajs/node` as
+the server adapter **on both runtimes** — it is `node:http` underneath, so one
+adapter means one code path instead of two that have to be kept in agreement.
+
+Two upstream details that already cost time:
+
+- `@elysiajs/static` before **1.4.10** is broken on any non-Bun runtime: its
+  etag path confuses the global `crypto` with the `node:crypto` module it meant
+  to lazy-load, throws, and serves a `404 NOT_FOUND` for every asset. Do not
+  downgrade it.
+- Node's ESM resolver requires a file extension on relative specifiers, and
+  this repo's TypeScript is extensionless. So **Node cannot import this source
+  tree** — only the bundle, where the relative imports are gone. That is why
+  `runtime-probe.mjs` reaches the driver through its package export (whose only
+  non-builtin import is `import type`, which erases) instead of importing the
+  store.
+
+### The shebang, and why it lost its flags
+
+The published bin is `#!/usr/bin/env node`. It used to be
+`env -S bun --no-env-file --config=/dev/null`, and those flags were a security
+control: Bun autoloads `./.env`, `./.env.local`, `./.env.<NODE_ENV>` **and**
+`./bunfig.toml`, whose `preload` runs arbitrary code from the user's current
+directory before the first line of this package. Nothing in-process can undo a
+preload.
+
+They are gone because **Node needs neither** — it reads no `.env` without an
+explicit `--env-file`, and has no cwd-scoped config that can execute code —
+not because anyone decided they were noise. That is a property of the
+interpreter, so `hostile-dir.test.ts` still launches the real installed command
+from a directory containing all of the above and checks what happened. The
+entry points still invoked **by Bun** (`src/cli/src/cli.ts`,
+`scripts/package.ts`) keep their flags.
+
+`env -S` is deliberately not used for anything: it has no Windows equivalent,
+and what npm installs there is a generated `.cmd` shim. Anything that must
+happen before the first import happens in process — which is where the
+`node:sqlite` ExperimentalWarning filter lives, at the top of the bin entry,
+ahead of every `await import`.
+
+### The published artifact is the Node one
+
+`scripts/package.ts` bundles with `bun build --target node`. The target is not
+incidental: it decides which branch of the conditional `exports` the bundler
+resolves. `--target bun` would inline `bun:sqlite` behind a `node` shebang and
+die at the first database open. Bun users run from source, or from a
+bun-targeted build; the Bun driver is not dead code.
+
+### Proving it, rather than assuming it
+
+`src/core/src/__tests__/runtime-parity.test.ts` is the file that makes the
+dual-runtime claim real, and it exists because of a specific way of being
+wrong: under `bun test`, importing the store and watching it work only ever
+exercises the Bun branch. Worse, a conditional `exports` map with a **typo'd
+condition name silently falls through to `"default"`** — both runtimes would
+load the same driver and every functional test in this repo would still pass.
+
+So it runs the same probe program (`runtime-probe.mjs`) under both
+interpreters and asserts the bindings **differ**, then round-trips a database
+between them in both directions, then launches the packaged command on Node
+against a database written with `bun:sqlite`.
+
+It needs a real Node. Without one it skips **loudly**; CI sets
+`YOUSIM_REQUIRE_NODE=1`, which turns the skip into a failure. `YOUSIM_NODE`
+points it at a specific binary when the one on `PATH` is older than the floor.
+
 ## The two invariants
 
 These are the ones most likely to be broken by an innocuous-looking change.
@@ -61,8 +179,14 @@ on. It has to be importable from a browser and from an edge runtime, neither of
 which has a filesystem.
 
 **It must never transitively import a platform-only module** — `bun:sqlite`,
-`fs`, `os`, `path`, or their `node:` forms. Not directly, and not through
-anything it imports, at any depth.
+`node:sqlite`, `fs`, `os`, `path`, `child_process`, or their `node:` forms. Not
+directly, and not through anything it imports, at any depth.
+
+`node:sqlite` is on that list for a reason that is easy to miss: the SQLite
+binding is now chosen by a conditional `exports` entry, and a bundler targeting
+the browser resolves the `"default"` branch — the Node one. A ban list that
+knew only about `bun:sqlite` would let the store reach the contract and report
+nothing.
 
 `src/core/src/__tests__/contract.test.ts` bundles `contract.ts` for the browser
 with a resolver plugin that traps every banned specifier, and fails naming the
@@ -211,8 +335,10 @@ config output starts lying.
 
 The `Storage` interface (`src/core/src/storage.ts`) covers sessions, messages,
 summaries, and users. Two implementations ship here: `MemoryStorage`
-(`storage/memory.ts`, zero deps) and `SqliteStorage` (`storage/sqlite.ts`,
-`bun:sqlite`). Factory: `createStorage("memory" | "sqlite")`.
+(`storage/memory.ts`, zero deps) and `SqliteStorage` (`storage/sqlite.ts`, on
+whichever SQLite binding the runtime resolved — see
+[The two runtimes](#the-two-runtimes)). Factory:
+`createStorage("memory" | "sqlite")`.
 
 The interface exists to **pin the shape, not to enable swapping**. Each surface
 has exactly one implementation — the CLI has SQLite, a browser UI would have
@@ -276,6 +402,10 @@ bun run test:ci     # typecheck + build + pack + suite + coverage floors
 bunx tsc --noEmit   # typecheck alone
 ```
 
+`bun run test` needs Bun (it is `bun test` underneath) and, for the parity
+suite, a Node >= 24 on `PATH` or at `YOUSIM_NODE`. Everything else runs with
+Bun alone.
+
 **Do not run `bun test` directly.** `bun run test` is `scripts/hermetic.ts`,
 which builds the environment the suite has to run in and then starts Bun inside
 it. That ordering is the point:
@@ -316,10 +446,22 @@ Suites, and what each is actually for:
 | `core/__tests__/credentials.test.ts` | key storage, 0600, keychain isolation |
 | `core/__tests__/pkce.test.ts` | the OAuth exchange, including its error paths |
 | `core/__tests__/storage.test.ts` | schema, path resolution, per-user scoping |
+| `core/__tests__/runtime-parity.test.ts` | Node and Bun really resolve different SQLite bindings, and a database written by one opens in the other |
 | `core/__tests__/no-live-calls.test.ts` | the suite needs no account |
 | `api/__tests__/boundary.test.ts` | loopback bind, CORS, malformed bodies, no path leaks |
 | `launcher/__tests__/packaged.test.ts` | what `npm pack` actually ships |
 | `launcher/__tests__/hostile-dir.test.ts` | the published command, launched from a malicious cwd |
+
+`runtime-parity.test.ts` is the other one to keep honest, and the trap it
+avoids is subtle: a conditional `exports` map whose condition names are
+misspelled falls through to `"default"` on every runtime, so both would load
+the same driver and every other test here would still pass. It therefore
+compares the two runtimes against each other rather than asserting that
+whichever one is running got what it expected. It needs a real Node >= 24:
+without one it skips loudly, and CI sets `YOUSIM_REQUIRE_NODE=1` to make that
+skip a failure. `YOUSIM_NODE=/path/to/node` points it at a specific binary
+when the `PATH` one is too old. See
+[The two runtimes](#the-two-runtimes).
 
 `hostile-dir.test.ts` is the one to keep honest. It builds a directory
 containing `.env`, `.env.local`, `.env.production`, a `bunfig.toml` whose

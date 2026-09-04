@@ -1,28 +1,91 @@
-#!/usr/bin/env -S bun --no-env-file --config=/dev/null
+#!/usr/bin/env node
 
-// The shebang flags are load-bearing security, not style.
+// Node, not `env -S bun --no-env-file --config=/dev/null`.
 //
-// Bun autoloads ./.env, ./.env.local, ./.env.<NODE_ENV> AND ./bunfig.toml
-// before this file executes. A bunfig `preload` therefore runs arbitrary
-// code from whatever directory the user happens to be standing in — `cd`
-// into a cloned repo and run `yousim`, and that repo chose what ran.
+// The flags this shebang no longer carries were a deliberate security
+// control, and it matters that they are gone because Node does not need them,
+// not because anyone decided they were noise:
 //
-// No in-process guard can prevent that: preload has already run by the
-// time our first line does. --config=/dev/null stops bunfig, and
-// --no-env-file stops every .env variant rather than the one file
-// neutralizeCwdEnv can reach.
+//   - `--no-env-file` existed because Bun autoloads ./.env, ./.env.local and
+//     ./.env.<NODE_ENV> before the first line of this file runs. Node loads
+//     no .env file unless it is asked to with --env-file, and nothing here
+//     asks. So the hole the flag closed does not exist under Node.
+//   - `--config=/dev/null` existed because Bun also autoloads ./bunfig.toml,
+//     whose `preload` executes arbitrary code from whatever directory the
+//     user happens to be standing in — `cd` into a cloned repo, run `yousim`,
+//     and that repo chose what ran. No in-process guard can undo a preload.
+//     Node has no bunfig.toml and no equivalent cwd-scoped config that can
+//     run code, so again there is nothing to switch off.
+//
+// This is stated rather than left as a happy accident because the difference
+// is the whole reason it is safe to drop two security flags: it is a property
+// of the interpreter, and if the interpreter ever changes back, so must this.
+// `hostile-dir.test.ts` launches the real installed command from a directory
+// that has tried all of the above, so the claim is observed, not asserted.
+//
+// Deliberately NOT `#!/usr/bin/env -S node --disable-warning=...`: `env -S`
+// has no Windows equivalent, npm's generated .cmd shim is what runs there,
+// and whether it forwards interpreter arguments is not something this repo
+// controls. Anything that has to happen before the first import happens in
+// process, below.
+//
+// The Bun-invoked entry points keep their flags: src/cli/src/cli.ts and
+// scripts/package.ts are still run by Bun in development, where every word of
+// the paragraph above about ./.env and ./bunfig.toml still applies.
 
 // This import is deliberately the only static one in this file, and this call
 // is deliberately the first thing that runs.
 //
-// Bun auto-loads ./.env before main() is reached, which means `cd` into any
-// cloned repo and its .env is already in process.env. A repo that ships
-// OPENAI_BASE_URL can therefore point inference at a host of its choosing with
-// the user's credential attached. Everything else here loads through `await
-// import` so that nothing can read process.env before it has been cleaned.
+// Node does not autoload ./.env, but `yousim-cli` and this launcher share a
+// config resolver with surfaces that can be reached under Bun, and the rule
+// this enforces — a cloned repo's .env is not a config source — is a property
+// of the tool rather than of one interpreter. A repo that ships
+// OPENAI_BASE_URL must not be able to point inference at a host of its
+// choosing with the user's credential attached, whichever runtime read it.
+// Everything else here loads through `await import` so that nothing can read
+// process.env before it has been cleaned.
 import { neutralizeCwdEnv } from "@yousim/core/config";
 
 const droppedFromCwdEnv = neutralizeCwdEnv();
+
+// Silence one warning, before anything that could trigger it is imported.
+//
+// `node:sqlite` is what backs storage under Node, and Node prints
+// "ExperimentalWarning: SQLite is an experimental feature" to stderr on the
+// first import in some versions (22.x does; 24.20 does not). It is noise on
+// every single `yousim` invocation, it names an internal this tool's users did
+// not choose, and it lands in the middle of terminal output that is the
+// product here.
+//
+// It has to be installed BEFORE the storage import, which is why it lives at
+// the top of the bin entry rather than next to the code that causes it — by
+// the time `@yousim/core/storage` has been evaluated the warning has already
+// been printed. Every subcommand below is reached through `await import`, so
+// this genuinely runs first.
+//
+// Narrow on purpose: matched on both the warning class and the SQLite text, so
+// an unrelated ExperimentalWarning — the next Node feature this package starts
+// depending on, deprecations, anything the user needs to see — still prints.
+// `process.on("warning")` cannot do this; it adds a listener without
+// displacing the default one that writes to stderr.
+//
+// A no-op under Bun, where `process.emitWarning` does not route through
+// `process.emit`. That is the right outcome rather than a gap: Bun has no
+// `node:sqlite` to warn about, and the patch changes nothing else there.
+const emitWarning = process.emit.bind(process);
+// @ts-expect-error - patching an overloaded builtin; the runtime shape is fine
+process.emit = (name: string, data: unknown, ...rest: unknown[]) => {
+  if (
+    name === "warning" &&
+    data instanceof Error &&
+    data.name === "ExperimentalWarning" &&
+    /SQLite/i.test(data.message)
+  ) {
+    return false;
+  }
+  // @ts-expect-error - see above
+  return emitWarning(name, data, ...rest);
+};
 
 const args = process.argv.slice(2);
 const command = args[0];
@@ -213,7 +276,10 @@ const main = async () => {
 
   if (command === "server") {
     const { startServer } = await import("@yousim/api");
-    startServer();
+    // Awaited: startServer resolves once the socket is actually up and has
+    // reported its address. Unawaited, a listen failure became an unhandled
+    // rejection instead of the "Fatal error:" line main().catch() prints.
+    await startServer();
     return;
   }
 

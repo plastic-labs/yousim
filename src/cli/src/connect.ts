@@ -7,6 +7,9 @@ import {
   credentialsPath,
 } from "@yousim/core";
 import * as readline from "readline";
+import { spawn } from "node:child_process";
+import { createServer } from "node:http";
+import type { AddressInfo } from "node:net";
 
 /**
  * Connect an OpenRouter account via OAuth PKCE.
@@ -35,12 +38,25 @@ function describeStorage(where: "keychain" | "file"): string {
 async function openBrowser(url: string): Promise<boolean> {
   const cmd =
     process.platform === "darwin" ? "open" : process.platform === "win32" ? "start" : "xdg-open";
-  try {
-    const proc = Bun.spawn([cmd, url], { stdout: "ignore", stderr: "ignore" });
-    return (await proc.exited) === 0;
-  } catch {
-    return false;
-  }
+  // `node:child_process` rather than `Bun.spawn`, so this one function serves
+  // both runtimes. The failure path needs care in the translation: Bun.spawn
+  // *throws* when the binary is missing, so a `try`/`catch` was enough, but
+  // node reports it through an "error" event on the child and a throw would
+  // never happen — leaving the promise pending forever, and the process with
+  // an unhandled error. Hence the explicit listener.
+  //
+  // A missing binary is the normal case on Windows, where `start` is a cmd.exe
+  // builtin and not an executable at all. Returning false is the whole
+  // contract here: the caller prints the URL for the user to open themselves.
+  return new Promise<boolean>((resolve) => {
+    try {
+      const child = spawn(cmd, [url], { stdio: "ignore" });
+      child.once("error", () => resolve(false));
+      child.once("exit", (code) => resolve(code === 0));
+    } catch {
+      resolve(false);
+    }
+  });
 }
 
 function ask(prompt: string): Promise<string> {
@@ -67,8 +83,6 @@ async function connectHeadless(): Promise<void> {
 export async function connect(opts: { headless?: boolean } = {}): Promise<void> {
   if (opts.headless) return connectHeadless();
 
-  // Bind port 0 to get an ephemeral one, then build the callback from the port
-  // we actually got — OpenRouter needs the exact URL up front.
   let resolveCode: (code: string) => void;
   let rejectCode: (err: Error) => void;
   const codePromise = new Promise<string>((res, rej) => {
@@ -76,29 +90,43 @@ export async function connect(opts: { headless?: boolean } = {}): Promise<void> 
     rejectCode = rej;
   });
 
-  const server = Bun.serve({
-    port: 0,
-    fetch(req) {
-      const code = new URL(req.url).searchParams.get("code");
-      if (!code) {
-        return new Response("Waiting for an authorization code…", {
-          headers: { "Content-Type": "text/plain" },
-        });
-      }
-      resolveCode(code);
-      return new Response(
-        `<!doctype html><meta charset="utf-8">
-         <title>Connected</title>
-         <body style="font:14px system-ui;padding:3rem;max-width:32rem">
-           <h1>Connected</h1>
-           <p>Your OpenRouter account is linked. You can close this tab and return to the terminal.</p>
-         </body>`,
-        { headers: { "Content-Type": "text/html" } }
-      );
-    },
+  // `node:http` rather than `Bun.serve`, so one listener serves both runtimes.
+  //
+  // Bound to 127.0.0.1 explicitly. `Bun.serve` with no hostname binds the
+  // wildcard, which put a listener that accepts an OAuth code onto every
+  // interface for the duration of the flow. Only this machine's browser is
+  // ever supposed to reach it, and loopback is what the redirect URL below
+  // already promises.
+  const server = createServer((req, res) => {
+    // `req.url` is a path, not an absolute URL, so it needs a base to parse
+    // against. The base is discarded — only the query is read.
+    const code = new URL(req.url ?? "/", "http://localhost").searchParams.get("code");
+    if (!code) {
+      res.writeHead(200, { "Content-Type": "text/plain; charset=utf-8" });
+      res.end("Waiting for an authorization code…");
+      return;
+    }
+    res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+    res.end(
+      `<!doctype html><meta charset="utf-8">
+       <title>Connected</title>
+       <body style="font:14px system-ui;padding:3rem;max-width:32rem">
+         <h1>Connected</h1>
+         <p>Your OpenRouter account is linked. You can close this tab and return to the terminal.</p>
+       </body>`
+    );
+    resolveCode(code);
   });
 
-  const callbackUrl = `http://localhost:${server.port}/callback`;
+  // Port 0 gets an ephemeral port, but the number is only knowable once the
+  // socket is listening — and OpenRouter needs the exact callback URL up
+  // front, so the flow cannot start before this resolves.
+  const port = await new Promise<number>((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(0, "127.0.0.1", () => resolve((server.address() as AddressInfo).port));
+  });
+
+  const callbackUrl = `http://localhost:${port}/callback`;
 
   try {
     const { url, verifier } = await beginAuth({ callbackUrl });
@@ -122,7 +150,12 @@ export async function connect(opts: { headless?: boolean } = {}): Promise<void> 
     const key = await exchangeCode(code, verifier);
     console.log(`Connected. ${describeStorage(saveCredential(PROVIDER, key))}`);
   } finally {
-    server.stop(true);
+    // `closeAllConnections` before `close`, which is what `Bun.serve`'s
+    // `stop(true)` did in one call. `close()` alone only stops *accepting*:
+    // the browser's keep-alive connection stays open and holds the event loop,
+    // so `yousim connect` would print "Connected." and then hang.
+    server.closeAllConnections();
+    server.close();
   }
 }
 

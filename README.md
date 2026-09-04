@@ -10,24 +10,31 @@ accounts and no server.
 
 ## Install and run
 
-You need [Bun](https://bun.sh) (>= 1.1) and an
-[OpenRouter](https://openrouter.ai) account.
+You need [Node](https://nodejs.org) 24 or newer, **or** [Bun](https://bun.sh)
+(>= 1.1), and an [OpenRouter](https://openrouter.ai) account.
 
 ```bash
-bunx yousim connect     # link your OpenRouter account in the browser
-bunx yousim             # start
+npx yousim connect      # link your OpenRouter account in the browser
+npx yousim              # start
 ```
 
 Or install it once and drop the prefix:
 
 ```bash
-bun add -g yousim       # or: npm i -g yousim
+npm i -g yousim         # or: bun add -g yousim
 yousim connect
 yousim
 ```
 
-Either way YouSim runs on Bun, so a global install still needs Bun on your
-PATH — `npm i -g` puts the `yousim` command there, not a Bun runtime.
+Either runtime works, and you do not have to choose: the command runs on
+whichever of the two it finds. `bunx yousim` is the Bun spelling of the same
+thing.
+
+Node 24 is the floor because YouSim keeps your conversations in SQLite and
+uses the runtime's built-in binding for it — `node:sqlite` on Node,
+`bun:sqlite` on Bun. That is what makes this a single download with no
+dependencies to install and nothing to compile; the alternative, a native
+SQLite package, would put a C++ build in front of `npx yousim`.
 
 `connect` uses OAuth (PKCE) — there is no API key to find, copy, or paste. The
 key OpenRouter issues is stored in the macOS Keychain where available, and
@@ -35,7 +42,7 @@ otherwise in `~/.yousim/credentials.json` with mode `0600`. It is never sent
 anywhere except OpenRouter.
 
 On a machine with no browser — SSH, a container — use
-`bunx yousim connect --headless`, which prints a URL and takes the resulting
+`npx yousim connect --headless`, which prints a URL and takes the resulting
 code back on stdin.
 
 If you would rather bring your own key, any of `ANTHROPIC_API_KEY`,
@@ -63,7 +70,7 @@ instruction-tuned open-weight models are where this comes alive.
 Set one with `MODEL`:
 
 ```bash
-MODEL=meta-llama/llama-3.3-70b-instruct bunx yousim
+MODEL=meta-llama/llama-3.3-70b-instruct npx yousim
 ```
 
 Defaults, per provider:
@@ -80,7 +87,7 @@ Two practical notes:
 - **Providers retire models, and a retired id looks like a broken tool.** The
   OpenRouter default here used to be `anthropic/claude-3.5-sonnet`; when every
   Claude 3.x was dropped it began returning 404 at request time. Run
-  `bunx yousim config` to see the provider, model and endpoint actually in
+  `npx yousim config` to see the provider, model and endpoint actually in
   effect for your setup rather than trusting this table to stay current.
 - **OpenRouter ids are namespaced `vendor/model`.** `MODEL` applies to every
   provider, so a bare name you set for a local endpoint leaks into an
@@ -196,9 +203,9 @@ Conversations are written to SQLite as they happen, one exchange at a time, so
 killing the process loses at most the turn in flight.
 
 ```bash
-bunx yousim sessions        # list saved sessions
-bunx yousim resume abc123   # pick one back up (ids may be abbreviated)
-bunx yousim resume          # no id: list them and choose
+npx yousim sessions        # list saved sessions
+npx yousim resume abc123   # pick one back up (ids may be abbreviated)
+npx yousim resume          # no id: list them and choose
 ```
 
 Resuming a simulator session replays the transcript and hands both models their
@@ -220,7 +227,7 @@ Highest precedence first:
 6. built-in defaults
 
 ```bash
-bunx yousim config   # every resolved value, and which layer set it
+npx yousim config   # every resolved value, and which layer set it
 ```
 
 **`./.env` is deliberately not read.** A `.env` in the current directory is an
@@ -228,9 +235,12 @@ ambient convention that exists in countless unrelated repos. Honoring it would
 mean `cd` into a cloned repository could silently redirect inference —
 `OPENAI_BASE_URL` included — to an endpoint of that repo's choosing, with your
 credential attached. For a tool you install once and run anywhere, that is a
-credential-disclosure vector rather than a convenience. Bun loads `./.env`
-before `main()` runs, so YouSim actively removes its own variables from it
-again at startup; `yousim config` reports anything it ignored.
+credential-disclosure vector rather than a convenience.
+
+Node does not read `./.env` at all unless asked with `--env-file`, and the
+published command never asks. Bun does load it, before `main()` runs — so
+YouSim actively removes its own variables from `process.env` again at startup,
+whichever runtime put them there. `yousim config` reports anything it ignored.
 
 A project-local `.yousim.json` may set `provider` and `model`, and nothing
 else. A repository is trusted to say which model its work wants. It is not
@@ -264,7 +274,7 @@ Nothing is uploaded anywhere. Model calls go straight from your machine to the
 provider you configured.
 
 ```bash
-bunx yousim disconnect   # forget the stored key
+npx yousim disconnect   # forget the stored key
 rm -rf ~/.yousim         # remove everything else
 ```
 

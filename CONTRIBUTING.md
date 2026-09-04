@@ -17,6 +17,22 @@ bun install
 Bun >= 1.1. There is no build step for development; everything runs from
 TypeScript source.
 
+**Also install Node >= 24.** The published package runs on Node as well as
+Bun, and `runtime-parity.test.ts` needs a real Node to check that half — see
+[The two runtimes](AGENTS.md#the-two-runtimes). Without one, that suite skips
+with a warning and the dual-runtime support is unverified in your run. If your
+`PATH` Node is older than 24 (likely — `engines.node` is ahead of most
+distributions), point the tests at a newer one:
+
+```bash
+YOUSIM_NODE=/path/to/node24/bin/node bun run test
+```
+
+Development itself is Bun-only, and not by preference: Node's ESM resolver
+needs a file extension on every relative specifier and this repo's TypeScript
+is extensionless, so Node cannot run the source tree. It runs the bundle,
+which is what gets published and what the packaging tests exercise.
+
 ## Checks
 
 ```bash
@@ -25,7 +41,8 @@ bunx tsc --noEmit   # typecheck every package
 ```
 
 Neither needs a model credential. Both should be clean before you open a pull
-request.
+request. `bun run test` prints a loud warning if it could not find a Node to
+run the parity suite against; treat that as a check you have not run.
 
 Run the tests through `bun run test`, not `bun test` directly. That script is
 `scripts/hermetic.ts`, which builds the environment the suite has to run in and

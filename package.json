@@ -22,5 +22,8 @@
   },
   "dependencies": {
     "elysia": "^1.4.25"
+  },
+  "devDependencies": {
+    "@types/node": "^24"
   }
 }

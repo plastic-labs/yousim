@@ -4,7 +4,12 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { SqliteStorage, resolveDbPath, SCHEMA_VERSION } from "../storage/sqlite";
 import { MemoryStorage } from "../storage/memory";
-import { Database } from "bun:sqlite";
+// The binding the runtime selected, not `bun:sqlite` by name. These tests
+// inspect files that SqliteStorage wrote, so they have to read them with the
+// same binding it used — otherwise this file quietly asserts that bun:sqlite
+// can read a bun:sqlite database, which is not a claim worth making.
+// runtime-parity.test.ts is where the two bindings are compared on purpose.
+import { SqliteDatabase } from "@yousim/core/storage/driver";
 
 const dirs: string[] = [];
 function tmpDb(name = "yousim.db") {
@@ -80,14 +85,14 @@ test("creates its parent directory on first run", async () => {
 test("records its schema version", () => {
   const p = tmpDb();
   new SqliteStorage(p).close();
-  const d = new Database(p);
-  expect((d.query("PRAGMA user_version").get() as any).user_version).toBe(SCHEMA_VERSION);
+  const d = new SqliteDatabase(p);
+  expect((d.prepare("PRAGMA user_version").get() as any).user_version).toBe(SCHEMA_VERSION);
   d.close();
 });
 
 test("refuses a database written by a newer build instead of corrupting it", () => {
   const p = tmpDb();
-  const d = new Database(p);
+  const d = new SqliteDatabase(p);
   d.exec(`PRAGMA user_version = ${SCHEMA_VERSION + 50};`);
   d.close();
   expect(() => new SqliteStorage(p)).toThrow(/schema v/);

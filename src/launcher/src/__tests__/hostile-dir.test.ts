@@ -5,10 +5,21 @@
  * repo and type `yousim`, and that repo has had a say in what happens: Bun
  * autoloads `./.env`, `./.env.local`, `./.env.<NODE_ENV>` and — worse —
  * `./bunfig.toml`, whose `preload` executes arbitrary code before the first
- * line of this package runs. Nothing in-process can undo a preload. The only
- * control is the shebang refusing to load bunfig at all.
+ * line of this package runs. Nothing in-process can undo a preload. Under Bun
+ * the only control is the shebang refusing to load bunfig at all.
  *
- * The test this replaces asserted that by grepping the source for the shebang
+ * The published bin now runs on Node, whose shebang carries no such flags,
+ * and this file is *more* important for that, not less. The reason the flags
+ * could go is that Node reads neither `./.env` (it needs an explicit
+ * `--env-file`) nor any cwd-scoped config that can execute code — there is no
+ * Node bunfig.toml. That is a property of the interpreter, asserted nowhere in
+ * this repo's own source, and taking it on faith is how a package ships an
+ * arbitrary-code-execution hole the day it changes. So these tests keep
+ * running against the same hostile directory: the bunfig and every .env
+ * variant are still on disk, still trying, and the assertions are unchanged.
+ * What changed is only which mechanism makes them fail.
+ *
+ * The test this replaces asserted this by grepping the source for the shebang
  * flags. That checks the flags are written down; it does not check they work.
  * Between the two sits everything that can go wrong: a bundler that drops the
  * shebang, an npm shim that ignores it, a platform without `env -S`. So these
@@ -148,8 +159,12 @@ function launch(args: string[], extraEnv: Record<string, string> = {}): Run {
 
 describe("a hostile working directory", () => {
   test("bunfig preload does not execute", () => {
-    // The whole reason `--config=/dev/null` is in the shebang. If the marker
-    // exists, running `yousim` in a cloned repo is arbitrary code execution.
+    // Under a Bun shebang this was the whole reason for `--config=/dev/null`.
+    // Under a Node shebang it holds because Node has no bunfig.toml to load —
+    // but the file is still here and still trying, so this stays the test that
+    // notices if the bin ever goes back to being launched by Bun without the
+    // flag. If the marker exists, running `yousim` in a cloned repo is
+    // arbitrary code execution.
     launch(["--help"]);
     expect(existsSync(markerPath())).toBe(false);
 
@@ -181,9 +196,12 @@ describe("a hostile working directory", () => {
   });
 
   test("NODE_ENV makes .env.production live, and it is still not read", () => {
-    // Bun autoloads `.env.<NODE_ENV>` too. A guard covering `.env` and
-    // `.env.local` and stopping there leaves this one live, which is the exact
-    // shape of the bug that already shipped once with `.env.local`.
+    // Bun autoloads `.env.<NODE_ENV>` too, and NODE_ENV is a variable anything
+    // in the environment might set. A guard covering `.env` and `.env.local`
+    // and stopping there leaves this one live, which is the exact shape of the
+    // bug that already shipped once with `.env.local`. Node autoloads none of
+    // the three, and neutralizeCwdEnv covers `./.env` on top of that for
+    // whichever runtime got there first.
     const r = launch(["config"], { NODE_ENV: "production" });
     expect(r.code).toBe(0);
     expect(r.out).not.toContain("hostile/model-from-env-production");

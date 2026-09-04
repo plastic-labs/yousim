@@ -42,10 +42,19 @@ function run(cmd: string[], cwd: string) {
 /**
  * Bundle, then pack.
  *
- * `--target bun` is what makes one unscoped package possible: the four
- * workspace packages collapse into a single file, so the published manifest
- * declares no dependencies and there is no `workspace:*` left to go
- * unresolved on someone else's machine.
+ * `--target node`, and the target is not incidental. Bundling collapses the
+ * four workspace packages into a single file, which is what makes one
+ * unscoped package possible: the published manifest declares no dependencies
+ * and there is no `workspace:*` left to go unresolved on someone else's
+ * machine. But the target also decides which branch of a conditional
+ * `exports` the bundler resolves, and this package has one — the SQLite
+ * binding. `--target bun` inlines `bun:sqlite` into a file whose shebang says
+ * `node`, which fails at the first database open with "No such built-in
+ * module". `--target node` inlines `node:sqlite`, matching the shebang.
+ *
+ * So the published artifact is the Node one. The Bun driver is not dead code:
+ * it is what runs from a source checkout under Bun, which is how this repo is
+ * developed, and `runtime-parity.test.ts` proves both halves still resolve.
  */
 export function buildArtifact(force = false): Artifact {
   const existing = existsSync(OUT) ? readdirSync(OUT).filter((f) => f.endsWith(".tgz")) : [];
@@ -66,7 +75,7 @@ export function buildArtifact(force = false): Artifact {
       process.execPath,
       "build",
       "--target",
-      "bun",
+      "node",
       join(LAUNCHER, "src", "index.ts"),
       "--outfile",
       join(LAUNCHER, "dist", "yousim.js"),
