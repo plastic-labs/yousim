@@ -4,26 +4,60 @@ import os from "os";
 import path from "path";
 import type { Storage, StoredSession, StoredMessage, StoredSummary } from "../storage";
 
-const DEFAULT_DB_PATH = path.join(os.homedir(), ".yousim", "yousim.db");
+/** Current schema version, tracked in `PRAGMA user_version`. */
+export const SCHEMA_VERSION = 1;
 
 /**
- * SQLite storage implementation using bun:sqlite (built-in, zero npm deps).
- * DB file defaults to ~/.yousim/yousim.db.
+ * Where the database lives, in precedence order:
+ *   1. an explicit path
+ *   2. $YOUSIM_DB               — useful for tests and separate profiles
+ *   3. $XDG_DATA_HOME/yousim/   — respected when set
+ *   4. ~/.yousim/               — the default
+ */
+export function resolveDbPath(explicit?: string): string {
+  if (explicit) return explicit;
+  if (process.env.YOUSIM_DB) return process.env.YOUSIM_DB;
+  const xdg = process.env.XDG_DATA_HOME;
+  if (xdg) return path.join(xdg, "yousim", "yousim.db");
+  return path.join(os.homedir(), ".yousim", "yousim.db");
+}
+
+/**
+ * SQLite storage using bun:sqlite (built-in, zero npm deps).
+ *
+ * Bun-only: never import this from the contract surface, which has to stay
+ * usable in a browser and on an edge runtime.
  */
 export class SqliteStorage implements Storage {
   private db: Database;
+  readonly path: string;
 
-  constructor(dbPath: string = DEFAULT_DB_PATH) {
-    const dir = path.dirname(dbPath);
+  constructor(dbPath?: string) {
+    this.path = resolveDbPath(dbPath);
+    const dir = path.dirname(this.path);
     if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true });
+      fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
     }
-    this.db = new Database(dbPath);
+    this.db = new Database(this.path);
     this.db.exec("PRAGMA journal_mode = WAL;");
+    this.db.exec("PRAGMA foreign_keys = ON;");
     this.migrate();
   }
 
+  /** Close the handle. WAL means an unclean exit still leaves a valid file. */
+  close() {
+    this.db.close();
+  }
+
   private migrate() {
+    const current = (this.db.query("PRAGMA user_version").get() as any)?.user_version ?? 0;
+    if (current > SCHEMA_VERSION) {
+      throw new Error(
+        `Database at ${this.path} has schema v${current}, but this build only ` +
+          `understands v${SCHEMA_VERSION}. Upgrade yousim, or point YOUSIM_DB elsewhere.`
+      );
+    }
+
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS users (
         id TEXT PRIMARY KEY,
@@ -62,7 +96,12 @@ export class SqliteStorage implements Storage {
       CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id);
       CREATE INDEX IF NOT EXISTS idx_messages_session_id ON messages(session_id);
       CREATE INDEX IF NOT EXISTS idx_summaries_session_id ON summaries(session_id);
+      CREATE INDEX IF NOT EXISTS idx_messages_session_created ON messages(session_id, created_at);
     `);
+
+    // Recorded so a future version can migrate rather than guess, and so an
+    // older build refuses a newer file instead of corrupting it.
+    this.db.exec(`PRAGMA user_version = ${SCHEMA_VERSION};`);
   }
 
   // Sessions

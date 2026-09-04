@@ -10,6 +10,8 @@ const printHelp = () => {
 
 Usage:
   yousim              Start the CLI (mode selection)
+  yousim sessions     List saved sessions
+  yousim resume [id]  Resume a session (picker if no id given)
   yousim server       Start the API server + frontend
   yousim config       Show current configuration
 
@@ -22,14 +24,23 @@ Config:
 
 Environment:
   PROVIDER            LLM provider: anthropic, openrouter, openai, groq
+  MODEL               Model override. Choice matters a lot here: older, less
+                      instruction-tuned models produce far more interesting
+                      output than current frontier assistants.
   ANTHROPIC_API_KEY   Anthropic API key (default provider)
   OPENAI_API_KEY      OpenAI API key
+  OPENROUTER_API_KEY  OpenRouter API key
   GROQ_API_KEY        Groq API key
-  YOUSIM_API_KEY      Optional API key for server auth
+  OPENAI_BASE_URL     Any OpenAI-compatible endpoint (local vLLM, Ollama)
+  YOUSIM_DB           Database path override
+
+Data:
+  Conversations are saved to ~/.yousim/yousim.db and survive restarts.
+  Respects XDG_DATA_HOME when set.
 `);
 };
 
-const printConfig = () => {
+const printConfig = async () => {
   const config = loadUserConfig();
 
   console.log("YouSim Configuration\n");
@@ -56,7 +67,8 @@ const printConfig = () => {
     }
   }
 
-  console.log(`\nStorage: sqlite (~/.yousim/yousim.db)`);
+  const { resolveDbPath } = await import("@yousim/core");
+  console.log(`\nStorage: ${resolveDbPath()}`);
 };
 
 if (command === "-h" || command === "--help" || command === "help") {
@@ -68,8 +80,20 @@ const main = async () => {
   loadUserConfig();
 
   if (command === "config") {
-    printConfig();
+    await printConfig();
     process.exit(0);
+  }
+
+  if (command === "sessions") {
+    const { listSessions } = await import("@yousim/cli");
+    await listSessions();
+    return;
+  }
+
+  if (command === "resume") {
+    const { resumeSession } = await import("@yousim/cli");
+    await resumeSession(args[1]);
+    return;
   }
 
   if (command === "server") {

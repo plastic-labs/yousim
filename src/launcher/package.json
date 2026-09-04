@@ -6,10 +6,14 @@
   "bin": {
     "yousim": "./src/index.ts"
   },
-  "files": ["src/", "README.md"],
+  "files": [
+    "src/",
+    "README.md"
+  ],
   "dependencies": {
     "@yousim/cli": "workspace:*",
-    "@yousim/api": "workspace:*"
+    "@yousim/api": "workspace:*",
+    "@yousim/core": "workspace:*"
   },
   "engines": {
     "bun": ">=1.1.0"

@@ -11,5 +11,5 @@ export * from "./simulate";
 // is why the stable surface in contract.ts does NOT come through this file.
 export type { Storage, StoredSession, StoredMessage, StoredSummary } from "./storage";
 export { MemoryStorage } from "./storage/memory";
-export { SqliteStorage } from "./storage/sqlite";
+export { SqliteStorage, resolveDbPath, SCHEMA_VERSION } from "./storage/sqlite";
 export { createStorage } from "./storage/index";

@@ -1,6 +1,6 @@
 export type { Storage, StoredSession, StoredMessage, StoredSummary } from "../storage";
 export { MemoryStorage } from "./memory";
-export { SqliteStorage } from "./sqlite";
+export { SqliteStorage, resolveDbPath, SCHEMA_VERSION } from "./sqlite";
 
 import type { Storage } from "../storage";
 import { MemoryStorage } from "./memory";

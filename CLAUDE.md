@@ -78,6 +78,7 @@ Selection via `PROVIDER` env var. Model override via `MODEL` env var.
 bun install                    # Install dependencies
 cp .env.template .env          # Configure (only PROVIDER + API key needed)
 cd src/cli && bun run start    # CLI (mode selection)
+bun run src/launcher/src/index.ts sessions   # list saved sessions
 bun run start:api              # API server (SQLite, no auth)
 cd src/frontend && bun run dev # Frontend dev server
 bun run dev                    # API + frontend dev mode
@@ -130,7 +131,9 @@ docker compose up --build
 
 ## Testing Notes
 
-- CLI maintains conversation history in memory only
+- CLI persists conversations to `~/.yousim/yousim.db` and they survive
+  restarts. `yousim sessions` lists them, `yousim resume [id]` picks one back
+  up. Path precedence: `YOUSIM_DB` > `XDG_DATA_HOME/yousim/` > `~/.yousim/`.
 - API persists via the Storage interface (SQLite at `~/.yousim/yousim.db`)
 - Exit CLI with "exit" command or Ctrl+C
 - The simulation prompt suggests commands, but the LLM responds to any input

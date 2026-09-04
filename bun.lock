@@ -67,6 +67,7 @@
       "dependencies": {
         "@yousim/api": "workspace:*",
         "@yousim/cli": "workspace:*",
+        "@yousim/core": "workspace:*",
       },
     },
   },
