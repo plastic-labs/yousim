@@ -293,11 +293,23 @@ it. That ordering is the point:
   stripping worked. A test that genuinely needs a real credential goes behind
   `bun run test:live`; there are none.
 
-A throwaway `HOME` is not belt-and-braces. `resolveConfig()` in the launcher
-calls `migrateLegacyHome()`, which **moves** `~/.yousim/credentials.json` and
-`yousim.db` whenever `YOUSIM_HOME` or `XDG_CONFIG_HOME` points elsewhere. A run
-that isolates only `YOUSIM_HOME` relocates the developer's real credential into
-a temp directory that is then deleted.
+A throwaway `HOME` is not belt-and-braces. `configHome()` and `dataHome()` end
+at `os.homedir()/.yousim` when `YOUSIM_HOME` and the XDG variables are all
+unset, and several suites unset them on purpose — that last leg of the
+precedence chain is precisely what `config.test.ts`, `storage.test.ts` and
+`credentials.test.ts` assert on. Inside those tests `YOUSIM_HOME` points
+nowhere, so `HOME` alone decides whether the resolver answers with a temp
+directory or with the developer's real `~/.yousim`; `os.homedir()` reads
+`HOME`/`USERPROFILE`, which no amount of `YOUSIM_HOME` can redirect. The cost
+of getting that wrong is not hypothetical. Config resolution used to run a
+filesystem migration that **moved** `~/.yousim/credentials.json` and
+`yousim.db` into the resolved config and data directories on every launch, so
+`yousim config` — a command whose entire job is to print where values came
+from — could relocate a live credential, and setting `XDG_CONFIG_HOME` was
+enough to trigger it. That code is gone, and
+`launcher/__tests__/config-is-read-only.test.ts` asserts it stays gone.
+Isolating `HOME` is what keeps the next bug of that shape cheap rather than
+expensive.
 
 `scripts/hermetic.ts` also refuses to pass quietly:
 
