@@ -40,10 +40,12 @@ test.skipIf(LIVE)("no endpoint override is visible to the test run", () => {
 });
 
 test("the run is isolated from the real home", () => {
-  // Not credential-specific, but the same class of assertion, and the one with
-  // teeth: `yousim config` performs a filesystem migration out of
-  // os.homedir()/.yousim on every invocation (see the launcher findings), so a
-  // run whose HOME is the developer's own can move their credential.
+  // Not credential-specific, but the same class of assertion. It had teeth for
+  // a concrete reason: `yousim config` used to perform a filesystem migration
+  // out of os.homedir()/.yousim on every invocation, so a run whose HOME was
+  // the developer's own could move their credential. That migration is gone
+  // (see launcher/__tests__/config-is-read-only.test.ts), but isolating HOME
+  // is still the assertion that stops the next such bug being expensive.
   expect(process.env.YOUSIM_HOME).toBeDefined();
   expect(process.env.YOUSIM_KEYCHAIN).toBe("0");
   expect(process.env.YOUSIM_HOME).not.toContain("/.yousim");
