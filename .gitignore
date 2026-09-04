@@ -38,3 +38,11 @@ supabase/
 # per-module floors are checked from.
 .pack/
 coverage/
+
+# Copied into the published package by scripts/package.ts, because npm only
+# ships real files from the package directory: it drops symlinks and it picks
+# up README/LICENSE from nowhere else. Build output, so not tracked — the
+# originals are src/web/dist and the repo root.
+/src/launcher/public/
+/src/launcher/README.md
+/src/launcher/LICENSE

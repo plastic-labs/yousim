@@ -34,7 +34,18 @@ function getStorage(): Storage {
   return _storage;
 }
 
-const publicDir = path.resolve(import.meta.dir, "../public");
+// The built frontend, in the two layouts that actually exist. In the published
+// package `import.meta.dir` is the bundle's own directory and the assets are
+// copied next to it as `public/` at pack time; in a clone this file is
+// src/api/src/index.ts and the assets are wherever Vite left them. There used
+// to be a tracked `src/api/public` symlink standing in for the second case,
+// which packed as nothing at all and, on a checkout without symlink support,
+// as a text file that passes an existence check and serves garbage.
+const PUBLIC_DIRS = [
+  path.resolve(import.meta.dir, "../public"),
+  path.resolve(import.meta.dir, "../../web/dist"),
+];
+const publicDir = PUBLIC_DIRS.find((d) => existsSync(d)) ?? PUBLIC_DIRS[0]!;
 
 // Types for request bodies
 interface ManualRequest {
@@ -692,9 +703,10 @@ export const startServer = () => {
   // use?", which sends you chasing a port conflict that doesn't exist.
   if (!existsSync(publicDir)) {
     throw new Error(
-      `Frontend assets not found at ${publicDir}. Run \`bun run build\` in ` +
-        `src/web, or use the CLI instead of \`server\` — a compiled ` +
-        `standalone binary cannot serve them.`
+      `Frontend assets not found. Looked in:\n` +
+        PUBLIC_DIRS.map((d) => `  ${d}`).join("\n") +
+        `\nRun \`bun run build\` in src/web, or use the CLI instead of ` +
+        `\`server\` — a compiled standalone binary cannot serve them.`
     );
   }
 
