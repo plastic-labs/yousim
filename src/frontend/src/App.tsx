@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { api, supabase } from './api';
+import { api } from './api';
 import { terminalConfig, simCommands, metaCommands, keyHints } from './config';
 import './index.css';
 
@@ -70,40 +70,12 @@ const App: React.FC = () => {
   }, []);
 
   useEffect(() => {
+    // No auth: this UI runs against a local server on your own machine.
     const init = async () => {
-      if (supabase) {
-        // Supabase auth mode
-        const { data } = await supabase.auth.getSession();
-        if (!data.session) {
-          const { error } = await supabase.auth.signInAnonymously();
-          if (error) {
-            console.error('Auth error:', error);
-          } else {
-            await loadOrCreateSession();
-          }
-        } else {
-          await loadOrCreateSession();
-        }
-      } else {
-        // Local mode — no auth needed
-        await loadOrCreateSession();
-      }
+      await loadOrCreateSession();
       setReady(true);
     };
-
     init();
-
-    if (supabase) {
-      const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
-        if (session) {
-          loadOrCreateSession();
-        }
-      });
-
-      return () => {
-        authListener?.subscription?.unsubscribe();
-      };
-    }
   }, []);
 
   useEffect(() => {

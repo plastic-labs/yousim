@@ -1,5 +1,5 @@
 // Storage interface and types for YouSim
-// Derived from the 4 Supabase tables: sessions, messages, summaries, users
+// Four entities: sessions, messages, summaries, users
 
 export interface StoredSession {
   id: string;

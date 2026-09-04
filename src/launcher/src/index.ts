@@ -40,8 +40,7 @@ const printConfig = () => {
   const keys = [
     "PROVIDER", "MODEL",
     "ANTHROPIC_API_KEY", "OPENAI_API_KEY", "OPENROUTER_API_KEY", "GROQ_API_KEY",
-    "YOUSIM_API_KEY",
-    "SUPABASE_URL", "SUPABASE_KEY",
+    "OPENAI_BASE_URL",
     "PORT",
   ];
 
@@ -57,15 +56,7 @@ const printConfig = () => {
     }
   }
 
-  const storageMode = process.env.SUPABASE_URL ? "supabase" : "sqlite (~/.yousim/yousim.db)";
-  const authMode = process.env.SUPABASE_URL
-    ? "supabase (JWT)"
-    : process.env.YOUSIM_API_KEY
-      ? "apikey"
-      : "local (no auth)";
-
-  console.log(`\nStorage: ${storageMode}`);
-  console.log(`Auth:    ${authMode}`);
+  console.log(`\nStorage: sqlite (~/.yousim/yousim.db)`);
 };
 
 if (command === "-h" || command === "--help" || command === "help") {

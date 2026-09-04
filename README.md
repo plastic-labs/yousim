@@ -20,17 +20,13 @@ bun run start
 bun run start:api
 ```
 
-No Supabase required. No database setup. Just an API key.
 
 ## Repository Layout
 
 - `src/core` (`@yousim/core`): Shared simulation logic, agents, and storage abstraction
-- `src/api` (`@yousim/api`): Bun/Elysia API with pluggable storage (SQLite, Supabase)
 - `src/cli` (`@yousim/cli`): Terminal interface — Simulator, Constructor, and Chat modes
-- `src/frontend` (`@yousim/frontend`): React/Vite frontend (works with or without Supabase)
 - `src/launcher` (`yousim`): Single binary launcher
 - `openclaw/`: OpenClaw skill for programmatic identity crafting
-- `supabase/`: Supabase config and migrations (optional)
 - `PM/`: Project management/architecture notes
 - `legacy-python/`: Archived Python + webshell implementation
 
@@ -60,8 +56,6 @@ Set `PROVIDER=openai` (or `groq`, `openrouter`) and the matching API key.
 
 ### Zero-Config Storage
 - **No env vars**: SQLite at `~/.yousim/yousim.db` (auto-created)
-- **`SUPABASE_URL` + `SUPABASE_KEY` set**: Supabase with JWT auth
-- **`YOUSIM_API_KEY` set**: API key auth (no Supabase needed)
 
 ### Programmatic API (`/v1/construct`)
 Any agent framework can craft identities programmatically:
@@ -125,7 +119,6 @@ Runs the Elysia API + serves the built frontend. Auth mode auto-detected:
 |---|---|---|
 | Nothing | Local (no auth) | SQLite |
 | `YOUSIM_API_KEY` | API key bearer | SQLite |
-| `SUPABASE_URL` + `SUPABASE_KEY` | Supabase JWT | Supabase |
 
 `GET /api/mode` returns the active auth mode.
 
@@ -145,15 +138,6 @@ docker compose up --build
 ## Environment Variables
 
 See `.env.template` for the full list. Only `PROVIDER` + matching API key are required.
-
-## Supabase (Optional)
-
-Supabase is fully optional. When `SUPABASE_URL` and `SUPABASE_KEY` are set:
-- API uses Supabase for persistence (sessions, messages, summaries, users)
-- Frontend uses Supabase for anonymous sign-in and JWT auth
-- Migrations live under `supabase/migrations`
-
-Without Supabase, everything works with local SQLite storage and no authentication.
 
 ## Legacy Python/Webshell
 

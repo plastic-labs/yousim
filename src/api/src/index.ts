@@ -14,32 +14,23 @@ import {
   createStorage,
 } from "@yousim/core";
 import type { Storage } from "@yousim/core";
-import { detectAuthMode, resolveUser, extractToken, type AuthMode } from "./auth";
-import { SupabaseStorage } from "./storage/supabase";
 import { detectDone } from "./detect-done";
 import { formatIdentityMd, formatSoulMd } from "./formatters";
 
-// --- Storage & Auth Setup ---
+// --- Storage ---
+//
+// This server is a single-user local instance: it runs on your machine
+// against your own data, so there is no auth and one owner. A hosted
+// deployment implements its own auth and storage instead.
 
-const authMode: AuthMode = detectAuthMode();
+const LOCAL_USER = "local";
 
-function buildStorage(token?: string | null): Storage {
-  if (authMode === "supabase") {
-    const url = process.env.SUPABASE_URL!;
-    const key = process.env.SUPABASE_KEY!;
-    return new SupabaseStorage(url, key, token || undefined);
+let _storage: Storage | null = null;
+function getStorage(): Storage {
+  if (!_storage) {
+    _storage = createStorage("sqlite");
   }
-  // For local/apikey modes, use a shared SQLite instance
-  return getSharedStorage();
-}
-
-// Shared SQLite storage for non-Supabase modes (created lazily)
-let _sharedStorage: Storage | null = null;
-function getSharedStorage(): Storage {
-  if (!_sharedStorage) {
-    _sharedStorage = createStorage("sqlite");
-  }
-  return _sharedStorage;
+  return _storage;
 }
 
 const publicDir = path.resolve(import.meta.dir, "../public");
@@ -60,16 +51,9 @@ interface ChatRequest extends ManualRequest {
 export const createApp = () => {
   const app = new Elysia()
     .use(cors())
-    .derive(async ({ headers }) => {
-      const auth = await resolveUser(headers.authorization, authMode);
-      const userId = auth?.userId || null;
-      const token = extractToken(headers.authorization);
-      const storage = buildStorage(token);
-
-      return { userId, storage };
-    })
+    .derive(() => ({ userId: LOCAL_USER, storage: getStorage() }))
     .get("/api/health", () => "YouSim API - Bun/Elysia version")
-    .get("/api/mode", () => ({ auth: authMode }))
+    .get("/api/mode", () => ({ auth: "local" as const }))
     .get("/user", async ({ query, set, userId, storage }) => {
       if (!userId) {
         set.status = 401;
@@ -695,7 +679,7 @@ export const startServer = () => {
   console.log(
     `YouSim API is running at http://${app.server?.hostname}:${app.server?.port}`
   );
-  console.log(`Auth mode: ${authMode}`);
+  console.log(`Storage: ${process.env.YOUSIM_DB ?? "~/.yousim/yousim.db"}`);
   return app;
 };
 

@@ -1,32 +1,8 @@
-import { createClient } from '@supabase/supabase-js';
-
 const API_BASE = import.meta.env.VITE_API_URL || '';
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
-const supabaseKey = import.meta.env.VITE_SUPABASE_KEY || '';
-const hasSupabase = Boolean(supabaseUrl && supabaseKey);
-
-// Initialize Supabase client for auth (only if configured)
-export const supabase = hasSupabase
-  ? createClient(supabaseUrl, supabaseKey)
-  : null;
-
-// Get auth token — returns null in local mode (no auth needed)
-async function getAuthToken(): Promise<string | null> {
-  if (!supabase) return null;
-  const { data } = await supabase.auth.getSession();
-  return data.session?.access_token || null;
-}
-
-function buildHeaders(token: string | null, json = false): Record<string, string> {
-  const headers: Record<string, string> = {};
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
-  }
-  if (json) {
-    headers['Content-Type'] = 'application/json';
-  }
-  return headers;
+// This UI talks to a local server on your own machine, so there is no auth.
+function buildHeaders(json = false): Record<string, string> {
+  return json ? { 'Content-Type': 'application/json' } : {};
 }
 
 async function streamRequest(url: string, options: RequestInit): Promise<ReadableStreamDefaultReader<string>> {
@@ -48,14 +24,12 @@ async function streamRequest(url: string, options: RequestInit): Promise<Readabl
 export const api = {
   // Create a new session
   async resetSession(mode?: string): Promise<{ user_id: string; session_id: string }> {
-    const token = await getAuthToken();
-
     const params = new URLSearchParams();
     if (mode) params.append('mode', mode);
 
     const res = await fetch(`${API_BASE}/reset?${params}`, {
       method: 'POST',
-      headers: buildHeaders(token),
+      headers: buildHeaders(),
     });
 
     if (!res.ok) throw new Error('Failed to reset session');
@@ -64,11 +38,9 @@ export const api = {
 
   // Send a manual command
   async sendManual(sessionId: string, command: string): Promise<string> {
-    const token = await getAuthToken();
-
     const res = await fetch(`${API_BASE}/manual`, {
       method: 'POST',
-      headers: buildHeaders(token, true),
+      headers: buildHeaders(true),
       body: JSON.stringify({ session_id: sessionId, command }),
     });
 
@@ -77,21 +49,17 @@ export const api = {
   },
 
   async streamManual(sessionId: string, command: string): Promise<ReadableStreamDefaultReader<string>> {
-    const token = await getAuthToken();
-
     return streamRequest(`${API_BASE}/manual`, {
       method: 'POST',
-      headers: buildHeaders(token, true),
+      headers: buildHeaders(true),
       body: JSON.stringify({ session_id: sessionId, command }),
     });
   },
 
   async sendAuto(sessionId: string): Promise<string> {
-    const token = await getAuthToken();
-
     const res = await fetch(`${API_BASE}/auto`, {
       method: 'POST',
-      headers: buildHeaders(token, true),
+      headers: buildHeaders(true),
       body: JSON.stringify({ session_id: sessionId }),
     });
 
@@ -100,22 +68,18 @@ export const api = {
   },
 
   async streamAuto(sessionId: string): Promise<ReadableStreamDefaultReader<string>> {
-    const token = await getAuthToken();
-
     return streamRequest(`${API_BASE}/auto`, {
       method: 'POST',
-      headers: buildHeaders(token, true),
+      headers: buildHeaders(true),
       body: JSON.stringify({ session_id: sessionId }),
     });
   },
 
   // Get session messages
   async getSession(sessionId?: string): Promise<{ session_id: string; messages: any[] }> {
-    const token = await getAuthToken();
-
     const params = sessionId ? `?session_id=${sessionId}` : '';
     const res = await fetch(`${API_BASE}/session${params}`, {
-      headers: buildHeaders(token),
+      headers: buildHeaders(),
     });
 
     if (!res.ok) throw new Error('Failed to get session');
@@ -124,11 +88,9 @@ export const api = {
 
   // List all sessions
   async getSessions(mode?: string): Promise<any[]> {
-    const token = await getAuthToken();
-
     const params = mode ? `?mode=${mode}` : '';
     const res = await fetch(`${API_BASE}/sessions${params}`, {
-      headers: buildHeaders(token),
+      headers: buildHeaders(),
     });
 
     if (!res.ok) throw new Error('Failed to get sessions');
@@ -136,11 +98,9 @@ export const api = {
   },
 
   async updateSessionMetadata(sessionId: string, metadata: Record<string, any>): Promise<{ session_id: string; metadata: Record<string, any> }> {
-    const token = await getAuthToken();
-
     const res = await fetch(`${API_BASE}/sessions/${sessionId}/metadata`, {
       method: 'PUT',
-      headers: buildHeaders(token, true),
+      headers: buildHeaders(true),
       body: JSON.stringify(metadata),
     });
 

@@ -1,7 +1,7 @@
 {
   "name": "@yousim/api",
   "version": "0.1.0",
-  "description": "YouSim API using Bun and Elysia - supports local SQLite and Supabase backends",
+  "description": "Local YouSim server: Elysia + SQLite, no auth",
   "type": "module",
   "main": "src/index.ts",
   "types": "src/index.ts",
@@ -9,17 +9,18 @@
     "dev": "bun --watch run src/index.ts",
     "start": "bun run src/index.ts"
   },
-  "files": ["src/", "README.md"],
+  "files": [
+    "src/",
+    "README.md"
+  ],
   "publishConfig": {
     "access": "public"
   },
   "dependencies": {
     "@elysiajs/cors": "^1.4.0",
     "@elysiajs/static": "^1.4.4",
-    "@supabase/supabase-js": "^2.78.0",
     "@yousim/core": "workspace:*",
-    "elysia": "^1.4.13",
-    "jose": "^5.9.3"
+    "elysia": "^1.4.13"
   },
   "devDependencies": {
     "bun-types": "latest"
