@@ -30,13 +30,12 @@ them is a regression, not a feature.
 | `src/frontend`  | `@yousim/frontend` | React/Vite web UI, served by the API from the same origin            |
 | `src/launcher`  | `yousim`           | The published binary: subcommand dispatch and config resolution      |
 | `openclaw/`     | —                  | Skill wrapping `/v1/construct`                                       |
-| `PM/`           | —                  | Architecture notes, some predating the current structure             |
 | `legacy-python/`| —                  | Original Python implementation. Archived, not maintained             |
 
 `src/cli` and `src/api` both depend on `@yousim/core` via `workspace:*`, so
 core changes are live immediately for both.
 
-Everything in `PM/` and `legacy-python/` is historical. Do not treat either as
+Everything in `legacy-python/` is historical. Do not treat it as
 a description of current behavior.
 
 ## The two invariants

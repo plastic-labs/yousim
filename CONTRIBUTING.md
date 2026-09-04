@@ -99,5 +99,5 @@ between them, and never create a second copy of a doc under a different name.
 | `CONTRIBUTING.md` | contributors  |
 | `CLAUDE.md`       | a pointer at `AGENTS.md`, nothing more |
 
-`PM/` and `legacy-python/` are historical and are not maintained. Do not update
-them to match new work, and do not cite them as current behavior.
+`legacy-python/` is historical and is not maintained. Do not update
+it to match new work, and do not cite it as current behavior.
