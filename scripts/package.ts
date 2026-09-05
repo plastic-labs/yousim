@@ -11,13 +11,29 @@
  * the artifact is missing, so a `bun test` run does the work once.
  */
 
-import { existsSync, mkdirSync, rmSync, readdirSync, writeFileSync } from "node:fs";
+import {
+  copyFileSync,
+  cpSync,
+  existsSync,
+  mkdirSync,
+  rmSync,
+  readdirSync,
+  writeFileSync,
+} from "node:fs";
 import { join } from "node:path";
 import { REPO_ROOT } from "./hermetic";
 
 const LAUNCHER = join(REPO_ROOT, "src", "launcher");
 const WEB = join(REPO_ROOT, "src", "web");
 const OUT = join(REPO_ROOT, ".pack");
+
+/**
+ * Files that only exist inside the launcher package because this script put
+ * them there. Removed before each build so a rename or a deleted asset cannot
+ * survive into the next tarball, and listed in .gitignore for the same reason
+ * `dist/` is: they are build output, not source.
+ */
+const COPIED = ["public", "README.md", "LICENSE"];
 
 export interface Artifact {
   /** The .tgz npm would upload. */
@@ -65,10 +81,22 @@ export function buildArtifact(force = false): Artifact {
   rmSync(OUT, { recursive: true, force: true });
   mkdirSync(OUT, { recursive: true });
   rmSync(join(LAUNCHER, "dist"), { recursive: true, force: true });
+  for (const name of COPIED) rmSync(join(LAUNCHER, name), { recursive: true, force: true });
 
   // The web assets have to exist before the launcher is packed, because the
   // server serves them from inside the package.
   run([process.execPath, "run", "build"], WEB);
+
+  // Real files, not a symlink into src/web/dist. npm silently drops symlinks
+  // when packing, so a link here publishes a package whose `public/` is simply
+  // absent and whose `server` command has nothing to serve.
+  cpSync(join(WEB, "dist"), join(LAUNCHER, "public"), { recursive: true });
+
+  // npm picks README and LICENSE up from the package directory only, and both
+  // live at the repo root: without the copy the npm page renders no readme and
+  // the tarball ships no licence.
+  copyFileSync(join(REPO_ROOT, "README.md"), join(LAUNCHER, "README.md"));
+  copyFileSync(join(REPO_ROOT, "LICENSE"), join(LAUNCHER, "LICENSE"));
 
   run(
     [

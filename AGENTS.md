@@ -26,8 +26,8 @@ downstream consumer of `@yousim/core`, not in this package. An auth module and
 a Supabase backend were both removed from this tree deliberately; re-adding
 them is a regression, not a feature.
 
-Two things in `src/api` are what make "local" true in the absence of auth, and
-neither is redundant:
+Three things in `src/api` are what make "local" true in the absence of auth,
+and none is redundant:
 
 - **The server binds `127.0.0.1`**, not the default wildcard. `HOST` overrides
   it, which is how the container gets `0.0.0.0` from the Dockerfile. The option
@@ -38,6 +38,16 @@ neither is redundant:
 - **CORS is scoped to local origins.** `cors()` with no options reflects any
   Origin back with Allow-Credentials, which would let any page the user has open
   read their sessions and spend their model credit.
+- **Mutating routes are gated separately from CORS.** CORS decides who may
+  *read* a response; the handler has already run by the time it withholds one.
+  `POST /reset` takes no body, so it was a CORS *simple* request: any tab could
+  delete a session and be denied only the reply. The `onRequest` hook refuses a
+  foreign `Origin` on POST/PUT/PATCH/DELETE, and requires `X-YouSim-Local` on
+  anything browser-shaped — a header no simple request can set, which forces a
+  preflight so the origin decision precedes the handler. `src/web/src/api.ts`
+  sends it; a non-browser caller (the CLI, curl, a `/v1/construct` consumer)
+  sends neither `Origin` nor `Sec-Fetch-Site` and is not gated, because a
+  hostile page cannot impersonate one.
 
 `HOST` is in `CWD_ENV_KEYS` for the same reason `OPENAI_BASE_URL` is: a cloned
 repo's `./.env` must not be able to widen the bind.
@@ -394,6 +404,33 @@ Bear this in mind when writing anything that sets `MODEL`.
 `simulator@anthropic:~/$` in the agent prompts. It is cosmetic, and part of the
 fiction rather than a config bug — but do not read it as reporting the provider.
 
+### npm ships neither symlinks nor files from outside the package directory
+
+`src/launcher` is the only published package, and `files` there is an
+allowlist. Three of its four entries do not exist in the source tree at all:
+`scripts/package.ts` builds `src/web` and then **copies** `dist/` in as
+`public/`, plus the repo-root `README.md` and `LICENSE`, before `npm pack`
+runs. `bun run pack` is the whole procedure; there is no manual step.
+
+They are copies rather than links because npm drops a symlink *silently* when
+packing — no warning, no entry, just a package whose `public/` is absent and
+whose `server` command has nothing to serve. That is how the web assets went
+missing from the tarball once already, and `packaged.test.ts` now gates both
+the absence of symlinks and the presence of all three copies. Do not
+reintroduce the shortcut, and do not use one for a new `files` entry either.
+
+The three copies are gitignored build output. `src/api/src/index.ts` therefore
+looks for the assets in two places — `../public` next to the bundle in the
+published package, `../../web/dist` in a clone — instead of relying on a
+tracked link.
+
+**No lifecycle script may live in `src/launcher/package.json`.** npm copies
+`scripts` into the packed manifest verbatim, and a published package must not
+run code on install; `packaged.test.ts` asserts that, and the list it checks
+covers `prepare`, `prepack` and `prepublishOnly` as well as the install hooks.
+So the build cannot hang off a lifecycle hook there — which is also why `bin`
+points at gitignored output and `bun link` needs `bun run pack` first.
+
 ## Tests
 
 ```bash
@@ -423,11 +460,23 @@ it. That ordering is the point:
   stripping worked. A test that genuinely needs a real credential goes behind
   `bun run test:live`; there are none.
 
-A throwaway `HOME` is not belt-and-braces. `resolveConfig()` in the launcher
-calls `migrateLegacyHome()`, which **moves** `~/.yousim/credentials.json` and
-`yousim.db` whenever `YOUSIM_HOME` or `XDG_CONFIG_HOME` points elsewhere. A run
-that isolates only `YOUSIM_HOME` relocates the developer's real credential into
-a temp directory that is then deleted.
+A throwaway `HOME` is not belt-and-braces. `configHome()` and `dataHome()` end
+at `os.homedir()/.yousim` when `YOUSIM_HOME` and the XDG variables are all
+unset, and several suites unset them on purpose — that last leg of the
+precedence chain is precisely what `config.test.ts`, `storage.test.ts` and
+`credentials.test.ts` assert on. Inside those tests `YOUSIM_HOME` points
+nowhere, so `HOME` alone decides whether the resolver answers with a temp
+directory or with the developer's real `~/.yousim`; `os.homedir()` reads
+`HOME`/`USERPROFILE`, which no amount of `YOUSIM_HOME` can redirect. The cost
+of getting that wrong is not hypothetical. Config resolution used to run a
+filesystem migration that **moved** `~/.yousim/credentials.json` and
+`yousim.db` into the resolved config and data directories on every launch, so
+`yousim config` — a command whose entire job is to print where values came
+from — could relocate a live credential, and setting `XDG_CONFIG_HOME` was
+enough to trigger it. That code is gone, and
+`launcher/__tests__/config-is-read-only.test.ts` asserts it stays gone.
+Isolating `HOME` is what keeps the next bug of that shape cheap rather than
+expensive.
 
 `scripts/hermetic.ts` also refuses to pass quietly:
 

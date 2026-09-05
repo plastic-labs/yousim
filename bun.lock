@@ -3,7 +3,8 @@
   "configVersion": 0,
   "workspaces": {
     "": {
-      "name": "yousim",
+      "name": "yousim-monorepo",
+      "version": "0.1.0",
       "dependencies": {
         "elysia": "^1.4.25",
       },

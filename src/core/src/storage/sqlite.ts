@@ -134,6 +134,16 @@ export class SqliteStorage implements Storage {
   // Sessions
 
   async createSession(userId: string, metadata: Record<string, any> = {}): Promise<StoredSession> {
+    // sessions.user_id is a real foreign key and `foreign_keys` is ON, so a
+    // session for an owner that has never been written fails outright with
+    // "FOREIGN KEY constraint failed". Only the API's `GET /user` wrote that
+    // row, so every other entry point 500'd on a database it had just created
+    // itself. Ensuring it here rather than in each caller is what makes that
+    // true for the next entry point too.
+    //
+    // OR IGNORE rather than an upsert: an owner that already exists keeps the
+    // name it was given.
+    this.db.prepare("INSERT OR IGNORE INTO users (id) VALUES (?)").run(userId);
     const id = crypto.randomUUID();
     const now = new Date().toISOString();
     this.db

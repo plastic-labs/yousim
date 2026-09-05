@@ -35,9 +35,21 @@ function getStorage(): Storage {
   return _storage;
 }
 
+// The built frontend, in the two layouts that actually exist. In the published
+// package this file's directory is the bundle's own and the assets are copied
+// next to it as `public/` at pack time; in a clone this file is
+// src/api/src/index.ts and the assets are wherever Vite left them. There used
+// to be a tracked `src/api/public` symlink standing in for the second case,
+// which packed as nothing at all and, on a checkout without symlink support,
+// as a text file that passes an existence check and serves garbage.
+//
 // `import.meta.dirname`, not Bun's `import.meta.dir`: the standard spelling,
 // and both runtimes implement it.
-const publicDir = path.resolve(import.meta.dirname, "../public");
+const PUBLIC_DIRS = [
+  path.resolve(import.meta.dirname, "../public"),
+  path.resolve(import.meta.dirname, "../../web/dist"),
+];
+const publicDir = PUBLIC_DIRS.find((d) => existsSync(d)) ?? PUBLIC_DIRS[0]!;
 
 // Types for request bodies
 interface ManualRequest {
@@ -64,6 +76,40 @@ interface ChatRequest extends ManualRequest {
  */
 const LOCAL_ORIGIN = /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/;
 
+/**
+ * Requests that change something, and therefore need more than CORS.
+ *
+ * CORS governs who may *read* a response, not who may cause an effect: by the
+ * time it withholds the body the handler has already run. `POST /reset` takes
+ * no body, which made it a CORS *simple* request — no preflight, the browser
+ * sent it, the session was deleted, and the attacking page was merely denied
+ * the reply it never wanted. Every mutating route has that shape, so the check
+ * is a single hook rather than a per-handler one.
+ *
+ * Two locks, because either alone fails open somewhere:
+ *
+ * - A foreign `Origin` is refused outright, on the request itself.
+ * - A browser-initiated mutation must carry `X-YouSim-Local`, which no
+ *   *simple* request can set. That turns every such request into a preflighted
+ *   one, so the origin decision happens before a handler runs at all, and it
+ *   still holds if `LOCAL_ORIGIN` is ever widened or a lookalike slips the
+ *   regex.
+ *
+ * "Browser-initiated" is `Origin` or `Sec-Fetch-Site` being present; both are
+ * forbidden header names, so page script cannot forge or suppress either. A
+ * caller with neither is not a page in a tab — it is curl, the CLI, or a
+ * `/v1/construct` consumer, none of which a hostile web page can impersonate,
+ * and all of which would break under a blanket header requirement.
+ */
+const MUTATING_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
+const LOCAL_CLIENT_HEADER = "x-yousim-local"; // sent by src/web/src/api.ts
+
+const forbidden = (reason: string) =>
+  new Response(JSON.stringify({ error: reason }), {
+    status: 403,
+    headers: { "Content-Type": "application/json" },
+  });
+
 export const createApp = () => {
   // `@elysiajs/node` on BOTH runtimes, not just on Node.
   //
@@ -76,6 +122,18 @@ export const createApp = () => {
   // worth a second server implementation nobody tests.
   const app = new Elysia({ adapter: node() })
     .use(cors({ origin: LOCAL_ORIGIN }))
+    .onRequest(({ request }) => {
+      if (!MUTATING_METHODS.has(request.method)) return;
+
+      const origin = request.headers.get("origin");
+      if (origin !== null && !LOCAL_ORIGIN.test(origin)) {
+        return forbidden("Cross-origin request refused");
+      }
+      const fromBrowser = origin !== null || request.headers.has("sec-fetch-site");
+      if (fromBrowser && !request.headers.has(LOCAL_CLIENT_HEADER)) {
+        return forbidden("Missing X-YouSim-Local header");
+      }
+    })
     .derive(() => ({ userId: LOCAL_USER, storage: getStorage() }))
     // Not "Bun/Elysia version" any more: this server runs on Node as well,
     // and a health endpoint that names the wrong runtime is a small lie in the
@@ -714,9 +772,10 @@ export const startServer = async () => {
   // use?", which sends you chasing a port conflict that doesn't exist.
   if (!existsSync(publicDir)) {
     throw new Error(
-      `Frontend assets not found at ${publicDir}. Run \`bun run build\` in ` +
-        `src/web, or use the CLI instead of \`server\` — a compiled ` +
-        `standalone binary cannot serve them.`
+      `Frontend assets not found. Looked in:\n` +
+        PUBLIC_DIRS.map((d) => `  ${d}`).join("\n") +
+        `\nRun \`bun run build\` in src/web, or use the CLI instead of ` +
+        `\`server\` — a compiled standalone binary cannot serve them.`
     );
   }
 

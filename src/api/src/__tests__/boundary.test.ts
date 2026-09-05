@@ -173,7 +173,8 @@ describe("bind address", () => {
 
 describe("a fresh install", () => {
   test("a fresh database serves the first request", async () => {
-    // EXPECTED TO FAIL. A real bug, reported not fixed.
+    // Regression guard: this failed until the fix landed. The explanation
+    // below is why the test exists, not a description of current behaviour.
     //
     // `sessions.user_id` is a FOREIGN KEY into `users`, and `PRAGMA
     // foreign_keys = ON`. The only code that inserts a `users` row is
@@ -257,7 +258,8 @@ describe("cross-origin", () => {
   });
 
   test("a cross-origin state change is refused, not merely unreadable", async () => {
-    // EXPECTED TO FAIL. A real bug, reported not fixed.
+    // Regression guard: this failed until the fix landed. The explanation
+    // below is why the test exists, not a description of current behaviour.
     //
     // `POST /reset` takes no body, so a cross-origin `fetch(url, {method:
     // "POST"})` is a CORS *simple* request: no preflight, and the browser

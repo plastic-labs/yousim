@@ -50,7 +50,7 @@ describe("tarball shape", () => {
     // a tarball can point anywhere on the installing machine. And npm silently
     // drops symlinks when packing, so one used as a build shortcut becomes a
     // file that is simply absent from the published package — which is exactly
-    // how the web assets went missing (DEV-2604).
+    // how the web assets went missing.
     const links = artifact.listing.split(/\r?\n/).filter((l) => l.startsWith("l") || l.includes(" -> "));
     expect(links).toEqual([]);
   });
@@ -169,17 +169,13 @@ describe("tarball shape", () => {
   });
 
   test("the web assets, README and LICENSE are present", () => {
-    // EXPECTED TO FAIL until DEV-2604 lands.
-    //
-    // `src/api/public` is a symlink to `../web/dist`, and npm never packs a
-    // symlink. So the built UI is simply not in the tarball: `yousim server`
-    // on a real install has nothing to serve. README and LICENSE are missing
-    // for the adjacent reason — npm only picks them up from the package
-    // directory, and both live at the repo root.
-    //
-    // Written as the assertion the published package has to satisfy, not as a
-    // description of what it currently does. A gate that accommodates the bug
-    // is not a gate.
+    // None of these three can be reached by a link or by npm's own defaults.
+    // npm silently drops symlinks when packing, so the `src/api/public ->
+    // ../web/dist` shortcut published a package whose UI was simply absent and
+    // whose `server` command had nothing to serve; and npm picks README and
+    // LICENSE up from the package directory only, while both live at the repo
+    // root. `scripts/package.ts` copies all three in before packing, and this
+    // is the gate on that copy still happening.
     expect(artifact.entries).toContain("public/index.html");
     expect(artifact.entries.some((e) => e.startsWith("public/assets/"))).toBe(true);
     expect(artifact.entries).toContain("README.md");
