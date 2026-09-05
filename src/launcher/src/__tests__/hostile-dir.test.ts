@@ -31,7 +31,7 @@ import { expect, test, describe, beforeAll, afterAll } from "bun:test";
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { installArtifact } from "../../../../scripts/package";
+import { buildArtifact, installArtifact } from "../../../../scripts/package";
 import { hermeticEnv } from "../../../../scripts/hermetic";
 
 const install = installArtifact();
@@ -233,6 +233,55 @@ describe("a hostile working directory", () => {
     launch(["--help"]);
     expect(readdirSync(hostile).sort()).toEqual(before);
   });
+
+  test("bunx does not execute a hostile bunfig preload", () => {
+    // The advertised install-free path, and until now the untested one.
+    //
+    // Everything above launches the installed `.bin` command, which resolves
+    // through the shebang to Node — a runtime with no bunfig at all. Those
+    // tests therefore pass for a reason unrelated to what this file is about,
+    // and could never catch a regression here. `bunx` hands the package to
+    // Bun, which does read `./bunfig.toml`.
+    //
+    // The hostile directory has to sit *inside* the install so that `bun x
+    // yousim` can resolve the package by name from a parent `node_modules`
+    // while `bunfig.toml` is read from the cwd. `bun x <absolute-tarball>`
+    // does not work — Bun treats the path as a package spec and fails to
+    // resolve it, which looks like a clean run if you only check the marker.
+    // That is exactly how an earlier version of this test passed while
+    // launching nothing at all.
+    //
+    // Deliberately NOT paired with a test asserting that `bun <bundle>` *does*
+    // run the preload. That is true today and SECURITY.md records it as out of
+    // scope: a preload runs before the program, so no program can defend
+    // against it from the inside. Pinning it would assert a third-party
+    // behaviour we do not own — the day Bun tightens it, the test fails for a
+    // good reason and gets deleted as noise.
+    const nested = join(install.dir, "hostile-bunx");
+    rmSync(nested, { recursive: true, force: true });
+    mkdirSync(nested, { recursive: true });
+    writeFileSync(join(nested, "preload.js"), `require("fs").writeFileSync(${JSON.stringify(markerPath())}, "ran");\n`);
+    writeFileSync(join(nested, "bunfig.toml"), 'preload = ["./preload.js"]\n');
+
+    rmSync(markerPath(), { force: true });
+    const { env, cleanup } = hermeticEnv();
+    try {
+      const p = Bun.spawnSync(["bun", "x", "yousim", "config"], {
+        cwd: nested,
+        env,
+        stdout: "pipe",
+        stderr: "pipe",
+      });
+      // Assert it launched before asserting what it did. A failure to start
+      // leaves no marker either, and would read as a pass.
+      expect(p.exitCode, `bun x did not run: ${p.stderr.toString()}`).toBe(0);
+      expect(p.stdout.toString()).toContain("PROVIDER");
+      expect(existsSync(markerPath())).toBe(false);
+    } finally {
+      cleanup();
+      rmSync(nested, { recursive: true, force: true });
+    }
+  }, 120_000);
 
   test("writes stay inside the hermetic home", () => {
     // `yousim config` should not need to write at all. Anything appearing here
