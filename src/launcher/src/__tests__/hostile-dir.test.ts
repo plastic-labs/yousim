@@ -238,21 +238,9 @@ describe("a hostile working directory", () => {
     // `yousim config` should not need to write at all. Anything appearing here
     // is a side effect of a diagnostic command, which is how a "read-only"
     // command ends up moving a credential.
-    //
-    // The runtime's own cache is a different thing from ours and is allowed.
-    // `Library/Caches/bun` appeared here the day the published `bin` became a
-    // shim that execs Bun explicitly: the old shebang named `node`, so on a
-    // machine with both, Node ran the bundle and never cached anything. This
-    // is Bun's transpiler cache, created before our first line executes, and
-    // there is nothing this package can do about it short of not being run by
-    // Bun. The Linux spellings are listed for the same reason.
-    //
-    // Keep the list exact rather than pattern-matching. The point is to notice
-    // a *new* entry and have to justify it, which is what happened here.
-    const RUNTIME_CACHES = ["Library", ".cache", ".bun"];
     const r = launch(["config"]);
     for (const entry of r.homeEntries) {
-      expect(["yousim", "xdg-config", "xdg-data", ...RUNTIME_CACHES]).toContain(entry);
+      expect(["yousim", "xdg-config", "xdg-data"]).toContain(entry);
     }
   });
 });

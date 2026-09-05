@@ -5,10 +5,9 @@
   "description": "YouSim - Identity simulator. Run as CLI or server.",
   "type": "module",
   "bin": {
-    "yousim": "./bin/yousim"
+    "yousim": "./dist/yousim.js"
   },
   "files": [
-    "bin",
     "dist/",
     "public/",
     "README.md",
