@@ -51,6 +51,34 @@ const PUBLIC_DIRS = [
 ];
 const publicDir = PUBLIC_DIRS.find((d) => existsSync(d)) ?? PUBLIC_DIRS[0]!;
 
+/**
+ * Content types for what Vite actually emits, and nothing else.
+ *
+ * Deliberately not a full MIME database: the only files under `assets/` are
+ * this app's own build output. An unknown extension gets a type that no
+ * browser will execute, which is the safe direction to be wrong in.
+ */
+const CONTENT_TYPES: Record<string, string> = {
+  ".js": "text/javascript; charset=utf-8",
+  ".mjs": "text/javascript; charset=utf-8",
+  ".css": "text/css; charset=utf-8",
+  ".map": "application/json; charset=utf-8",
+  ".json": "application/json; charset=utf-8",
+  ".svg": "image/svg+xml",
+  ".png": "image/png",
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".gif": "image/gif",
+  ".webp": "image/webp",
+  ".ico": "image/x-icon",
+  ".woff": "font/woff",
+  ".woff2": "font/woff2",
+  ".ttf": "font/ttf",
+};
+
+const contentTypeFor = (name: string) =>
+  CONTENT_TYPES[path.extname(name).toLowerCase()] ?? "application/octet-stream";
+
 // Types for request bodies
 interface ManualRequest {
   session_id: string;
@@ -110,17 +138,30 @@ const forbidden = (reason: string) =>
     headers: { "Content-Type": "application/json" },
   });
 
+/**
+ * Feature-detected, never a build flag: one artifact is run by both runtimes.
+ */
+const IS_BUN = typeof (globalThis as { Bun?: unknown }).Bun !== "undefined";
+
 export const createApp = () => {
-  // `@elysiajs/node` on BOTH runtimes, not just on Node.
+  // The adapter is chosen at runtime, and it has to be.
   //
-  // Elysia's default adapter is `Bun.serve`, which does not exist under Node.
-  // Rather than choose an adapter per runtime, this uses the Node one
-  // everywhere: it is built on `node:http`, which Bun implements, so one
-  // adapter means one code path and one set of behaviours to reason about
-  // instead of two that have to be kept in agreement. This is a local,
-  // single-user tool — the throughput the Bun adapter would buy back is not
-  // worth a second server implementation nobody tests.
-  const app = new Elysia({ adapter: node() })
+  // Elysia's default is `Bun.serve`, which does not exist under Node. The
+  // obvious simplification is to use `@elysiajs/node` everywhere — it is built
+  // on `node:http`, which Bun also implements — and that is what this did.
+  // From a source checkout it works on both.
+  //
+  // It does not survive bundling. `bun build --target node` freezes srvx and
+  // crossws onto their Node branches, and the resulting artifact run under Bun
+  // dies at startup with "[crossws] Using Node.js adapter in an incompatible
+  // environment" — before serving anything. Same shape as the SQLite binding:
+  // a build-time decision baked into a file that then runs on the other
+  // runtime. Feature-detect instead, because the artifact outlives the build.
+  //
+  // Importing `@elysiajs/node` under Bun is harmless; only *using* it as the
+  // adapter is not. So the import stays static and the bundle keeps its
+  // zero-dependency manifest.
+  const app = new Elysia(IS_BUN ? {} : { adapter: node() })
     .use(cors({ origin: LOCAL_ORIGIN }))
     .onRequest(({ request }) => {
       if (!MUTATING_METHODS.has(request.method)) return;
@@ -750,6 +791,35 @@ export const createApp = () => {
         alwaysStatic: false,
       })
     )
+    // Serve the hashed assets ourselves rather than leaving it to the plugin.
+    //
+    // Under the Node adapter `staticPlugin` answered 200 with the right bytes
+    // and **no Content-Type at all**. index.html loads its entry as
+    // `<script type="module">`, and a module script with a non-JavaScript MIME
+    // type is refused by the browser — so the packaged `yousim server` served
+    // a blank page while every status code said success. Under Bun the same
+    // code sets `text/javascript`, which is why it survived review: the suite
+    // only ever spawns the API with `process.execPath`, i.e. Bun.
+    //
+    // The filename guard is the point of doing this by hand. Vite emits
+    // `index-<hash>.js`; anything with a slash or a dot-dot is not that, and
+    // must not become a path join.
+    .get("/assets/:file", ({ params, set }) => {
+      const name = params.file;
+      if (!/^[A-Za-z0-9._-]+$/.test(name) || name.includes("..")) {
+        set.status = 404;
+        return "Not found";
+      }
+      const file = path.join(publicDir, "assets", name);
+      if (!existsSync(file)) {
+        set.status = 404;
+        return "Not found";
+      }
+      set.headers["content-type"] = contentTypeFor(name);
+      return new Response(readFileSync(file), {
+        headers: { "Content-Type": contentTypeFor(name) },
+      });
+    })
     // SPA fallback - serve index.html for all unmatched routes
     .get("/*", () => {
       // `readFileSync` rather than `Bun.file`. A `BunFile` is a Bun-only lazy
@@ -801,11 +871,35 @@ export const startServer = async () => {
       // Reported rather than echoed back from `hostname` above, so the line
       // below is evidence of what was bound instead of a restatement of what
       // was asked for.
-      const raw = (server as unknown as { raw?: { ready?: () => Promise<unknown>; url?: string } }).raw;
-      Promise.resolve(raw?.ready?.()).then(
-        () => (raw?.url ? resolve(raw.url) : reject(new Error("server reported no address"))),
-        reject
-      );
+      // Two adapters, two ways to learn what was actually bound.
+      //
+      // srvx (the Node adapter) exposes `raw`, and the address is only knowable
+      // after `ready()` — with PORT=0 the reported port is the requested 0
+      // until then. Bun's native server has no `raw` and is already listening,
+      // so its `url`/`hostname`/`port` are live by the time the callback runs.
+      //
+      // Reported rather than echoed back from `hostname` above, so the line
+      // printed below is evidence of what was bound instead of a restatement
+      // of what was asked for.
+      const s = server as unknown as {
+        raw?: { ready?: () => Promise<unknown>; url?: string };
+        url?: string | URL;
+        hostname?: string;
+        port?: number;
+      };
+      if (s.raw) {
+        Promise.resolve(s.raw.ready?.()).then(
+          () => (s.raw?.url ? resolve(s.raw.url) : reject(new Error("server reported no address"))),
+          reject
+        );
+        return;
+      }
+      const direct = s.url
+        ? String(s.url)
+        : s.hostname && s.port
+          ? `http://${s.hostname}:${s.port}/`
+          : null;
+      direct ? resolve(direct) : reject(new Error("server reported no address"));
     });
   });
 

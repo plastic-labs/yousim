@@ -23,6 +23,7 @@
     ".": "./src/index.ts",
     "./storage": "./src/storage/index.ts",
     "./storage/driver": {
+      "bundled": "./src/storage/driver.dispatch.ts",
       "bun": "./src/storage/driver.bun.ts",
       "node": "./src/storage/driver.node.ts",
       "default": "./src/storage/driver.node.ts"

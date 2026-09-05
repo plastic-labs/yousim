@@ -316,23 +316,35 @@ describe("the published artifact", () => {
     }
   }, 120_000);
 
-  test("the shipped bundle imports node:sqlite and not bun:sqlite", async () => {
-    // The static counterpart. `--target node` is what makes the bundler
-    // resolve the "node" branch, and a build that reverted to `--target bun`
-    // would produce a file whose shebang says node and whose first database
-    // open says "No such built-in module" — a failure no unit test sees,
-    // because the source tree runs under Bun where bun:sqlite is correct.
+  test("the shipped bundle statically imports neither binding", async () => {
+    // This assertion used to say the opposite: that the bundle *contains*
+    // `from "node:sqlite"`. That was true, and it was the bug — a static
+    // import is resolved when the module is linked, so the artifact demanded
+    // `node:sqlite` on every runtime, and Bun (which has no such module) died
+    // at startup on every subcommand before reaching any of our code.
+    //
+    // The binding is now required lazily through a computed specifier, with
+    // both names external, so neither appears as a static import and each
+    // runtime resolves only the one it has. Asserting the *absence* of both is
+    // the claim that actually protects the artifact; asserting the presence of
+    // one only pinned which runtime it was broken on.
     const { buildArtifact } = await import("../../../../scripts/package");
     const bundle = join(REPO_ROOT, "src", "launcher", "dist", "yousim.js");
     buildArtifact();
     expect(existsSync(bundle)).toBe(true);
 
     const code = await Bun.file(bundle).text();
-    expect(code).toStartWith("#!/usr/bin/env node\n");
-    expect(code).toContain('from "node:sqlite"');
-    // Matched as an import rather than as a substring: the launcher manifest
-    // is inlined into the bundle for `--version`, and its comments mention
-    // bun:sqlite by name.
-    expect(code).not.toMatch(/(from|require\(|import\()\s*["']bun:sqlite["']/);
+
+    // Matched as imports rather than as substrings: the launcher manifest is
+    // inlined for `--version`, and the dispatch module names both bindings in
+    // its comments and in the string it computes.
+    const staticImport = (spec: string) =>
+      new RegExp(`(^|\\n)\\s*import[^;\\n]*["']${spec}["']|from\\s*["']${spec}["']`);
+    expect(code).not.toMatch(staticImport("node:sqlite"));
+    expect(code).not.toMatch(staticImport("bun:sqlite"));
+
+    // The dispatch is what replaced them, so its absence would mean the
+    // bundle has no way to open a database at all.
+    expect(code).toContain("createRequire");
   }, 120_000);
 });

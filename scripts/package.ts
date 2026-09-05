@@ -68,9 +68,12 @@ function run(cmd: string[], cwd: string) {
  * `node`, which fails at the first database open with "No such built-in
  * module". `--target node` inlines `node:sqlite`, matching the shebang.
  *
- * So the published artifact is the Node one. The Bun driver is not dead code:
- * it is what runs from a source checkout under Bun, which is how this repo is
- * developed, and `runtime-parity.test.ts` proves both halves still resolve.
+ * That is why the build below passes `--conditions bundled`, which routes the
+ * binding through a runtime dispatch instead, and marks both specifiers
+ * external so neither is hoisted. The published artifact then runs on either
+ * runtime. The per-runtime drivers are not dead code: they are what a source
+ * checkout resolves, which is how this repo is developed and how the hosted
+ * tier consumes core, and `runtime-parity.test.ts` proves both still resolve.
  */
 export function buildArtifact(force = false): Artifact {
   const existing = existsSync(OUT) ? readdirSync(OUT).filter((f) => f.endsWith(".tgz")) : [];
@@ -104,6 +107,16 @@ export function buildArtifact(force = false): Artifact {
       "build",
       "--target",
       "node",
+      // Resolve the SQLite binding at runtime, not here. Without this the
+      // bundler picks one branch of the conditional exports and inlines it,
+      // and the artifact runs on exactly one runtime — see
+      // core/src/storage/driver.dispatch.ts for the whole story.
+      "--conditions",
+      "bundled",
+      "--external",
+      "bun:sqlite",
+      "--external",
+      "node:sqlite",
       join(LAUNCHER, "src", "index.ts"),
       "--outfile",
       join(LAUNCHER, "dist", "yousim.js"),
