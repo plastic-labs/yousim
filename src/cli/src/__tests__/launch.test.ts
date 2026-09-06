@@ -142,3 +142,89 @@ describe.skipIf(!!skip)("the launch path", () => {
     }
   });
 });
+
+/**
+ * Commands that announce a switch have to perform one.
+ *
+ * `mode <x>` and `sessions <id>` set a request and return `exit: true`, because
+ * switching rebuilds the agents and the current loop has to unwind first. For
+ * as long as nothing read those requests, the unwinding *was* the whole
+ * behaviour: the user got a confirmation line and then a shell prompt.
+ *
+ * Every test here asserts on **reaching the next prompt**, never on the
+ * confirmation. Printing the confirmation is precisely what the broken version
+ * already did, so an assertion on that text passes either way.
+ */
+describe.skipIf(!!skip)("switching mode and session", () => {
+  /** Get to the in-session command prompt. The model call fails; the loop lives. */
+  const named = async (pty: ReturnType<typeof launchPty>) => {
+    await pty.expect(/Enter a name:/);
+    pty.send("ada");
+    await pty.expect(/No API key for provider/);
+  };
+
+  test("`mode constructor` lands in the constructor, not in a shell", async () => {
+    const pty = launchPty();
+    try {
+      await named(pty);
+      pty.send("mode constructor");
+      await pty.expect(/What name should this identity have\?/);
+    } finally {
+      await pty.close();
+    }
+  });
+
+  test("`mode chat` lands in chat", async () => {
+    const pty = launchPty();
+    try {
+      await named(pty);
+      pty.send("mode chat");
+      await pty.expect(/Paste or type the identity summary/);
+    } finally {
+      await pty.close();
+    }
+  });
+
+  /**
+   * `reset` is the sibling that must *not* unwind: it swaps the recorder in
+   * place, so there is nothing to re-enter. It used to return `exit: true` too,
+   * which quit while claiming to have started a new session.
+   */
+  test("`reset` starts a new session and stays in it", async () => {
+    const pty = launchPty();
+    try {
+      await named(pty);
+      pty.send("reset");
+      await pty.expect(/New session\./);
+      // The proof is that the prompt still answers, not that it printed.
+      pty.send("mode");
+      await pty.expect(/current mode: simulator/);
+    } finally {
+      await pty.close();
+    }
+  });
+
+  /**
+   * The id comes out of the live listing rather than being fabricated: it is
+   * the abbreviated form `sessions` actually prints, which is the form
+   * `expandSessionId` has to accept.
+   */
+  test("`sessions <id>` reopens the session instead of quitting", async () => {
+    const pty = launchPty();
+    try {
+      await named(pty);
+      pty.send("sessions");
+      await pty.expect(/Saved sessions/);
+
+      const id = pty.transcript().match(/^ {2}([0-9a-f]{8}) {2}/m)?.[1];
+      expect(id).toBeTruthy();
+
+      pty.send(`sessions ${id}`);
+      // `Resuming` is printed only on the resume path, so seeing it means the
+      // loop re-entered rather than ended.
+      await pty.expect(/Resuming "ada"/);
+    } finally {
+      await pty.close();
+    }
+  });
+});
