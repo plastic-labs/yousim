@@ -5,7 +5,8 @@
  * recorder, and the launch path. That is where the meta-command regression
  * lived: `parseInput` and the registry were unit-tested and correct, while
  * being unreachable at the only prompt anyone sees on launch. Testing the
- * parts proved the parts worked.
+ * parts proved the parts worked, and these are what proves the launch path
+ * still reaches them.
  *
  * These drive the real thing through a pty. See `pty.ts` for why a pipe cannot.
  */
@@ -73,20 +74,19 @@ describe.skipIf(!!skip)("the launch path", () => {
   });
 
   /**
-   * KNOWN BROKEN, and deliberately written to invert.
+   * The name prompt is a prompt, not a gate.
    *
-   * `help` at the name prompt becomes an identity named "help". The prompt at
-   * `cli.ts` reads raw and special-cases only `exit`; `parseInput` never runs,
-   * so the registry is unreachable at the one moment a new user reaches for it.
+   * This is the case the whole registry exists for: the launch prompt is the
+   * only one a new user has seen, so it is where they reach for `help`. Every
+   * line typed there goes through `parseInput` first and becomes an identity
+   * name only by falling through — the arrangement the original had, where one
+   * dispatcher handled every line and naming was its last branch.
    *
-   * `test.failing` rather than a comment saying "expected to fail": this passes
-   * while the bug exists and **fails the moment it is fixed**, which forces the
-   * marker to be removed. Two comments claiming an expected failure were left
-   * sitting on passing tests in this repo already; a reader trusted them and
-   * had to re-derive the truth. A marker that cannot rot is worth more than one
-   * that is currently accurate.
+   * Both directions are asserted. `help` printing is not enough on its own:
+   * the failure being guarded is the input *also* being taken as a name, which
+   * would show up as `/locate help` in the transcript.
    */
-  test.failing("`help` at the name prompt dispatches instead of becoming a name", async () => {
+  test("`help` at the name prompt dispatches instead of becoming a name", async () => {
     const pty = launchPty();
     try {
       await pty.expect(/Enter a name:/);
@@ -97,6 +97,48 @@ describe.skipIf(!!skip)("the launch path", () => {
       expect(pty.transcript()).toMatch(HELP_OUTPUT);
     } finally {
       await pty.close();
+    }
+  });
+
+  /**
+   * Dispatching at the launch prompt means commands now run with no session
+   * behind them. They have to say so and hand the prompt back — throwing there
+   * would take down the process at the one moment a new user is exploring.
+   */
+  test("commands that need a session report it plainly at the name prompt", async () => {
+    const pty = launchPty();
+    try {
+      await pty.expect(/Enter a name:/);
+      pty.send("export");
+      await pty.expect(/nothing to export yet/);
+      pty.send("reset");
+      await pty.expect(/no session to reset yet/);
+      // Still at the prompt, so a name still works after the refusals.
+      pty.send("ada");
+      await pty.expect(takenAsName("ada"));
+    } finally {
+      await pty.close();
+    }
+  });
+
+  /**
+   * The dispatcher exact-matches the first token, so a name that merely starts
+   * with a command's letters is still a name. `chateau ruins` is the case that
+   * named this rule — the original's `startsWith("chat")` swallowed it. This
+   * registry has no `chat`, so `modest mouse` is checked alongside it: `mode`
+   * is a live command here, which makes the assertion able to fail if prefix
+   * matching ever comes back.
+   */
+  test("a name that shadows a command prefix still reaches the simulator", async () => {
+    for (const name of ["chateau ruins", "modest mouse"]) {
+      const pty = launchPty();
+      try {
+        await pty.expect(/Enter a name:/);
+        pty.send(name);
+        await pty.expect(takenAsName(name));
+      } finally {
+        await pty.close();
+      }
     }
   });
 });
