@@ -1,5 +1,6 @@
 import fs from "fs";
 import path from "path";
+import { spawnSync } from "node:child_process";
 import { configHome } from "./config";
 import type { Provider } from "./model";
 
@@ -13,7 +14,7 @@ import type { Provider } from "./model";
  * Deliberately not config.json. Config gets pasted into issues and committed
  * to dotfile repos; a credential should not travel with it.
  *
- * Bun/Node only. The browser keeps its key in localStorage and never writes
+ * Node/Bun only. The browser keeps its key in localStorage and never writes
  * anywhere we control.
  */
 
@@ -37,17 +38,26 @@ type Store = Record<string, { key: string; connected_at: string }>;
  */
 function keychainAvailable(): boolean {
   if (process.env.YOUSIM_KEYCHAIN === "0") return false;
-  return process.platform === "darwin" && typeof Bun !== "undefined";
+  // Platform only. There used to be a `typeof Bun !== "undefined"` here as
+  // well, from when Bun was the only runtime and `Bun.spawnSync` was the only
+  // way to reach `security`. It has to go rather than be inverted: keeping it
+  // would silently drop every Node user to the file store on a Mac that has a
+  // perfectly good keychain, and the calls below are `node:child_process` now,
+  // which both runtimes implement.
+  return process.platform === "darwin";
 }
 
 function keychainGet(provider: string): string | undefined {
   if (!keychainAvailable()) return undefined;
   try {
-    const p = Bun.spawnSync([
-      "security", "find-generic-password",
+    const p = spawnSync("security", [
+      "find-generic-password",
       "-s", `${SERVICE}-${provider}`, "-a", provider, "-w",
     ]);
-    if (p.exitCode !== 0) return undefined;
+    // `status` is null when the child was killed or never started at all
+    // (`security` absent, spawn refused), and node reports that through
+    // `p.error` rather than by throwing. `!== 0` covers every one of those.
+    if (p.status !== 0) return undefined;
     const out = p.stdout.toString().trim();
     return out || undefined;
   } catch {
@@ -76,15 +86,13 @@ function keychainSet(provider: string, key: string): boolean {
     // argv — `-w <key>` exposes it to anything that can read this process's
     // arguments for the duration of the call.
     if (keychainQuotable(key)) {
-      const p = Bun.spawnSync(["security", "-i"], {
-        stdin: new TextEncoder().encode(
-          `add-generic-password ${args.join(" ")} -w "${key}"\n`
-        ),
+      const p = spawnSync("security", ["-i"], {
+        input: `add-generic-password ${args.join(" ")} -w "${key}"\n`,
       });
-      return p.exitCode === 0;
+      return p.status === 0;
     }
-    const p = Bun.spawnSync(["security", "add-generic-password", ...args, "-w", key]);
-    return p.exitCode === 0;
+    const p = spawnSync("security", ["add-generic-password", ...args, "-w", key]);
+    return p.status === 0;
   } catch {
     return false;
   }
@@ -93,8 +101,8 @@ function keychainSet(provider: string, key: string): boolean {
 function keychainDelete(provider: string): void {
   if (!keychainAvailable()) return;
   try {
-    Bun.spawnSync([
-      "security", "delete-generic-password",
+    spawnSync("security", [
+      "delete-generic-password",
       "-s", `${SERVICE}-${provider}`, "-a", provider,
     ]);
   } catch { /* absent is fine */ }

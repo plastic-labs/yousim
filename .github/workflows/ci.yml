@@ -34,13 +34,29 @@ jobs:
         uses: oven-sh/setup-bun@v2
         with:
           # PINNED, deliberately. This gate makes claims about what Bun does
-          # with ./bunfig.toml, ./.env, ./.env.local and .env.<NODE_ENV>, and
-          # about how `bun build --target bun` treats a shebang. All of that is
-          # runtime behaviour that a minor release can change underneath us. A
+          # with ./bunfig.toml, ./.env, ./.env.local and .env.<NODE_ENV>, about
+          # how `bun build --target node` treats a shebang, and about which
+          # branch of a conditional `exports` map each of `bun` and
+          # `--target node` resolves. All of that is runtime and bundler
+          # behaviour that a minor release can change underneath us. A
           # floating version turns this job into a canary for Bun's changelog
           # and makes every unrelated PR flaky. Bump it on purpose, in a commit
           # that says so.
           bun-version: 1.3.6
+
+      # PINNED for the same reason Bun is. This package runs on Node as well,
+      # and `engines.node` is ">=24" because storage uses `node:sqlite`. The
+      # runners' preinstalled Node drifts, and a lane whose Node version moves
+      # on its own cannot tell "this broke" from "the runner changed".
+      #
+      # It is installed in THIS job, not only in the `node` job below, because
+      # runtime-parity.test.ts needs a real Node to run the Node half of the
+      # driver-selection check — and that check is what makes the dual-runtime
+      # claim true on all three platforms rather than just on Linux.
+      - name: Install Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
 
       - run: bun install --frozen-lockfile
 
@@ -48,9 +64,15 @@ jobs:
       #
       # typecheck -> pack -> hermetic test run with per-module coverage floors.
       # `pack` builds the web assets, bundles the launcher with
-      # `bun build --target bun`, and runs `npm pack`; the packaging and
+      # `bun build --target node`, and runs `npm pack`; the packaging and
       # hostile-directory tests then assert against that tarball and against a
       # real `npm install` of it.
+      #
+      # `--target node` is load-bearing, not a default: the SQLite binding is
+      # chosen by a conditional `exports` entry, so the build target decides
+      # which one is inlined. A bun-targeted bundle behind a `node` shebang
+      # dies at the first database open, and runtime-parity.test.ts is what
+      # catches it.
       #
       # NOT set here, on purpose: no ANTHROPIC_API_KEY, OPENAI_API_KEY,
       # OPENROUTER_API_KEY or GROQ_API_KEY, and no secrets of any kind. The
@@ -60,6 +82,12 @@ jobs:
       # credential, that is a regression in the tests, not a missing secret.
       - name: test:ci
         run: bun run test:ci
+        env:
+          # Turns runtime-parity.test.ts's "no usable Node, skipping" into a
+          # failure. A local run without Node is allowed to skip that half; a
+          # gate is not — "Node was not installed" must never be the reason a
+          # dual-runtime package's Node half went unchecked.
+          YOUSIM_REQUIRE_NODE: 1
 
       - name: Upload coverage
         if: always()
@@ -71,38 +99,107 @@ jobs:
 
   # ── Windows: the shebang question ───────────────────────────────────────────
   #
-  # The published entrypoint's security controls live in its shebang:
+  # The published entrypoint is now:
   #
-  #     #!/usr/bin/env -S bun --no-env-file --config=/dev/null
+  #     #!/usr/bin/env node
   #
-  # `--config=/dev/null` is the only thing that stops a `bunfig.toml` in the
-  # user's current directory from running arbitrary code via `preload` before
-  # our first line executes. Nothing in-process can undo a preload.
+  # This used to read `env -S bun --no-env-file --config=/dev/null`, and those
+  # flags were a security control, not style: Bun autoloads ./.env, its
+  # variants, and ./bunfig.toml — whose `preload` runs arbitrary code from
+  # whatever directory the user is standing in, before our first line. Nothing
+  # in-process can undo a preload, so the shebang was the only place to stop
+  # it.
   #
-  # `env -S` does not exist on Windows. What npm installs there is a generated
-  # `.cmd`/`.ps1` shim, and whether the flags survive depends entirely on
-  # whether npm's shim generator parses `env -S` and forwards the interpreter
-  # arguments. That is not something this repo controls or can assert by
-  # reading its own source, so the `gate` job above runs the same
-  # hostile-directory tests on windows-latest against the real installed
-  # command and lets the answer be observed.
+  # On Windows that control was never verifiable from this repo. `env -S` does
+  # not exist there; what npm installs is a generated `.cmd`/`.ps1` shim, and
+  # whether the interpreter arguments survived depended entirely on npm's shim
+  # generator. So `gate` ran the hostile-directory tests on windows-latest and
+  # let the answer be observed.
   #
-  # If the Windows leg of `gate` fails on
+  # A `node` shebang removes the question rather than answering it. There are
+  # no interpreter arguments left for a shim to drop, and there is nothing for
+  # them to switch off: Node reads no ./.env unless passed --env-file, and has
+  # no cwd-scoped config that can execute code. The Windows leg is now testing
+  # the ordinary case — does `env -S`-free `#!/usr/bin/env node` survive npm's
+  # shim generator — which is the case npm is built for.
+  #
+  # The hostile-directory tests stay on all three platforms anyway, unchanged.
+  # The reasoning above is a claim about Node's behaviour, and this repo does
+  # not get to assert that about someone else's interpreter: the .env variants
+  # and the bunfig are still on disk in that test, still trying. If the
+  # Windows leg of `gate` ever fails on
   # "src/launcher/src/__tests__/hostile-dir.test.ts > bunfig preload does not
-  # execute", that is not a broken test. It means running `yousim` from an
-  # untrusted directory on Windows is arbitrary code execution, and the fix is
-  # a real one — a `.cmd` shim that passes the flags itself, or an in-process
-  # re-exec — not a skip on this job.
+  # execute", that is not a broken test — it means the assumption above is
+  # false on that platform and the fix is a real one, not a skip.
+
+  # ── The Node lane ─────────────────────────────────────────────────────────
   #
-  # There is currently no documented Windows invocation to test instead: README
-  # and CONTRIBUTING say nothing about Windows. Adding one that tells users to
-  # run `bun --no-env-file --config=/dev/null <path>` by hand would document
-  # the hole rather than close it.
+  # `gate` pins one Node so its result is stable. This sweeps the range
+  # `engines.node` actually claims — the floor, and the current major — because
+  # "runs on Node" is a claim about a range and the two ends are where it
+  # breaks. `node:sqlite` is the reason: it is still marked experimental, its
+  # warning behaviour has already changed between majors (22 warns, 24.20 does
+  # not), and an API change there lands on users as a broken database.
+  #
+  # Bun is installed here too, and is not a contradiction. It is the build tool
+  # — `bun build` produces the published bundle and `bun test` is the runner —
+  # while the Node under test is what actually executes the packaged command
+  # and the `node:sqlite` half of runtime-parity.test.ts. Linux only: the
+  # platform matrix is `gate`'s job, and this one varies the other axis.
+  node:
+    name: node ${{ matrix.node }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ["24", "26"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.6
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+
+      - run: bun install --frozen-lockfile
+
+      # The full suite, not a subset: scripts/hermetic.ts refuses a run that
+      # discovered fewer test files than exist on disk, which is deliberate and
+      # is not worth an escape hatch for this. It is also cheap — the whole
+      # suite is seconds once the artifact is built.
+      - name: test
+        run: bun run test
+        env:
+          YOUSIM_REQUIRE_NODE: 1
+
+      # The published command, launched by its own `#!/usr/bin/env node`
+      # shebang through npm's shim, on this Node. `.pack/install` is the real
+      # `npm install --offline` of the tarball that the step above already
+      # produced (installArtifact, via packaged.test.ts), so this adds no
+      # build — it just runs what a stranger would have on their PATH.
+      # packaged.test.ts and
+      # hostile-dir.test.ts above already do this through the suite; this is
+      # the same claim stated where a reader looking at the Node lane will
+      # find it, and it fails loudly if the bundle ever ships the wrong SQLite
+      # branch ("No such built-in module").
+      - name: the installed command runs on this Node
+        run: |
+          node --version
+          .pack/install/node_modules/.bin/yousim --version
+          .pack/install/node_modules/.bin/yousim --help
+          YOUSIM_HOME="$RUNNER_TEMP/yousim-home" YOUSIM_KEYCHAIN=0 \
+            .pack/install/node_modules/.bin/yousim config
+          YOUSIM_HOME="$RUNNER_TEMP/yousim-home" YOUSIM_KEYCHAIN=0 \
+            .pack/install/node_modules/.bin/yousim sessions
 
   publish-dry-run:
     name: publish --dry-run
     runs-on: ubuntu-latest
-    needs: gate
+    needs: [gate, node]
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2

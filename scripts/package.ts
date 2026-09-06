@@ -58,10 +58,22 @@ function run(cmd: string[], cwd: string) {
 /**
  * Bundle, then pack.
  *
- * `--target bun` is what makes one unscoped package possible: the four
- * workspace packages collapse into a single file, so the published manifest
- * declares no dependencies and there is no `workspace:*` left to go
- * unresolved on someone else's machine.
+ * `--target node`, and the target is not incidental. Bundling collapses the
+ * four workspace packages into a single file, which is what makes one
+ * unscoped package possible: the published manifest declares no dependencies
+ * and there is no `workspace:*` left to go unresolved on someone else's
+ * machine. But the target also decides which branch of a conditional
+ * `exports` the bundler resolves, and this package has one — the SQLite
+ * binding. `--target bun` inlines `bun:sqlite` into a file whose shebang says
+ * `node`, which fails at the first database open with "No such built-in
+ * module". `--target node` inlines `node:sqlite`, matching the shebang.
+ *
+ * That is why the build below passes `--conditions bundled`, which routes the
+ * binding through a runtime dispatch instead, and marks both specifiers
+ * external so neither is hoisted. The published artifact then runs on either
+ * runtime. The per-runtime drivers are not dead code: they are what a source
+ * checkout resolves, which is how this repo is developed and how the hosted
+ * tier consumes core, and `runtime-parity.test.ts` proves both still resolve.
  */
 export function buildArtifact(force = false): Artifact {
   const existing = existsSync(OUT) ? readdirSync(OUT).filter((f) => f.endsWith(".tgz")) : [];
@@ -94,7 +106,17 @@ export function buildArtifact(force = false): Artifact {
       process.execPath,
       "build",
       "--target",
-      "bun",
+      "node",
+      // Resolve the SQLite binding at runtime, not here. Without this the
+      // bundler picks one branch of the conditional exports and inlines it,
+      // and the artifact runs on exactly one runtime — see
+      // core/src/storage/driver.dispatch.ts for the whole story.
+      "--conditions",
+      "bundled",
+      "--external",
+      "bun:sqlite",
+      "--external",
+      "node:sqlite",
       join(LAUNCHER, "src", "index.ts"),
       "--outfile",
       join(LAUNCHER, "dist", "yousim.js"),

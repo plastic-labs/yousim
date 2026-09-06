@@ -71,7 +71,8 @@ does with your credential, your data, or your machine:
   `config.json`, never in `argv`, never in a log line, and never in the
   published artifact.
 - **The untrusted current directory.** `yousim` is expected to be safe to run
-  from a directory you did not write. A `./.env`, `./.env.local`,
+  from a directory you did not write, **however you invoke the command** —
+  `yousim`, `bunx yousim`, `bun run yousim`. A `./.env`, `./.env.local`,
   `./bunfig.toml` or `./.yousim.json` there must not be able to execute code,
   redirect inference to another endpoint with your key attached, widen the
   server's bind, or otherwise raise its own privileges.
@@ -114,6 +115,20 @@ closed with a pointer back to this section.
   reaches the model from somewhere you did not put it, or if output crosses
   back out into code execution, a file write outside the data directory, or a
   request carrying your credential somewhere new.
+- **A runtime you launched yourself, pointed at our bundle.** `bun
+  node_modules/yousim/dist/yousim.js` from a hostile directory will run that
+  directory's `bunfig.toml` `preload` before a single line of this package
+  executes. That is true of `bun anything.js`: a preload runs before the
+  program, so no program can defend against it from the inside.
+
+  The shipped entry point is a command, not a file you are invited to hand to
+  an interpreter. `yousim`, `bunx yousim` and `bun run yousim` are all in scope
+  and all tested from a hostile directory — the shebang routes them to a
+  runtime that does not read `bunfig.toml`, and
+  `launcher/__tests__/hostile-dir.test.ts` fails if that stops being true. As
+  with `baseURL` above, the distinction is who chose the interpreter: if you
+  chose it, its configuration is yours too.
+
 - **Denial of service against your own machine** — a prompt that costs a lot
   of tokens, a session file that grows, a model call that hangs.
 - **Findings against `legacy-python/`.** It is an archived copy of the original

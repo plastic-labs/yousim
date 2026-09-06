@@ -27,7 +27,7 @@
     "access": "public"
   },
   "comment:deps": [
-    "No RUNTIME dependencies, on purpose. `bun build --target bun` inlines",
+    "No RUNTIME dependencies, on purpose. `bun build --target node` inlines",
     "@yousim/core, @yousim/cli and @yousim/api into dist/yousim.js, so the",
     "published package needs nothing at install time and there is no",
     "workspace:* left in `dependencies` for someone else's npm to fail on.",
@@ -42,7 +42,19 @@
     "@yousim/cli": "workspace:*",
     "@yousim/core": "workspace:*"
   },
+  "comment:engines": [
+    "node >=24 is the floor because storage runs on node:sqlite, the built-in",
+    "that keeps this package at zero runtime dependencies. Node 20 and 22 are",
+    "out of scope: 22 has node:sqlite but warns and is not the supported",
+    "floor. Widening it with a native SQLite package would put a compile step",
+    "in front of `npx yousim`, which is a worse trade than asking for a",
+    "current Node. Bun is listed too because it is still a first-class",
+    "runtime for this package - it uses bun:sqlite instead, chosen by a",
+    "conditional export rather than by any code. See @yousim/core's",
+    "src/storage/driver.ts."
+  ],
   "engines": {
+    "node": ">=24",
     "bun": ">=1.1.0"
   }
 }

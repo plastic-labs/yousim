@@ -11,6 +11,18 @@
 // time our first line does. --config=/dev/null stops bunfig, and
 // --no-env-file stops every .env variant rather than the one file
 // neutralizeCwdEnv can reach.
+//
+// Still Bun, and still flagged, even though the published launcher's shebang
+// is now `#!/usr/bin/env node`. This is the Bun-invoked entry: it is
+// TypeScript source with extensionless relative imports, which Node's ESM
+// resolver cannot follow, so the only thing that runs this file directly is
+// Bun — and under Bun every word above still applies. The launcher could drop
+// the flags because Node reads neither ./.env nor any cwd-scoped config that
+// executes code; that reasoning does not transfer here.
+//
+// The module itself is runtime-agnostic (node:fs, node:readline, no Bun
+// globals) and reaches Node users through the bundle, where the launcher is
+// the entry point.
 
 import {
   GaslitClaude,
@@ -55,6 +67,7 @@ setCredentialResolver((provider: Provider) =>
   provider === "openrouter" ? loadCredential("openrouter") : undefined
 );
 import * as readline from "readline";
+import { writeFile } from "node:fs/promises";
 import chalk from "chalk";
 
 
@@ -248,7 +261,8 @@ function baseCommands(deps: CommandDeps): MetaCommand[] {
         const body = msgs
           .map((m) => `${m.role === "user" ? ">" : ""} ${m.content}`.trim())
           .join("\n\n");
-        await Bun.write(file, body + "\n");
+        // `node:fs` rather than `Bun.write`: the same call on both runtimes.
+        await writeFile(file, body + "\n");
         return { output: `Wrote ${msgs.length} messages to ${file}` };
       },
     },

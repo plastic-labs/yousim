@@ -1,16 +1,33 @@
 {
   "name": "@yousim/core",
   "private": true,
-  "comment:private": "Not published. `yousim` is the only package that ships; bun build --target bun inlines this one into it.",
+  "comment:private": "Not published. `yousim` is the only package that ships; bun build --target node inlines this one into it.",
   "version": "0.1.0",
   "license": "AGPL-3.0-only",
   "description": "Core simulation logic for YouSim - provider-agnostic identity simulator",
   "type": "module",
   "main": "src/index.ts",
   "types": "src/index.ts",
+  "comment:storage-driver": [
+    "exports[\"./storage/driver\"] is the one genuine Node/Bun fork in this",
+    "package. Bun has bun:sqlite and no node:sqlite; Node has node:sqlite and",
+    "no bun:sqlite, so a single import cannot cover both. The resolver",
+    "chooses, not the code: nothing in src/storage/sqlite.ts branches and",
+    "there is no `typeof Bun` check. \"default\" is the Node driver because",
+    "every non-Bun runtime that can run this package at all is Node.",
+    "Note this cannot be a comment key inside `exports` itself - Node rejects",
+    "an exports map that mixes \".\"-prefixed keys with anything else.",
+    "See src/storage/driver.ts."
+  ],
   "exports": {
     ".": "./src/index.ts",
     "./storage": "./src/storage/index.ts",
+    "./storage/driver": {
+      "bundled": "./src/storage/driver.dispatch.ts",
+      "bun": "./src/storage/driver.bun.ts",
+      "node": "./src/storage/driver.node.ts",
+      "default": "./src/storage/driver.node.ts"
+    },
     "./contract": "./src/contract.ts",
     "./model": "./src/model.ts",
     "./pkce": "./src/pkce.ts",

@@ -12,6 +12,10 @@ agent will find it.
 - `bun run test` and `bunx tsc --noEmit` are the two checks to run before
   declaring work done. Neither needs a model credential. `bun run test:ci` is
   the full gate and additionally builds and packs the published artifact.
+- This package runs on **Node >= 24 and Bun**. `runtime-parity.test.ts` needs a
+  real Node to check the Node half and will say so, loudly, if it cannot find
+  one — `YOUSIM_NODE=/path/to/node` points it at a specific binary. A run that
+  skips that half has not checked the dual-runtime support at all.
 - **Run `bun run test`, never `bun test` directly.** The former is
   `scripts/hermetic.ts`, which sets a throwaway `HOME`/`YOUSIM_HOME` and
   `YOUSIM_KEYCHAIN=0` in the environment *before Bun starts*, and strips every

@@ -5,10 +5,21 @@
  * repo and type `yousim`, and that repo has had a say in what happens: Bun
  * autoloads `./.env`, `./.env.local`, `./.env.<NODE_ENV>` and — worse —
  * `./bunfig.toml`, whose `preload` executes arbitrary code before the first
- * line of this package runs. Nothing in-process can undo a preload. The only
- * control is the shebang refusing to load bunfig at all.
+ * line of this package runs. Nothing in-process can undo a preload. Under Bun
+ * the only control is the shebang refusing to load bunfig at all.
  *
- * The test this replaces asserted that by grepping the source for the shebang
+ * The published bin now runs on Node, whose shebang carries no such flags,
+ * and this file is *more* important for that, not less. The reason the flags
+ * could go is that Node reads neither `./.env` (it needs an explicit
+ * `--env-file`) nor any cwd-scoped config that can execute code — there is no
+ * Node bunfig.toml. That is a property of the interpreter, asserted nowhere in
+ * this repo's own source, and taking it on faith is how a package ships an
+ * arbitrary-code-execution hole the day it changes. So these tests keep
+ * running against the same hostile directory: the bunfig and every .env
+ * variant are still on disk, still trying, and the assertions are unchanged.
+ * What changed is only which mechanism makes them fail.
+ *
+ * The test this replaces asserted this by grepping the source for the shebang
  * flags. That checks the flags are written down; it does not check they work.
  * Between the two sits everything that can go wrong: a bundler that drops the
  * shebang, an npm shim that ignores it, a platform without `env -S`. So these
@@ -20,7 +31,7 @@ import { expect, test, describe, beforeAll, afterAll } from "bun:test";
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { installArtifact } from "../../../../scripts/package";
+import { buildArtifact, installArtifact } from "../../../../scripts/package";
 import { hermeticEnv } from "../../../../scripts/hermetic";
 
 const install = installArtifact();
@@ -148,8 +159,12 @@ function launch(args: string[], extraEnv: Record<string, string> = {}): Run {
 
 describe("a hostile working directory", () => {
   test("bunfig preload does not execute", () => {
-    // The whole reason `--config=/dev/null` is in the shebang. If the marker
-    // exists, running `yousim` in a cloned repo is arbitrary code execution.
+    // Under a Bun shebang this was the whole reason for `--config=/dev/null`.
+    // Under a Node shebang it holds because Node has no bunfig.toml to load —
+    // but the file is still here and still trying, so this stays the test that
+    // notices if the bin ever goes back to being launched by Bun without the
+    // flag. If the marker exists, running `yousim` in a cloned repo is
+    // arbitrary code execution.
     launch(["--help"]);
     expect(existsSync(markerPath())).toBe(false);
 
@@ -181,9 +196,12 @@ describe("a hostile working directory", () => {
   });
 
   test("NODE_ENV makes .env.production live, and it is still not read", () => {
-    // Bun autoloads `.env.<NODE_ENV>` too. A guard covering `.env` and
-    // `.env.local` and stopping there leaves this one live, which is the exact
-    // shape of the bug that already shipped once with `.env.local`.
+    // Bun autoloads `.env.<NODE_ENV>` too, and NODE_ENV is a variable anything
+    // in the environment might set. A guard covering `.env` and `.env.local`
+    // and stopping there leaves this one live, which is the exact shape of the
+    // bug that already shipped once with `.env.local`. Node autoloads none of
+    // the three, and neutralizeCwdEnv covers `./.env` on top of that for
+    // whichever runtime got there first.
     const r = launch(["config"], { NODE_ENV: "production" });
     expect(r.code).toBe(0);
     expect(r.out).not.toContain("hostile/model-from-env-production");
@@ -215,6 +233,55 @@ describe("a hostile working directory", () => {
     launch(["--help"]);
     expect(readdirSync(hostile).sort()).toEqual(before);
   });
+
+  test("bunx does not execute a hostile bunfig preload", () => {
+    // The advertised install-free path, and until now the untested one.
+    //
+    // Everything above launches the installed `.bin` command, which resolves
+    // through the shebang to Node — a runtime with no bunfig at all. Those
+    // tests therefore pass for a reason unrelated to what this file is about,
+    // and could never catch a regression here. `bunx` hands the package to
+    // Bun, which does read `./bunfig.toml`.
+    //
+    // The hostile directory has to sit *inside* the install so that `bun x
+    // yousim` can resolve the package by name from a parent `node_modules`
+    // while `bunfig.toml` is read from the cwd. `bun x <absolute-tarball>`
+    // does not work — Bun treats the path as a package spec and fails to
+    // resolve it, which looks like a clean run if you only check the marker.
+    // That is exactly how an earlier version of this test passed while
+    // launching nothing at all.
+    //
+    // Deliberately NOT paired with a test asserting that `bun <bundle>` *does*
+    // run the preload. That is true today and SECURITY.md records it as out of
+    // scope: a preload runs before the program, so no program can defend
+    // against it from the inside. Pinning it would assert a third-party
+    // behaviour we do not own — the day Bun tightens it, the test fails for a
+    // good reason and gets deleted as noise.
+    const nested = join(install.dir, "hostile-bunx");
+    rmSync(nested, { recursive: true, force: true });
+    mkdirSync(nested, { recursive: true });
+    writeFileSync(join(nested, "preload.js"), `require("fs").writeFileSync(${JSON.stringify(markerPath())}, "ran");\n`);
+    writeFileSync(join(nested, "bunfig.toml"), 'preload = ["./preload.js"]\n');
+
+    rmSync(markerPath(), { force: true });
+    const { env, cleanup } = hermeticEnv();
+    try {
+      const p = Bun.spawnSync(["bun", "x", "yousim", "config"], {
+        cwd: nested,
+        env,
+        stdout: "pipe",
+        stderr: "pipe",
+      });
+      // Assert it launched before asserting what it did. A failure to start
+      // leaves no marker either, and would read as a pass.
+      expect(p.exitCode, `bun x did not run: ${p.stderr.toString()}`).toBe(0);
+      expect(p.stdout.toString()).toContain("PROVIDER");
+      expect(existsSync(markerPath())).toBe(false);
+    } finally {
+      cleanup();
+      rmSync(nested, { recursive: true, force: true });
+    }
+  }, 120_000);
 
   test("writes stay inside the hermetic home", () => {
     // `yousim config` should not need to write at all. Anything appearing here

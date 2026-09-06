@@ -1,8 +1,9 @@
 import { Elysia, t } from "elysia";
 import { cors } from "@elysiajs/cors";
 import { staticPlugin } from "@elysiajs/static";
+import { node } from "@elysiajs/node";
 import path from "path";
-import { existsSync } from "fs";
+import { existsSync, readFileSync } from "fs";
 import {
   Message,
   GaslitClaude,
@@ -35,17 +36,48 @@ function getStorage(): Storage {
 }
 
 // The built frontend, in the two layouts that actually exist. In the published
-// package `import.meta.dir` is the bundle's own directory and the assets are
-// copied next to it as `public/` at pack time; in a clone this file is
+// package this file's directory is the bundle's own and the assets are copied
+// next to it as `public/` at pack time; in a clone this file is
 // src/api/src/index.ts and the assets are wherever Vite left them. There used
 // to be a tracked `src/api/public` symlink standing in for the second case,
 // which packed as nothing at all and, on a checkout without symlink support,
 // as a text file that passes an existence check and serves garbage.
+//
+// `import.meta.dirname`, not Bun's `import.meta.dir`: the standard spelling,
+// and both runtimes implement it.
 const PUBLIC_DIRS = [
-  path.resolve(import.meta.dir, "../public"),
-  path.resolve(import.meta.dir, "../../web/dist"),
+  path.resolve(import.meta.dirname, "../public"),
+  path.resolve(import.meta.dirname, "../../web/dist"),
 ];
 const publicDir = PUBLIC_DIRS.find((d) => existsSync(d)) ?? PUBLIC_DIRS[0]!;
+
+/**
+ * Content types for what Vite actually emits, and nothing else.
+ *
+ * Deliberately not a full MIME database: the only files under `assets/` are
+ * this app's own build output. An unknown extension gets a type that no
+ * browser will execute, which is the safe direction to be wrong in.
+ */
+const CONTENT_TYPES: Record<string, string> = {
+  ".js": "text/javascript; charset=utf-8",
+  ".mjs": "text/javascript; charset=utf-8",
+  ".css": "text/css; charset=utf-8",
+  ".map": "application/json; charset=utf-8",
+  ".json": "application/json; charset=utf-8",
+  ".svg": "image/svg+xml",
+  ".png": "image/png",
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".gif": "image/gif",
+  ".webp": "image/webp",
+  ".ico": "image/x-icon",
+  ".woff": "font/woff",
+  ".woff2": "font/woff2",
+  ".ttf": "font/ttf",
+};
+
+const contentTypeFor = (name: string) =>
+  CONTENT_TYPES[path.extname(name).toLowerCase()] ?? "application/octet-stream";
 
 // Types for request bodies
 interface ManualRequest {
@@ -106,8 +138,30 @@ const forbidden = (reason: string) =>
     headers: { "Content-Type": "application/json" },
   });
 
+/**
+ * Feature-detected, never a build flag: one artifact is run by both runtimes.
+ */
+const IS_BUN = typeof (globalThis as { Bun?: unknown }).Bun !== "undefined";
+
 export const createApp = () => {
-  const app = new Elysia()
+  // The adapter is chosen at runtime, and it has to be.
+  //
+  // Elysia's default is `Bun.serve`, which does not exist under Node. The
+  // obvious simplification is to use `@elysiajs/node` everywhere — it is built
+  // on `node:http`, which Bun also implements — and that is what this did.
+  // From a source checkout it works on both.
+  //
+  // It does not survive bundling. `bun build --target node` freezes srvx and
+  // crossws onto their Node branches, and the resulting artifact run under Bun
+  // dies at startup with "[crossws] Using Node.js adapter in an incompatible
+  // environment" — before serving anything. Same shape as the SQLite binding:
+  // a build-time decision baked into a file that then runs on the other
+  // runtime. Feature-detect instead, because the artifact outlives the build.
+  //
+  // Importing `@elysiajs/node` under Bun is harmless; only *using* it as the
+  // adapter is not. So the import stays static and the bundle keeps its
+  // zero-dependency manifest.
+  const app = new Elysia(IS_BUN ? {} : { adapter: node() })
     .use(cors({ origin: LOCAL_ORIGIN }))
     .onRequest(({ request }) => {
       if (!MUTATING_METHODS.has(request.method)) return;
@@ -122,7 +176,10 @@ export const createApp = () => {
       }
     })
     .derive(() => ({ userId: LOCAL_USER, storage: getStorage() }))
-    .get("/api/health", () => "YouSim API - Bun/Elysia version")
+    // Not "Bun/Elysia version" any more: this server runs on Node as well,
+    // and a health endpoint that names the wrong runtime is a small lie in the
+    // one place people look when they are already confused.
+    .get("/api/health", () => "YouSim API - Elysia")
     .get("/api/mode", () => ({ auth: "local" as const }))
     .get("/user", async ({ query, set, userId, storage }) => {
       if (!userId) {
@@ -734,16 +791,52 @@ export const createApp = () => {
         alwaysStatic: false,
       })
     )
+    // Serve the hashed assets ourselves rather than leaving it to the plugin.
+    //
+    // Under the Node adapter `staticPlugin` answered 200 with the right bytes
+    // and **no Content-Type at all**. index.html loads its entry as
+    // `<script type="module">`, and a module script with a non-JavaScript MIME
+    // type is refused by the browser — so the packaged `yousim server` served
+    // a blank page while every status code said success. Under Bun the same
+    // code sets `text/javascript`, which is why it survived review: the suite
+    // only ever spawns the API with `process.execPath`, i.e. Bun.
+    //
+    // The filename guard is the point of doing this by hand. Vite emits
+    // `index-<hash>.js`; anything with a slash or a dot-dot is not that, and
+    // must not become a path join.
+    .get("/assets/:file", ({ params, set }) => {
+      const name = params.file;
+      if (!/^[A-Za-z0-9._-]+$/.test(name) || name.includes("..")) {
+        set.status = 404;
+        return "Not found";
+      }
+      const file = path.join(publicDir, "assets", name);
+      if (!existsSync(file)) {
+        set.status = 404;
+        return "Not found";
+      }
+      set.headers["content-type"] = contentTypeFor(name);
+      return new Response(readFileSync(file), {
+        headers: { "Content-Type": contentTypeFor(name) },
+      });
+    })
     // SPA fallback - serve index.html for all unmatched routes
     .get("/*", () => {
-      return Bun.file(path.join(publicDir, "index.html"));
+      // `readFileSync` rather than `Bun.file`. A `BunFile` is a Bun-only lazy
+      // handle that only the Bun adapter knows how to unwrap; under the Node
+      // adapter it would serialize as an empty object and the UI would load a
+      // blank page. index.html is a few KB, so reading it costs nothing worth
+      // measuring.
+      return new Response(readFileSync(path.join(publicDir, "index.html")), {
+        headers: { "Content-Type": "text/html; charset=utf-8" },
+      });
     });
 
   return app;
 };
 
-export const startServer = () => {
-  // publicDir is resolved from import.meta.dir, which points inside the
+export const startServer = async () => {
+  // publicDir is resolved from import.meta.dirname, which points inside the
   // embedded bundle in a `bun build --compile` binary — so the frontend
   // assets are not there. Elysia reports any listen failure as "Is port N in
   // use?", which sends you chasing a port conflict that doesn't exist.
@@ -758,19 +851,63 @@ export const startServer = () => {
 
   const app = createApp();
   const port = Number(process.env.PORT || 3000);
-  // Loopback unless asked otherwise. There is no auth here by design, so Bun's
-  // default wildcard bind would put every session on this machine within reach
-  // of anyone on the same network. A container is the one case that genuinely
+  // Loopback unless asked otherwise. There is no auth here by design, so a
+  // wildcard bind would put every session on this machine within reach of
+  // anyone on the same network. A container is the one case that genuinely
   // needs 0.0.0.0, since a published port cannot reach loopback inside it.
+  //
+  // The key must be `hostname`. The adapter's own option is `host`, but it is
+  // reached through srvx, which translates `hostname` -> `host` and *drops* an
+  // unrecognised `host` — leaving the bind wide open on 0.0.0.0. Verified in
+  // both directions; do not "simplify" this to `host`.
   const hostname = process.env.HOST || "127.0.0.1";
-  app.listen({ port, hostname });
-  console.log(
-    `YouSim API is running at http://${app.server?.hostname}:${app.server?.port}`
-  );
+
+  const url = await new Promise<string>((resolve, reject) => {
+    app.listen({ port, hostname }, (server) => {
+      // The address is only knowable once the socket is up, and with PORT=0
+      // the reported port is the requested 0 until then. `raw` is the srvx
+      // server; awaiting its `ready()` and reading `url` is the one way to get
+      // the *resolved* host and port, and it works the same on both runtimes.
+      // Reported rather than echoed back from `hostname` above, so the line
+      // below is evidence of what was bound instead of a restatement of what
+      // was asked for.
+      // Two adapters, two ways to learn what was actually bound.
+      //
+      // srvx (the Node adapter) exposes `raw`, and the address is only knowable
+      // after `ready()` — with PORT=0 the reported port is the requested 0
+      // until then. Bun's native server has no `raw` and is already listening,
+      // so its `url`/`hostname`/`port` are live by the time the callback runs.
+      //
+      // Reported rather than echoed back from `hostname` above, so the line
+      // printed below is evidence of what was bound instead of a restatement
+      // of what was asked for.
+      const s = server as unknown as {
+        raw?: { ready?: () => Promise<unknown>; url?: string };
+        url?: string | URL;
+        hostname?: string;
+        port?: number;
+      };
+      if (s.raw) {
+        Promise.resolve(s.raw.ready?.()).then(
+          () => (s.raw?.url ? resolve(s.raw.url) : reject(new Error("server reported no address"))),
+          reject
+        );
+        return;
+      }
+      const direct = s.url
+        ? String(s.url)
+        : s.hostname && s.port
+          ? `http://${s.hostname}:${s.port}/`
+          : null;
+      direct ? resolve(direct) : reject(new Error("server reported no address"));
+    });
+  });
+
+  console.log(`YouSim API is running at ${url}`);
   console.log(`Storage: ${process.env.YOUSIM_DB ?? "~/.yousim/yousim.db"}`);
   return app;
 };
 
 if (import.meta.main) {
-  startServer();
+  await startServer();
 }
