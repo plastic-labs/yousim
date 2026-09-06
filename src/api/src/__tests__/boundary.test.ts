@@ -19,6 +19,8 @@ import { mkdtempSync, rmSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir, homedir, networkInterfaces } from "node:os";
 import { createApp } from "../index";
+import { MemoryStorage } from "@yousim/core/storage";
+import type { Storage } from "@yousim/core/storage";
 import { REPO_ROOT } from "../../../../scripts/hermetic";
 
 let dbHome: string;
@@ -434,5 +436,125 @@ describe("identity and state", () => {
     expect(resolveDbPath()).toBe(join(dbHome, "boundary.db"));
     expect(existsSync(join(dbHome, "boundary.db"))).toBe(true);
     expect(resolveDbPath().startsWith(homedir() + "/.yousim")).toBe(false);
+  });
+});
+
+/**
+ * The composition seam.
+ *
+ * `createApp()` with no arguments is the local single-user server, and the
+ * whole suite above is the evidence that it still is — nothing in it was
+ * changed for this. These tests are about the other caller: a downstream
+ * consumer serving the same routes for many people, supplying its own store
+ * and its own notion of who is calling.
+ *
+ * `MemoryStorage` rather than a hand-written stub, on purpose. Its `userId`
+ * boundary is already pinned by the conformance test in
+ * `core/__tests__/storage.test.ts`, which runs the same assertions against
+ * both shipped implementations. A stub here would only prove that the stub
+ * isolates its own map. Injecting a conformed store leaves exactly the new
+ * thing to test: whether the route layer routes the *resolved* user into it.
+ */
+describe("injected storage and user resolution", () => {
+  const USER_HEADER = "x-consumer-user";
+
+  /** A consumer's app: one shared store, caller identified by a header. */
+  const consumerApp = (store: Storage) =>
+    createApp({
+      storage: () => store,
+      resolveUser: async (headers) => headers[USER_HEADER] ?? null,
+    });
+
+  const as = (
+    consumer: ReturnType<typeof createApp>,
+    user: string | null,
+    path: string,
+    method = "GET"
+  ) =>
+    consumer.handle(
+      new Request(url(path), {
+        method,
+        headers: user === null ? {} : { [USER_HEADER]: user },
+      })
+    );
+
+  test("a consumer's storage and resolver are what the routes use", async () => {
+    const store = new MemoryStorage();
+    const consumer = consumerApp(store);
+
+    const user = await as(consumer, "alice", "/user?name=alice");
+    expect(user.status).toBe(200);
+    expect(await user.json()).toEqual({ user_id: "alice" });
+
+    const reset = await as(consumer, "alice", "/reset", "POST");
+    expect(reset.status).toBe(200);
+    const { session_id, user_id } = (await reset.json()) as Record<string, string>;
+    expect(user_id).toBe("alice");
+
+    // The route wrote into the injected store, not the module's SQLite one.
+    expect((await store.getSessions("alice")).map((s) => s.id)).toEqual([session_id!]);
+
+    const listed = await as(consumer, "alice", "/sessions");
+    expect(((await listed.json()) as { id: string }[]).map((s) => s.id)).toEqual([session_id!]);
+  });
+
+  test("an unauthenticated request is 401, never the local user", async () => {
+    // The failure this guards is a silent fallback to the local owner when the
+    // resolver declines. On a multi-caller deployment that is not a missing
+    // check, it is every unauthenticated stranger sharing one namespace.
+    const store = new MemoryStorage();
+    const consumer = consumerApp(store);
+
+    await as(consumer, "alice", "/user?name=alice");
+    await as(consumer, "alice", "/reset", "POST");
+
+    for (const [path, method] of [
+      ["/sessions", "GET"],
+      ["/session", "GET"],
+      ["/summary?session_id=x", "GET"],
+      ["/identity?session_id=x", "GET"],
+      ["/export/x", "GET"],
+      ["/user?name=nobody", "GET"],
+      ["/reset", "POST"],
+    ] as const) {
+      const res = await as(consumer, null, path, method);
+      // Reported with the path so a failure names the route that leaked.
+      expect({ path, status: res.status }).toEqual({ path, status: 401 });
+      expect(await res.json()).toEqual({ error: "Unauthorized" });
+    }
+
+    // Nothing was created for, or readable as, the local owner.
+    expect(await store.getSessions("local")).toHaveLength(0);
+    expect(await store.getSessions("alice")).toHaveLength(1);
+  });
+
+  test("two callers do not see each other's sessions", async () => {
+    const store = new MemoryStorage();
+    const consumer = consumerApp(store);
+
+    const ids: Record<string, string> = {};
+    for (const who of ["alice", "bob"]) {
+      await as(consumer, who, `/user?name=${who}`);
+      const res = await as(consumer, who, "/reset", "POST");
+      ids[who] = ((await res.json()) as { session_id: string }).session_id;
+    }
+    expect(ids.alice).not.toBe(ids.bob);
+
+    for (const who of ["alice", "bob"]) {
+      const mine = (await (await as(consumer, who, "/sessions")).json()) as { id: string }[];
+      expect(mine.map((s) => s.id)).toEqual([ids[who]!]);
+    }
+
+    // And naming the other's session id by hand returns nothing of theirs.
+    const stolen = await as(consumer, "bob", `/session?session_id=${ids.alice}`);
+    expect(await stolen.json()).toMatchObject({ messages: [] });
+  });
+
+  test("with no resolver the same anonymous request is served as the local owner", async () => {
+    // The contrast that makes the 401 above mean something: an identical
+    // request, no injected resolver, answered exactly as it always was.
+    const anonymous = await createApp().handle(new Request(url("/sessions")));
+    expect(anonymous.status).toBe(200);
+    expect(await anonymous.json()).toBeArray();
   });
 });
