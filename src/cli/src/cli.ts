@@ -208,7 +208,8 @@ class Recorder {
 
 interface CommandDeps {
   rl: readline.Interface;
-  recorder: () => Recorder;
+  /** Null until an identity is named — the launch prompt has no session yet. */
+  recorder: () => Recorder | null;
   options: () => ModelConfig;
   setModel: (model: string) => void;
   switchTo: (sessionId: string) => void;
@@ -246,6 +247,10 @@ function baseCommands(deps: CommandDeps): MetaCommand[] {
       name: "reset",
       description: "start a new session",
       run: async () => {
+        // Reachable at the launch prompt, where there is nothing to reset.
+        if (!deps.recorder()) {
+          return { output: "no session to reset yet — name an identity first." };
+        }
         await deps.resetSession();
         return { exit: true, output: "New session." };
       },
@@ -255,6 +260,9 @@ function baseCommands(deps: CommandDeps): MetaCommand[] {
       description: "write this session's transcript to a file",
       run: async () => {
         const r = deps.recorder();
+        if (!r) {
+          return { output: "nothing to export yet — name an identity first." };
+        }
         const msgs = await r.history();
         const name = r.session.metadata?.name || r.session.id.slice(0, 8);
         const file = `yousim-${String(name).replace(/[^\w.-]+/g, "-").slice(0, 40)}.txt`;
@@ -368,8 +376,47 @@ async function runSimulator(rl: readline.Interface, resumeId?: string) {
   const gaslitClaude = new GaslitClaude({ name: "", insights: "", history: [] });
   const simulator = new Simulator({ name: "", history: [] });
 
-  let recorder: Recorder;
-  let name: string;
+  // Null until an identity is named. The launch prompt runs before there is a
+  // session, and the commands reachable from it have to be able to say so.
+  let recorder: Recorder | null = null;
+  let name = "";
+
+  // Built here, ahead of the name prompt, and not after the loop below: the
+  // registry is what makes a meta-command reachable, so anything built after
+  // the prompt is unreachable from it. `parseInput` against an empty key list
+  // matches nothing and silently falls through to "this is a name" — which is
+  // the shape the first attempt at this fix took.
+  //
+  // The commands still close over this session's recorder and options; they
+  // reach them through thunks, which is what lets the registry outlive the
+  // moment the recorder is created.
+  let switchToId: string | null = null;
+  const registry = buildRegistry(
+    baseCommands({
+      rl,
+      recorder: () => recorder,
+      options: () => agentOptions,
+      setModel: (m) => {
+        agentOptions.model = m;
+      },
+      switchTo: (id) => {
+        switchToId = id;
+      },
+      resetSession: async () => {
+        recorder?.close();
+        recorder = await Recorder.start("simulator", name);
+      },
+    })
+  );
+  registryRef = registry;
+
+  /** Run one meta-command. True means "leave the current loop". */
+  const runMeta = async (cmd: string, args: string[]) => {
+    const result = await registry.get(cmd)!.run(args);
+    if (result.clear) console.clear();
+    if (result.output) console.log(result.output);
+    return result.exit === true;
+  };
 
   if (resumeId) {
     const resumed = await Recorder.resume(resumeId);
@@ -403,8 +450,27 @@ async function runSimulator(rl: readline.Interface, resumeId?: string) {
     console.log(`\n${theme.simulator("SIMULATOR CLAUDE:")}`);
     console.log(theme.simulator(INITIAL_RESPONSE));
 
-    name = await readInput(rl, "Enter a name: ");
-    if (name === "exit") return;
+    // The original had a name *prompt*, never a name *gate*: every line went
+    // through the one dispatcher in the webshell's `enterKey`, and "this is an
+    // identity name" was its last fallthrough, below `mode`, `help` and the
+    // rest. Reading raw here and special-casing `exit` put the registry out of
+    // reach at the only prompt a new user has seen, so `help` became an
+    // identity called "help".
+    for (;;) {
+      const input = await readInput(rl, "Enter a name: ");
+      const parsed = parseInput(input, registry.keys());
+
+      if (parsed.kind === "meta") {
+        if (await runMeta(parsed.name, parsed.args)) return;
+        continue;
+      }
+      // A bare [Enter] means "searcher, pick the next command" — but there is
+      // no identity to explore yet, so re-ask rather than start a model call.
+      if (parsed.kind === "auto") continue;
+
+      name = parsed.text;
+      break;
+    }
 
     gaslitClaude.name = name;
     simulator.name = name;
@@ -414,10 +480,12 @@ async function runSimulator(rl: readline.Interface, resumeId?: string) {
   }
 
   const manual = async (command: string) => {
+    // Only reachable once an identity is named, so there is a recorder.
+    const rec = recorder!;
     let simulatorResponse = "";
     simulator.history.push({ role: "user", content: command });
     gaslitClaude.history.push({ role: "assistant", content: command });
-    await recorder.user(command);
+    await rec.user(command);
 
     console.log(`\n${theme.simulator("SIMULATOR CLAUDE:")}`);
     try {
@@ -429,13 +497,13 @@ async function runSimulator(rl: readline.Interface, resumeId?: string) {
     } catch (error: any) {
       console.error("Error in conversation:", error.message);
       // Persist whatever streamed before the failure rather than dropping it.
-      if (simulatorResponse) await recorder.assistant(simulatorResponse);
+      if (simulatorResponse) await rec.assistant(simulatorResponse);
       return;
     }
 
     simulator.history.push({ role: "assistant", content: simulatorResponse });
     gaslitClaude.history.push({ role: "user", content: simulatorResponse });
-    await recorder.assistant(simulatorResponse);
+    await rec.assistant(simulatorResponse);
   };
 
   const auto = async () => {
@@ -463,28 +531,6 @@ async function runSimulator(rl: readline.Interface, resumeId?: string) {
     await manual(initialLocate);
   }
 
-  // Registry is built here because the commands close over this session's
-  // recorder and options.
-  let switchToId: string | null = null;
-  const registry = buildRegistry(
-    baseCommands({
-      rl,
-      recorder: () => recorder,
-      options: () => agentOptions,
-      setModel: (m) => {
-        agentOptions.model = m;
-      },
-      switchTo: (id) => {
-        switchToId = id;
-      },
-      resetSession: async () => {
-        recorder.close();
-        recorder = await Recorder.start("simulator", name);
-      },
-    })
-  );
-  registryRef = registry;
-
   try {
     while (true) {
       const input = await readInput(rl, commandPrompt);
@@ -496,10 +542,7 @@ async function runSimulator(rl: readline.Interface, resumeId?: string) {
       }
 
       if (parsed.kind === "meta") {
-        const result = await registry.get(parsed.name)!.run(parsed.args);
-        if (result.clear) console.clear();
-        if (result.output) console.log(result.output);
-        if (result.exit) return;
+        if (await runMeta(parsed.name, parsed.args)) return;
         continue;
       }
 
