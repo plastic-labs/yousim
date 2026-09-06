@@ -77,7 +77,7 @@ async function newSession(): Promise<string> {
  * module-level singleton, so a fresh database needs a fresh process.
  *
  * Started from source rather than from the packaged bin because the package
- * has no web assets yet (DEV-2604) and `yousim server` refuses to start
+ * does not ship the web assets yet and `yousim server` refuses to start
  * without them, which would fail these for an unrelated reason.
  */
 async function withServer<T>(

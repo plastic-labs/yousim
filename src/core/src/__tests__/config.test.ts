@@ -225,8 +225,8 @@ test("every autoloaded env file is neutralized, not just .env", () => {
 
 // ─── neutralizeCwdEnv vs Bun's actual precedence ───────────────────────────
 //
-// KNOWN FAILING. A real bug, left unfixed deliberately (DEV-2629 is the test
-// gate, not the fix).
+// KNOWN FAILING. A real bug, left unfixed deliberately: the work this landed
+// under was the test gate, not the fix.
 //
 // neutralizeCwdEnv attributes a variable to a cwd .env file by comparing
 // process.env against its own merge of those files. That comparison is only

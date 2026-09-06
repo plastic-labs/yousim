@@ -7,8 +7,8 @@
  * `YOUSIM_HOME=/tmp/x yousim config` — a command whose entire job is to print
  * where values came from — relocated the user's live credential into /tmp.
  * Setting XDG_CONFIG_HOME was enough to trigger it on Linux. It was hit for
- * real during the DEV-2629 work, and only a sandbox write denial prevented the
- * loss.
+ * real while building the publication-safety gate, and only a sandbox write
+ * denial prevented the loss.
  *
  * The migration is gone: nothing has ever been published under an older
  * layout, so there is no install to migrate, and the code was pure downside.
