@@ -13,6 +13,7 @@
 
 import { describe, expect, test } from "bun:test";
 import { launchPty, ptyReason } from "./pty";
+import { fakeProviderEnv, startFakeProvider } from "./fake-provider";
 
 const skip = ptyReason();
 if (skip) console.warn(`launch.test.ts: SKIPPED — ${skip}`);
@@ -225,6 +226,56 @@ describe.skipIf(!!skip)("switching mode and session", () => {
       await pty.expect(/Resuming "ada"/);
     } finally {
       await pty.close();
+    }
+  });
+
+  /**
+   * `reset` swaps the recorder, and that is the visible half. The other half is
+   * the agent histories: leaving them in place produced a "new session" that
+   * kept replaying the old conversation into every prompt while writing to a
+   * file that claimed to be fresh.
+   *
+   * Nothing in the transcript shows this — a stale history is only visible in
+   * what leaves the process. Hence the loopback provider; see `fake-provider.ts`
+   * for why that does not weaken the offline guarantee.
+   */
+  test("`reset` clears what the model sees, not just the file", async () => {
+    const fake = startFakeProvider();
+    const pty = launchPty([], fakeProviderEnv(fake));
+    try {
+      await pty.expect(/Enter a name:/);
+
+      // A distinct reply per turn, so waiting for one cannot match an earlier
+      // one still sitting in the transcript.
+      fake.reply = "ALPHA";
+      pty.send("ada");
+      await pty.expect(/ALPHA/);
+
+      fake.reply = "BETA";
+      pty.send("describe your childhood");
+      await pty.expect(/BETA/);
+
+      // Precondition: without it, the assertion below would also pass on a
+      // build that never sent any history at all.
+      const before = fake.calls[fake.calls.length - 1]!.messages;
+      expect(before.map((m) => m.content).join("\n")).toContain("childhood");
+
+      pty.send("reset");
+      await pty.expect(/New session\./);
+
+      fake.reply = "GAMMA";
+      pty.send("who are you");
+      await pty.expect(/GAMMA/);
+
+      const after = fake.calls[fake.calls.length - 1]!.messages;
+      const sent = after.map((m) => m.content).join("\n");
+      expect(sent).toContain("who are you");
+      expect(sent).not.toContain("childhood");
+      expect(sent).not.toContain("ALPHA");
+      expect(sent).not.toContain("BETA");
+    } finally {
+      await pty.close();
+      fake.stop();
     }
   });
 });
