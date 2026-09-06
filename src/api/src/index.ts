@@ -16,6 +16,7 @@ import {
   createStorage,
 } from "@yousim/core";
 import type { Storage } from "@yousim/core";
+import type { AppOptions } from "@yousim/core/contract";
 import { detectDone } from "./detect-done";
 import { formatIdentityMd, formatSoulMd } from "./formatters";
 
@@ -143,7 +144,24 @@ const forbidden = (reason: string) =>
  */
 const IS_BUN = typeof (globalThis as { Bun?: unknown }).Bun !== "undefined";
 
-export const createApp = () => {
+/**
+ * Build the app.
+ *
+ * With no arguments this is the local single-user server and nothing about it
+ * has changed: one hardcoded owner, one SQLite file, no auth. `opts` exists so
+ * a downstream consumer serving the same routes for many callers can reuse
+ * them rather than reimplement them — the routes are the product, the identity
+ * and the store are the deployment.
+ *
+ * The two seams are deliberately the only two. Anything else a consumer needs
+ * is a sign the split is in the wrong place, not a third option.
+ */
+export const createApp = (opts?: AppOptions) => {
+  // Per-request, so a consumer can hand back a different store per tenant.
+  // The local default resolves the module-level SQLite singleton, which is
+  // what the `.derive()` below already did.
+  const resolveStorage = opts?.storage ?? (() => getStorage());
+
   // The adapter is chosen at runtime, and it has to be.
   //
   // Elysia's default is `Bun.serve`, which does not exist under Node. The
@@ -175,7 +193,34 @@ export const createApp = () => {
         return forbidden("Missing X-YouSim-Local header");
       }
     })
-    .derive(() => ({ userId: LOCAL_USER, storage: getStorage() }))
+    // Who is calling, and where their data lives.
+    //
+    // With no resolver injected this is the constant it always was, and the
+    // `if (!userId)` guard on every handler below cannot fire. With one
+    // injected it can, and a `null` answer is answered 401 — never by falling
+    // back to LOCAL_USER, which in a multi-caller deployment would hand one
+    // tenant another's sessions. `userId` is typed `string | null` precisely so
+    // that a handler which forgets the guard fails to compile: every storage
+    // method wants a `string`.
+    //
+    // The health, mode and static routes have no guard and keep answering
+    // unauthenticated, which is what lets a consumer serve a login page at all.
+    .derive(async ({ request }) => {
+      let userId: string | null = LOCAL_USER;
+      if (opts?.resolveUser) {
+        // `DOM.Iterable` is not in this project's `lib`, so `Headers` has no
+        // iterator here. `forEach` is on the plain `DOM` shape and on both
+        // runtimes' real implementations.
+        const headers: Record<string, string | undefined> = {};
+        request.headers.forEach((v, k) => (headers[k] = v));
+        userId = await opts.resolveUser(headers);
+      }
+      const auth = request.headers.get("authorization");
+      return {
+        userId,
+        storage: resolveStorage({ token: auth?.replace(/^Bearer\s+/i, "") ?? null }),
+      };
+    })
     // Not "Bun/Elysia version" any more: this server runs on Node as well,
     // and a health endpoint that names the wrong runtime is a small lie in the
     // one place people look when they are already confused.

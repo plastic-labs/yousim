@@ -27,6 +27,43 @@ export type {
 } from "./storage";
 
 // ---------------------------------------------------------------------------
+// Server composition
+//
+// The route handlers are shared; who is calling and where their data lives are
+// not. A local install answers both from constants — one hardcoded owner, one
+// SQLite file — and supplies neither of these. A downstream consumer serving
+// the same routes for many callers supplies both.
+//
+// Types only. The routes themselves are not part of this contract, because
+// they need a filesystem and this file must stay importable from a browser.
+// ---------------------------------------------------------------------------
+
+/**
+ * Picks the store for one request, given whatever bearer token it carried.
+ *
+ * Called on **every** request, including ones that turn out to be
+ * unauthenticated, so it must answer without a token rather than throw.
+ */
+export type StorageResolver = (req: { token?: string | null }) => import("./storage").Storage;
+
+/**
+ * Identifies the caller from their request headers (lowercased names).
+ *
+ * `null` means "not authenticated" and the request is answered 401. There is
+ * deliberately no third answer: falling back to a default owner when a
+ * resolver declines is how one tenant reads another's sessions.
+ */
+export type UserResolver = (
+  headers: Record<string, string | undefined>
+) => Promise<string | null>;
+
+/** Overrides for `createApp()`. Every field absent is the local single-user server. */
+export interface AppOptions {
+  storage?: StorageResolver;
+  resolveUser?: UserResolver;
+}
+
+// ---------------------------------------------------------------------------
 // Model access
 //
 // Credentials are per-call, never module-level. This is what lets one codebase
