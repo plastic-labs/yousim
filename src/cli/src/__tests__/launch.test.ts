@@ -224,6 +224,14 @@ describe.skipIf(!!skip)("switching mode and session", () => {
       // `Resuming` is printed only on the resume path, so seeing it means the
       // loop re-entered rather than ended.
       await pty.expect(/Resuming "ada"/);
+
+      // But that banner prints *before* the resumed session takes input, so on
+      // its own it cannot tell a live prompt from a replay that then exited.
+      // Drive one command through to settle it. Asserting on the prompt string
+      // would not: it is already in the transcript twice by this point, so it
+      // would match whatever happened here.
+      pty.send("mode");
+      await pty.expect(/current mode: simulator/);
     } finally {
       await pty.close();
     }
