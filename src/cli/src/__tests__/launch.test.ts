@@ -13,6 +13,7 @@
 
 import { describe, expect, test } from "bun:test";
 import { launchPty, ptyReason } from "./pty";
+import { fakeProviderEnv, startFakeProvider } from "./fake-provider";
 
 const skip = ptyReason();
 if (skip) console.warn(`launch.test.ts: SKIPPED — ${skip}`);
@@ -139,6 +140,150 @@ describe.skipIf(!!skip)("the launch path", () => {
       } finally {
         await pty.close();
       }
+    }
+  });
+});
+
+/**
+ * Commands that announce a switch have to perform one.
+ *
+ * `mode <x>` and `sessions <id>` set a request and return `exit: true`, because
+ * switching rebuilds the agents and the current loop has to unwind first. For
+ * as long as nothing read those requests, the unwinding *was* the whole
+ * behaviour: the user got a confirmation line and then a shell prompt.
+ *
+ * Every test here asserts on **reaching the next prompt**, never on the
+ * confirmation. Printing the confirmation is precisely what the broken version
+ * already did, so an assertion on that text passes either way.
+ */
+describe.skipIf(!!skip)("switching mode and session", () => {
+  /** Get to the in-session command prompt. The model call fails; the loop lives. */
+  const named = async (pty: ReturnType<typeof launchPty>) => {
+    await pty.expect(/Enter a name:/);
+    pty.send("ada");
+    await pty.expect(/No API key for provider/);
+  };
+
+  test("`mode constructor` lands in the constructor, not in a shell", async () => {
+    const pty = launchPty();
+    try {
+      await named(pty);
+      pty.send("mode constructor");
+      await pty.expect(/What name should this identity have\?/);
+    } finally {
+      await pty.close();
+    }
+  });
+
+  test("`mode chat` lands in chat", async () => {
+    const pty = launchPty();
+    try {
+      await named(pty);
+      pty.send("mode chat");
+      await pty.expect(/Paste or type the identity summary/);
+    } finally {
+      await pty.close();
+    }
+  });
+
+  /**
+   * `reset` is the sibling that must *not* unwind: it swaps the recorder in
+   * place, so there is nothing to re-enter. It used to return `exit: true` too,
+   * which quit while claiming to have started a new session.
+   */
+  test("`reset` starts a new session and stays in it", async () => {
+    const pty = launchPty();
+    try {
+      await named(pty);
+      pty.send("reset");
+      await pty.expect(/New session\./);
+      // The proof is that the prompt still answers, not that it printed.
+      pty.send("mode");
+      await pty.expect(/current mode: simulator/);
+    } finally {
+      await pty.close();
+    }
+  });
+
+  /**
+   * The id comes out of the live listing rather than being fabricated: it is
+   * the abbreviated form `sessions` actually prints, which is the form
+   * `expandSessionId` has to accept.
+   */
+  test("`sessions <id>` reopens the session instead of quitting", async () => {
+    const pty = launchPty();
+    try {
+      await named(pty);
+      pty.send("sessions");
+      await pty.expect(/Saved sessions/);
+
+      const id = pty.transcript().match(/^ {2}([0-9a-f]{8}) {2}/m)?.[1];
+      expect(id).toBeTruthy();
+
+      pty.send(`sessions ${id}`);
+      // `Resuming` is printed only on the resume path, so seeing it means the
+      // loop re-entered rather than ended.
+      await pty.expect(/Resuming "ada"/);
+
+      // But that banner prints *before* the resumed session takes input, so on
+      // its own it cannot tell a live prompt from a replay that then exited.
+      // Drive one command through to settle it. Asserting on the prompt string
+      // would not: it is already in the transcript twice by this point, so it
+      // would match whatever happened here.
+      pty.send("mode");
+      await pty.expect(/current mode: simulator/);
+    } finally {
+      await pty.close();
+    }
+  });
+
+  /**
+   * `reset` swaps the recorder, and that is the visible half. The other half is
+   * the agent histories: leaving them in place produced a "new session" that
+   * kept replaying the old conversation into every prompt while writing to a
+   * file that claimed to be fresh.
+   *
+   * Nothing in the transcript shows this — a stale history is only visible in
+   * what leaves the process. Hence the loopback provider; see `fake-provider.ts`
+   * for why that does not weaken the offline guarantee.
+   */
+  test("`reset` clears what the model sees, not just the file", async () => {
+    const fake = startFakeProvider();
+    const pty = launchPty([], fakeProviderEnv(fake));
+    try {
+      await pty.expect(/Enter a name:/);
+
+      // A distinct reply per turn, so waiting for one cannot match an earlier
+      // one still sitting in the transcript.
+      fake.reply = "ALPHA";
+      pty.send("ada");
+      await pty.expect(/ALPHA/);
+
+      fake.reply = "BETA";
+      pty.send("describe your childhood");
+      await pty.expect(/BETA/);
+
+      // Precondition: without it, the assertion below would also pass on a
+      // build that never sent any history at all.
+      const before = fake.calls[fake.calls.length - 1]!.messages;
+      expect(before.map((m) => m.content).join("\n")).toContain("childhood");
+
+      pty.send("reset");
+      await pty.expect(/New session\./);
+
+      fake.reply = "GAMMA";
+      pty.send("who are you");
+      await pty.expect(/GAMMA/);
+
+      const after = fake.calls[fake.calls.length - 1]!.messages;
+      const sent = after.map((m) => m.content).join("\n");
+      expect(sent).toContain("who are you");
+      expect(sent).not.toContain("childhood");
+      expect(sent).not.toContain("ALPHA");
+      expect(sent).not.toContain("BETA");
+    } finally {
+      await pty.close();
+      fake.stop();
     }
   });
 });

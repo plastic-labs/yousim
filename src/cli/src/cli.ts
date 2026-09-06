@@ -252,7 +252,10 @@ function baseCommands(deps: CommandDeps): MetaCommand[] {
           return { output: "no session to reset yet — name an identity first." };
         }
         await deps.resetSession();
-        return { exit: true, output: "New session." };
+        // No `exit` here, unlike its two siblings: the recorder is swapped in
+        // place, so there is nothing to re-enter. Exiting dropped the user to
+        // a shell holding a session they had just been told was new.
+        return { output: "New session." };
       },
     },
     {
@@ -364,7 +367,14 @@ function baseCommands(deps: CommandDeps): MetaCommand[] {
 // `help` renders from the live registry, so it can never advertise a command
 // that isn't wired — which is how `share` ended up documented but missing.
 let registryRef: Map<string, MetaCommand> | null = null;
+
+// What the current loop wants done *after* it ends. Switching either the mode
+// or the session rebuilds the agents, so the command cannot do the switch
+// itself — it records the request, returns `exit: true`, and `runCli` re-enters
+// with the new target. Both were previously assigned and never read, which is
+// why `mode` and `sessions <id>` printed a confirmation and then quit.
 let pendingMode: Mode | null = null;
+let pendingSessionId: string | null = null;
 
 // ─── Mode: Simulator ───────────────────────────────────────────────────────
 
@@ -390,7 +400,6 @@ async function runSimulator(rl: readline.Interface, resumeId?: string) {
   // The commands still close over this session's recorder and options; they
   // reach them through thunks, which is what lets the registry outlive the
   // moment the recorder is created.
-  let switchToId: string | null = null;
   const registry = buildRegistry(
     baseCommands({
       rl,
@@ -400,11 +409,16 @@ async function runSimulator(rl: readline.Interface, resumeId?: string) {
         agentOptions.model = m;
       },
       switchTo: (id) => {
-        switchToId = id;
+        pendingSessionId = id;
       },
       resetSession: async () => {
         recorder?.close();
         recorder = await Recorder.start("simulator", name);
+        // A new session the agents cannot see the old one from. Swapping the
+        // recorder alone would keep replaying the previous conversation into
+        // every prompt while writing to a file that claims to be fresh.
+        simulator.history = [];
+        gaslitClaude.history = [];
       },
     })
   );
@@ -767,6 +781,36 @@ async function expandSessionId(prefix: string): Promise<string | null> {
   }
 }
 
+/**
+ * Open an already-resolved session in whichever mode it was recorded in.
+ *
+ * Shared by `yousim resume` and by the in-session `sessions <id>` switch, which
+ * has to land in the same place: a switch that always reopened the simulator
+ * would silently change the mode of a chat session.
+ */
+async function openSession(rl: readline.Interface, full: string): Promise<void> {
+  const store = new SqliteStorage();
+  const session = await store.getSession(full, OWNER);
+  const mode = session?.metadata?.mode;
+  store.close();
+
+  if (mode === "simulator") {
+    await runSimulator(rl, full);
+    return;
+  }
+
+  // Constructor and chat sessions resume into chat: their value is the
+  // resulting identity, not replaying the construction interview.
+  const s2 = new SqliteStorage();
+  const summary = await s2.getLatestSummary(full, OWNER);
+  s2.close();
+  if (!summary) {
+    console.error("That session has no summary to chat with yet.");
+    return;
+  }
+  await runChat(rl, summary.content, session?.metadata?.name);
+}
+
 export async function resumeSession(idOrPrefix?: string) {
   const rl = createRl();
   try {
@@ -786,27 +830,57 @@ export async function resumeSession(idOrPrefix?: string) {
       return;
     }
 
-    const store = new SqliteStorage();
-    const session = await store.getSession(full, OWNER);
-    const mode = session?.metadata?.mode;
-    store.close();
-
-    if (mode === "simulator") {
-      await runSimulator(rl, full);
-    } else {
-      // Constructor and chat sessions resume into chat: their value is the
-      // resulting identity, not replaying the construction interview.
-      const s2 = new SqliteStorage();
-      const summary = await s2.getLatestSummary(full, OWNER);
-      s2.close();
-      if (!summary) {
-        console.error("That session has no summary to chat with yet.");
-        return;
-      }
-      await runChat(rl, summary.content, session?.metadata?.name);
-    }
+    await sessionLoop(rl, { mode: initialMode(), resumeId: full });
   } finally {
     rl.close();
+  }
+}
+
+/**
+ * Run modes back to back until one ends without asking for a switch.
+ *
+ * `mode <x>` and `sessions <id>` both need the current loop to unwind — the
+ * agents, the recorder and the prompt are all rebuilt by a switch — so they
+ * record what they want and return `exit: true`. This is the only thing that
+ * reads those two requests; without it the process simply ended after printing
+ * a confirmation. `exit` and a plain end-of-input set neither, and fall out.
+ */
+async function sessionLoop(
+  rl: readline.Interface,
+  start: { mode: Mode; resumeId?: string }
+): Promise<void> {
+  let mode = start.mode;
+  let resumeId = start.resumeId;
+
+  for (;;) {
+    // Cleared before each run, not after: a mode function that throws would
+    // otherwise leave a stale request behind for the next iteration to obey.
+    pendingMode = null;
+    pendingSessionId = null;
+
+    if (resumeId) {
+      await openSession(rl, resumeId);
+    } else if (mode === "constructor") {
+      const result = await runConstructor(rl);
+      if (result) await runChat(rl, result.summary, result.name);
+    } else if (mode === "chat") {
+      await runChat(rl);
+    } else {
+      await runSimulator(rl);
+    }
+
+    // A session switch wins over a mode switch: the session carries its own
+    // recorded mode, which `openSession` honours.
+    if (pendingSessionId) {
+      resumeId = pendingSessionId;
+      continue;
+    }
+    if (pendingMode) {
+      mode = pendingMode;
+      resumeId = undefined;
+      continue;
+    }
+    return;
   }
 }
 
@@ -842,19 +916,7 @@ export async function runCli(requestedMode?: Mode) {
   const mode = requestedMode ?? initialMode();
 
   try {
-    switch (mode) {
-      case "constructor": {
-        const result = await runConstructor(rl);
-        if (result) await runChat(rl, result.summary, result.name);
-        break;
-      }
-      case "chat":
-        await runChat(rl);
-        break;
-      default:
-        await runSimulator(rl);
-        break;
-    }
+    await sessionLoop(rl, { mode });
   } catch (error: any) {
     console.error("Error:", error.message);
   } finally {
